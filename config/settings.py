@@ -24,6 +24,8 @@ class Settings:
         qdrant_url: str,
         qdrant_collection: str,
         indexed_channel_ids: frozenset[int],
+        rag_top_k: int,
+        rag_min_score: float,
     ):
         self.discord_token = discord_token
         self.dev_guild_id = dev_guild_id
@@ -33,6 +35,8 @@ class Settings:
         self.qdrant_url = qdrant_url.rstrip("/")
         self.qdrant_collection = qdrant_collection
         self.indexed_channel_ids = indexed_channel_ids
+        self.rag_top_k = rag_top_k
+        self.rag_min_score = rag_min_score
 
 
 def load_settings() -> Settings:
@@ -83,6 +87,19 @@ def load_settings() -> Settings:
                 )
             indexed_channel_ids.add(int(cleaned))
 
+    rag_top_k_raw = os.getenv("RAG_TOP_K", "5").strip()
+    if not rag_top_k_raw.isdigit() or int(rag_top_k_raw) <= 0:
+        raise ConfigError("RAG_TOP_K must be a positive integer.")
+    rag_top_k = int(rag_top_k_raw)
+
+    rag_min_score_raw = os.getenv("RAG_MIN_SCORE", "0.30").strip()
+    try:
+        rag_min_score = float(rag_min_score_raw)
+        if not (0.0 <= rag_min_score <= 1.0):
+            raise ValueError()
+    except ValueError:
+        raise ConfigError("RAG_MIN_SCORE must be a float between 0.0 and 1.0.")
+
     return Settings(
         discord_token=token,
         dev_guild_id=dev_guild_id,
@@ -92,4 +109,6 @@ def load_settings() -> Settings:
         qdrant_url=qdrant_url,
         qdrant_collection=qdrant_collection,
         indexed_channel_ids=frozenset(indexed_channel_ids),
+        rag_top_k=rag_top_k,
+        rag_min_score=rag_min_score,
     )

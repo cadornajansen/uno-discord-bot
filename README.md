@@ -11,21 +11,26 @@ The bot is currently being developed and tested inside a private development ser
 - [x] **Phase 1 — Core Bot Foundation** (`/ping`, `/hello`, `/userinfo`, `/serverinfo`, `/help`)
 - [x] **Phase 2A — Local Ollama AI Integration** (`/ask` slash command via `phi4-mini`)
 - [x] **Phase 2B — Controlled Discord Knowledge Ingestion** (Background indexing into Qdrant via `embeddinggemma`)
-- [ ] **Phase 2C — Discord Chat RAG** (*Not implemented yet*)
+- [x] **Phase 2C — Discord Chat RAG Integration** (Grounded `/ask` answers using retrieved server messages)
 
 ---
 
 ## 🏗️ Architecture & Model Responsibilities
 
 ```text
-Discord
-   │
-   ├── /ask command ──> AIService ──> Ollama ──> phi4-mini (Chat Generation)
-   │
-   └── Approved messages ──> Knowledge Cog ──> EmbeddingService ──> Ollama ──> embeddinggemma (Embeddings)
-                                                                                       │
-                                                                                       ▼
-                                                                           VectorStore (Qdrant)
+Discord Server /ask question:<text>
+           │
+           ▼
+     EmbeddingService (embeddinggemma @ /api/embed)
+           │
+           ▼
+     VectorStore (Qdrant search_similar, strictly filtered by current guild_id)
+           │
+           ▼
+     RAGService (formats compact context + untrusted-data safety instructions)
+           │
+           ▼
+     AIService (phi4-mini @ /api/chat) ──> Grounded Answer + Lightweight Sources
 ```
 
 - **`phi4-mini`**: Chat / response generation model.
@@ -34,18 +39,12 @@ Discord
 
 ---
 
-## 🔒 Privacy & Ingestion Rules
+## 🔒 Security & Privacy Boundaries
 
-To protect privacy in our class server:
-
-1. **Explicit Channel Allowlist Only**: Uno does **not** index every channel it can access. Only channels explicitly listed in `INDEXED_CHANNEL_IDS` are indexed.
-2. **Empty Allowlist Safety**: If `INDEXED_CHANNEL_IDS` is empty or unset, **no messages are indexed**.
-3. **Ignored Content**:
-   - Direct Messages (DMs) are ignored.
-   - Bot messages are ignored.
-   - Webhook messages are ignored.
-   - Attachments-only or empty messages are ignored.
-   - Historical message backfill is not performed (only live messages received while Uno is running are processed).
+1. **Guild Isolation**: Vector retrieval is strictly filtered by the current Discord `guild_id`. Data from one Discord server can **never** be retrieved in another server.
+2. **Server-Only `/ask`**: `/ask` commands in Direct Messages (DMs) return a clear message: `"This command currently works inside a server."`
+3. **Prompt Injection Boundary**: Retrieved Discord messages are injected as untrusted reference data with system instructions forbidding the model from executing commands found inside retrieved text.
+4. **Explicit Channel Allowlist**: Messages are only indexed from channels explicitly listed in `INDEXED_CHANNEL_IDS`. If empty, no messages are indexed.
 
 ---
 
@@ -77,10 +76,6 @@ docker run -d --name uno-qdrant \
   qdrant/qdrant
 ```
 
-Verify Qdrant is running:
-- Dashboard: [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
-- REST API: `http://localhost:6333`
-
 ---
 
 ## 🛠️ Discord Developer Portal Setup
@@ -88,7 +83,7 @@ Verify Qdrant is running:
 1. **Create Application & Bot**: [Discord Developer Portal](https://discord.com/developers/applications).
 2. **Enable Message Content Intent**:
    - Go to **Bot** → **Privileged Gateway Intents**.
-   - Enable **Message Content Intent** (*required for Phase 2B message ingestion*).
+   - Enable **Message Content Intent** (*required for reading text in allowlisted channels*).
 3. **Developer Mode**: In Discord Settings > Advanced, enable **Developer Mode**.
 4. **Copy Server & Channel IDs**:
    - Copy your test server ID (`DEV_GUILD_ID`).
@@ -139,6 +134,10 @@ QDRANT_COLLECTION=discord_messages
 
 # Comma-separated allowlist of channel IDs eligible for indexing:
 INDEXED_CHANNEL_IDS=123456789012345678
+
+# RAG Configuration
+RAG_TOP_K=5
+RAG_MIN_SCORE=0.30
 ```
 
 ### 3. Run Automated Tests
@@ -147,7 +146,13 @@ INDEXED_CHANNEL_IDS=123456789012345678
 python -m pytest
 ```
 
-### 4. Launch Bot
+### 4. Developer Semantic Search Verification CLI
+
+```bash
+python scripts/test_semantic_search.py "When is the data structures quiz?"
+```
+
+### 5. Launch Bot
 
 ```bash
 python main.py

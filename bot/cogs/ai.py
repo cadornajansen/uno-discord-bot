@@ -10,6 +10,9 @@ from bot.services.ai import (
     OllamaTimeoutError,
     AIError,
 )
+from bot.services.embeddings import EmbeddingService
+from bot.services.vector_store import VectorStore
+from bot.services.rag import RAGService
 from bot.utils.formatting import split_message
 
 logger = logging.getLogger(__name__)
@@ -19,21 +22,44 @@ MAX_PROMPT_LENGTH = 2000
 
 
 class AICog(commands.Cog):
-    """Cog for local Ollama AI interaction slash commands."""
+    """Cog for AI chat assistance and RAG-grounded slash commands."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        # Initialize AIService using configuration settings from bot client
+
         settings = getattr(bot, "settings", None)
         base_url = settings.ollama_base_url if settings else "http://localhost:11434"
         model = settings.ollama_model if settings else "phi4-mini"
+        embed_model = settings.ollama_embedding_model if settings else "embeddinggemma"
+        qdrant_url = settings.qdrant_url if settings else "http://localhost:6333"
+        qdrant_coll = settings.qdrant_collection if settings else "discord_messages"
+        top_k = settings.rag_top_k if settings else 5
+        min_score = settings.rag_min_score if settings else 0.30
 
-        self.ai_service = AIService(base_url=base_url, model=model)
+        ai_service = AIService(base_url=base_url, model=model)
+        embedding_service = EmbeddingService(base_url=base_url, model=embed_model)
+        vector_store = VectorStore(url=qdrant_url, collection_name=qdrant_coll)
 
-    @app_commands.command(name="ask", description="Ask the local AI assistant a question.")
+        self.rag_service = RAGService(
+            ai_service=ai_service,
+            embedding_service=embedding_service,
+            vector_store=vector_store,
+            top_k=top_k,
+            min_score=min_score,
+        )
+
+    @app_commands.command(name="ask", description="Ask the AI assistant a question grounded in class context.")
     @app_commands.describe(question="The question or prompt to ask the AI assistant.")
     async def ask(self, interaction: discord.Interaction, question: str) -> None:
         """Slash command /ask question:<text>"""
+        # Security boundary: RAG-enabled /ask must run inside a Discord server
+        if interaction.guild is None:
+            await interaction.response.send_message(
+                "This command currently works inside a server.",
+                ephemeral=True,
+            )
+            return
+
         cleaned_question = question.strip()
 
         # Input validation
@@ -51,23 +77,21 @@ class AICog(commands.Cog):
             )
             return
 
-        # Discord interactions must be acknowledged quickly (<3s), while local
-        # inference may take several seconds, so defer before calling Ollama.
+        # Defer interaction before executing vector search and local LLM inference
         await interaction.response.defer()
 
         try:
-            response_text = await self.ai_service.ask(cleaned_question)
+            response_text = await self.rag_service.answer(
+                cleaned_question,
+                guild_id=interaction.guild.id,
+            )
 
             chunks = split_message(response_text, limit=2000)
             if not chunks:
                 await interaction.followup.send("The AI returned an empty response.")
                 return
 
-            # Send first chunk via interaction followup
-            await interaction.followup.send(chunks[0])
-
-            # Send remaining chunks if response exceeded 2000 characters
-            for chunk in chunks[1:]:
+            for chunk in chunks:
                 await interaction.followup.send(chunk)
 
         except OllamaConnectionError:
@@ -80,7 +104,7 @@ class AICog(commands.Cog):
 
         except OllamaModelNotFoundError:
             logger.warning(
-                f"User {interaction.user.id} '/ask' failed: Model '{self.ai_service.model}' not found."
+                f"User {interaction.user.id} '/ask' failed: Model '{self.rag_service.ai_service.model}' not found."
             )
             await interaction.followup.send(
                 "The configured AI model is not available."
