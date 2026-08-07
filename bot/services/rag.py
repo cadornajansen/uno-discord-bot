@@ -37,32 +37,38 @@ def format_context_block(results: list[dict[str, Any]]) -> str:
 
 
 def format_sources_section(results: list[dict[str, Any]]) -> str:
-    """Format lightweight source citation list from retrieved results payload metadata.
+    """Format lightweight, compact clickable Discord message links from retrieved results.
 
     Args:
         results: List of result dicts containing 'payload'.
 
     Returns:
-        Formatted source citation string.
+        Formatted source citation string like:
+        "Sources: [Message 1](https://discord.com/channels/100/200/300), [Message 2](...)"
+        or empty string if no valid sources exist.
     """
-    sources = []
+    links = []
     seen = set()
+    counter = 1
 
     for item in results:
         payload = item.get("payload", {})
+        guild_id = payload.get("guild_id")
         channel_id = payload.get("channel_id")
         message_id = payload.get("message_id")
 
-        if channel_id and message_id:
-            key = (channel_id, message_id)
+        if guild_id and channel_id and message_id:
+            key = (str(guild_id), str(channel_id), str(message_id))
             if key not in seen:
                 seen.add(key)
-                sources.append(f"- Channel ID {channel_id} — message {message_id}")
+                url = f"https://discord.com/channels/{key[0]}/{key[1]}/{key[2]}"
+                links.append(f"[Message {counter}]({url})")
+                counter += 1
 
-    if not sources:
+    if not links:
         return ""
 
-    return "Sources:\n" + "\n".join(sources)
+    return f"Sources: {', '.join(links)}"
 
 
 class RAGService:

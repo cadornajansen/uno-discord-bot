@@ -12,27 +12,67 @@ from bot.services.rag import (
 )
 
 
-def test_context_formatting_helpers():
-    """Test format_context_block and format_sources_section formatting."""
+def test_format_sources_section_single_source():
+    """Test format_sources_section formatting for a single source."""
     results = [
         {
             "score": 0.85,
             "payload": {
-                "content": "Our DSA quiz was moved to Friday.",
-                "channel_id": "12345",
-                "message_id": "99901",
-                "created_at": "2026-08-08T00:00:00Z",
+                "guild_id": "777",
+                "channel_id": "123",
+                "message_id": "456",
+                "content": "DSA quiz is Friday.",
             },
         }
     ]
 
-    block = format_context_block(results)
-    assert "Message: Our DSA quiz was moved to Friday." in block
-    assert "Channel ID: 12345" in block
+    sources = format_sources_section(results)
+    assert sources == "Sources: [Message 1](https://discord.com/channels/777/123/456)"
+
+
+def test_format_sources_section_multiple_sources_and_url_construction():
+    """Test format_sources_section with multiple sources and correct URL format."""
+    results = [
+        {
+            "score": 0.85,
+            "payload": {"guild_id": "777", "channel_id": "100", "message_id": "200"},
+        },
+        {
+            "score": 0.75,
+            "payload": {"guild_id": "777", "channel_id": "100", "message_id": "201"},
+        },
+    ]
 
     sources = format_sources_section(results)
-    assert "Sources:" in sources
-    assert "- Channel ID 12345 — message 99901" in sources
+    expected = (
+        "Sources: [Message 1](https://discord.com/channels/777/100/200), "
+        "[Message 2](https://discord.com/channels/777/100/201)"
+    )
+    assert sources == expected
+
+
+def test_format_sources_section_deduplication():
+    """Test format_sources_section deduplicates identical message link keys."""
+    results = [
+        {
+            "score": 0.85,
+            "payload": {"guild_id": "777", "channel_id": "100", "message_id": "200"},
+        },
+        {
+            "score": 0.82,
+            "payload": {"guild_id": "777", "channel_id": "100", "message_id": "200"},
+        },
+    ]
+
+    sources = format_sources_section(results)
+    assert sources == "Sources: [Message 1](https://discord.com/channels/777/100/200)"
+
+
+def test_format_sources_section_no_valid_sources():
+    """Test format_sources_section returns empty string when no payload metadata exists."""
+    assert format_sources_section([]) == ""
+    assert format_sources_section([{"score": 0.5, "payload": {}}]) == ""
+    assert format_sources_section([{"score": 0.5, "payload": {"channel_id": "123"}}]) == ""
 
 
 def test_rag_answer_with_relevant_context():
@@ -50,6 +90,7 @@ def test_rag_answer_with_relevant_context():
                 "score": 0.85,
                 "payload": {
                     "content": "Our DSA quiz was moved to Friday.",
+                    "guild_id": "777",
                     "channel_id": "100",
                     "message_id": "200",
                     "created_at": "2026-08-08T00:00:00Z",
@@ -77,10 +118,9 @@ def test_rag_answer_with_relevant_context():
         _, kwargs = ai_mock.ask.call_args
         assert "Our DSA quiz was moved to Friday." in kwargs["context"]
 
-        # Assert sources appended
+        # Assert compact clickable sources appended
         assert "The DSA quiz is on Friday." in result
-        assert "Sources:" in result
-        assert "- Channel ID 100 — message 200" in result
+        assert "Sources: [Message 1](https://discord.com/channels/777/100/200)" in result
 
     asyncio.run(_test())
 
@@ -100,6 +140,7 @@ def test_rag_answer_min_score_filtering():
                 "score": 0.15,  # Below min_score 0.30
                 "payload": {
                     "content": "Unrelated text",
+                    "guild_id": "777",
                     "channel_id": "100",
                     "message_id": "200",
                 },
