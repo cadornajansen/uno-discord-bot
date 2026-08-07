@@ -6,87 +6,104 @@ The bot is currently being developed and tested inside a private development ser
 
 ---
 
-## 📌 Current Phase
+## 📌 Current Phase Status
 
-### **Phase 1 — Core Bot Foundation**
-- [x] Discord bot foundation & client runner
-- [x] Slash command system (`discord.app_commands`)
-- [x] Fast development guild command syncing (`DEV_GUILD_ID`)
-- [x] `/ping` — Connection latency check
-- [x] `/hello` — User greeting
-- [x] `/userinfo` — Public user account metadata
-- [x] `/serverinfo` — Server details embed
-- [x] `/help` — Command guide
-
-### **Phase 2A — Local Ollama AI Integration**
-- [x] Local Ollama AI integration via direct HTTP API (`httpx`)
-- [x] `/ask question:<text>` — Slash command for AI interaction
-- [x] `phi4-mini` model configured for local inference
-- [x] Automatic response chunking for long AI outputs (`split_message`)
-- [x] Failure fallback handling (Ollama offline, model missing, inference timeout)
-
-*(Note: No external AI API, hosted LLM provider, or cloud SDK is used.)*
+- [x] **Phase 1 — Core Bot Foundation** (`/ping`, `/hello`, `/userinfo`, `/serverinfo`, `/help`)
+- [x] **Phase 2A — Local Ollama AI Integration** (`/ask` slash command via `phi4-mini`)
+- [x] **Phase 2B — Controlled Discord Knowledge Ingestion** (Background indexing into Qdrant via `embeddinggemma`)
+- [ ] **Phase 2C — Discord Chat RAG** (*Not implemented yet*)
 
 ---
 
-## 🔮 Future Direction (*Not Implemented Yet*)
+## 🏗️ Architecture & Model Responsibilities
 
-Future phases may expand the bot to include:
-- Phase 2B: Local Qdrant vector database & text embeddings (Discord Chat RAG)
-- Phase 3: Internet search & Open-Meteo weather forecasts
-- Phase 4: SQLite schedules & reminders
+```text
+Discord
+   │
+   ├── /ask command ──> AIService ──> Ollama ──> phi4-mini (Chat Generation)
+   │
+   └── Approved messages ──> Knowledge Cog ──> EmbeddingService ──> Ollama ──> embeddinggemma (Embeddings)
+                                                                                       │
+                                                                                       ▼
+                                                                           VectorStore (Qdrant)
+```
+
+- **`phi4-mini`**: Chat / response generation model.
+- **`embeddinggemma`**: Dense text vector embedding model.
+- **`Qdrant`**: Local vector database (`http://localhost:6333`).
 
 ---
 
-## 🤖 Local AI Setup (Ollama)
+## 🔒 Privacy & Ingestion Rules
 
-To enable the `/ask` command:
+To protect privacy in our class server:
 
-1. **Install Ollama**: Download and install Ollama from [https://ollama.com](https://ollama.com).
-2. **Pull Model**: Open your terminal and pull the `phi4-mini` model:
-   ```bash
-   ollama pull phi4-mini
-   ```
-3. **Test Model Locally**:
-   ```bash
-   ollama run phi4-mini
-   ```
-4. **Run Discord Bot**: Ensure Ollama is running in the background (`http://localhost:11434`), then start the bot:
-   ```bash
-   python main.py
-   ```
-5. **Test in Discord**:
-   ```text
-   /ask question:Explain pointers in C
-   ```
+1. **Explicit Channel Allowlist Only**: Uno does **not** index every channel it can access. Only channels explicitly listed in `INDEXED_CHANNEL_IDS` are indexed.
+2. **Empty Allowlist Safety**: If `INDEXED_CHANNEL_IDS` is empty or unset, **no messages are indexed**.
+3. **Ignored Content**:
+   - Direct Messages (DMs) are ignored.
+   - Bot messages are ignored.
+   - Webhook messages are ignored.
+   - Attachments-only or empty messages are ignored.
+   - Historical message backfill is not performed (only live messages received while Uno is running are processed).
+
+---
+
+## 🤖 Local AI & Qdrant Setup
+
+### 1. Ollama Models Setup
+Ensure Ollama is installed ([https://ollama.com](https://ollama.com)), then pull both models:
+
+```bash
+# Pull chat model
+ollama pull phi4-mini
+
+# Pull embedding model
+ollama pull embeddinggemma
+```
+
+### 2. Qdrant Vector Database Setup
+Run Qdrant locally using Docker:
+
+```bash
+# Create persistent storage volume
+docker volume create uno_qdrant_storage
+
+# Run Qdrant container
+docker run -d --name uno-qdrant \
+  -p 6333:6333 \
+  -p 6334:6334 \
+  -v uno_qdrant_storage:/qdrant/storage \
+  qdrant/qdrant
+```
+
+Verify Qdrant is running:
+- Dashboard: [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
+- REST API: `http://localhost:6333`
 
 ---
 
 ## 🛠️ Discord Developer Portal Setup
 
-1. **Create Application**: Go to the [Discord Developer Portal](https://discord.com/developers/applications) → **New Application**.
-2. **Add Bot**: Go to **Bot** tab → **Add Bot**.
-3. **Copy Bot Token**: Click **Reset Token** and copy the generated token string.
-4. **Developer Mode**: In Discord client, go to **User Settings > Advanced** and turn on **Developer Mode**.
-5. **Copy Server ID**: Right-click your private test server icon and select **Copy Server ID**.
-6. **Generate Invite Link**:
-   - Go to **OAuth2 > URL Generator**.
-   - Select Scopes: `bot`, `applications.commands`.
-   - Select Permissions: `View Channels`, `Send Messages`, `Embed Links`, `Use Application Commands`.
-   - *(Do **NOT** request Administrator permissions, and do **NOT** enable Message Content Intent yet.)*
-7. **Invite Bot**: Open the generated invite link to add the bot to your private test server.
+1. **Create Application & Bot**: [Discord Developer Portal](https://discord.com/developers/applications).
+2. **Enable Message Content Intent**:
+   - Go to **Bot** → **Privileged Gateway Intents**.
+   - Enable **Message Content Intent** (*required for Phase 2B message ingestion*).
+3. **Developer Mode**: In Discord Settings > Advanced, enable **Developer Mode**.
+4. **Copy Server & Channel IDs**:
+   - Copy your test server ID (`DEV_GUILD_ID`).
+   - Right-click an approved test channel → **Copy Channel ID** (`INDEXED_CHANNEL_IDS`).
 
 ---
 
-## 🚀 Environment Setup & Local Running
+## 🚀 Environment Configuration & Execution
 
-### 1. Clone & Setup Virtual Environment
+### 1. Virtual Environment Setup
 
 ```bash
 git clone https://github.com/your-username/uno-discord-bot.git
 cd uno-discord-bot
 
-# Create virtual environment
 python -m venv .venv
 
 # Activate on Windows:
@@ -94,17 +111,14 @@ python -m venv .venv
 
 # Activate on Linux / macOS:
 source .venv/bin/activate
-```
 
-### 2. Install Project Dependencies
-
-```bash
+# Install dependencies in editable mode
 pip install -e ".[dev]"
 ```
 
-### 3. Environment Configuration
+### 2. Configure Environment (`.env`)
 
-Copy `.env.example` to create your private `.env` file:
+Copy `.env.example` to `.env`:
 
 ```bash
 cp .env.example .env
@@ -118,15 +132,22 @@ DEV_GUILD_ID=your_test_server_id_here
 
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=phi4-mini
+OLLAMA_EMBEDDING_MODEL=embeddinggemma
+
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION=discord_messages
+
+# Comma-separated allowlist of channel IDs eligible for indexing:
+INDEXED_CHANNEL_IDS=123456789012345678
 ```
 
-### 4. Run Automated Tests
+### 3. Run Automated Tests
 
 ```bash
 python -m pytest
 ```
 
-### 5. Start Bot
+### 4. Launch Bot
 
 ```bash
 python main.py

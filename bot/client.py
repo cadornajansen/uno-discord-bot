@@ -14,10 +14,9 @@ class UnoDiscordBot(commands.Bot):
     def __init__(self, settings: Settings):
         self.settings = settings
 
-        # Request only minimal default intents required for Phase 1.
-        # message_content is explicitly kept disabled as message ingestion is not yet implemented.
+        # Request required default intents + message_content intent for Phase 2B message ingestion
         intents = discord.Intents.default()
-        intents.message_content = False
+        intents.message_content = True
 
         super().__init__(
             command_prefix="!",
@@ -28,7 +27,7 @@ class UnoDiscordBot(commands.Bot):
     async def setup_hook(self) -> None:
         """Asynchronous initialization executed prior to bot login."""
         # Load cogs
-        cogs_to_load = ["bot.cogs.general", "bot.cogs.ai"]
+        cogs_to_load = ["bot.cogs.general", "bot.cogs.ai", "bot.cogs.knowledge"]
         for extension in cogs_to_load:
             try:
                 await self.load_extension(extension)
