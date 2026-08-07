@@ -29,3 +29,71 @@ def format_timestamp(dt: Optional[datetime], style: str = "F") -> str:
         return "Unknown"
     unix_timestamp = int(dt.timestamp())
     return f"<t:{unix_timestamp}:{style}>"
+
+
+def split_message(text: str, limit: int = 2000) -> list[str]:
+    """Split a long text string into chunks not exceeding the limit length.
+
+    Prefers splitting along newline boundaries (\\n), then whitespace (space),
+    and falls back to hard character splitting if a single line/token exceeds limit.
+
+    Args:
+        text: The string content to split.
+        limit: Maximum character length per chunk (default: 2000).
+
+    Returns:
+        A list of non-empty string chunks.
+    """
+    if not text:
+        return []
+
+    if len(text) <= limit:
+        return [text]
+
+    chunks: list[str] = []
+    current_chunk = ""
+
+    lines = text.split("\n")
+
+    for line in lines:
+        # If line itself is larger than limit, split it by words/chars
+        if len(line) > limit:
+            if current_chunk:
+                chunks.append(current_chunk)
+                current_chunk = ""
+
+            words = line.split(" ")
+            current_line_chunk = ""
+
+            for word in words:
+                if len(word) > limit:
+                    if current_line_chunk:
+                        chunks.append(current_line_chunk)
+                        current_line_chunk = ""
+                    for i in range(0, len(word), limit):
+                        chunks.append(word[i : i + limit])
+                elif (
+                    len(current_line_chunk) + (1 if current_line_chunk else 0) + len(word)
+                    <= limit
+                ):
+                    current_line_chunk = (
+                        f"{current_line_chunk} {word}" if current_line_chunk else word
+                    )
+                else:
+                    chunks.append(current_line_chunk)
+                    current_line_chunk = word
+
+            if current_line_chunk:
+                current_chunk = current_line_chunk
+        else:
+            needed_len = len(current_chunk) + (1 if current_chunk else 0) + len(line)
+            if needed_len <= limit:
+                current_chunk = f"{current_chunk}\n{line}" if current_chunk else line
+            else:
+                chunks.append(current_chunk)
+                current_chunk = line
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    return [c for c in chunks if c]

@@ -14,9 +14,17 @@ class ConfigError(Exception):
 class Settings:
     """Holds validated configuration settings for the bot."""
 
-    def __init__(self, discord_token: str, dev_guild_id: int | None):
+    def __init__(
+        self,
+        discord_token: str,
+        dev_guild_id: int | None,
+        ollama_base_url: str,
+        ollama_model: str,
+    ):
         self.discord_token = discord_token
         self.dev_guild_id = dev_guild_id
+        self.ollama_base_url = ollama_base_url.rstrip("/")
+        self.ollama_model = ollama_model
 
 
 def load_settings() -> Settings:
@@ -43,4 +51,12 @@ def load_settings() -> Settings:
             )
         dev_guild_id = int(guild_id_raw)
 
-    return Settings(discord_token=token, dev_guild_id=dev_guild_id)
+    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip()
+    ollama_model = os.getenv("OLLAMA_MODEL", "phi4-mini").strip()
+
+    return Settings(
+        discord_token=token,
+        dev_guild_id=dev_guild_id,
+        ollama_base_url=ollama_base_url,
+        ollama_model=ollama_model,
+    )

@@ -18,44 +18,63 @@ The bot is currently being developed and tested inside a private development ser
 - [x] `/serverinfo` — Server details embed
 - [x] `/help` — Command guide
 
+### **Phase 2A — Local Ollama AI Integration**
+- [x] Local Ollama AI integration via direct HTTP API (`httpx`)
+- [x] `/ask question:<text>` — Slash command for AI interaction
+- [x] `phi4-mini` model configured for local inference
+- [x] Automatic response chunking for long AI outputs (`split_message`)
+- [x] Failure fallback handling (Ollama offline, model missing, inference timeout)
+
+*(Note: No external AI API, hosted LLM provider, or cloud SDK is used.)*
+
 ---
 
 ## 🔮 Future Direction (*Not Implemented Yet*)
 
 Future phases may expand the bot to include:
-- Self-hosted AI models
-- Self-hosted text embeddings
-- Local vector database
-- Discord chat RAG (Retrieval-Augmented Generation)
-- Internet search integration
-- Weather forecasts
-- Schedules and reminders
+- Phase 2B: Local Qdrant vector database & text embeddings (Discord Chat RAG)
+- Phase 3: Internet search & Open-Meteo weather forecasts
+- Phase 4: SQLite schedules & reminders
 
-*(Note: None of these services or dependencies are implemented in Phase 1.)*
+---
+
+## 🤖 Local AI Setup (Ollama)
+
+To enable the `/ask` command:
+
+1. **Install Ollama**: Download and install Ollama from [https://ollama.com](https://ollama.com).
+2. **Pull Model**: Open your terminal and pull the `phi4-mini` model:
+   ```bash
+   ollama pull phi4-mini
+   ```
+3. **Test Model Locally**:
+   ```bash
+   ollama run phi4-mini
+   ```
+4. **Run Discord Bot**: Ensure Ollama is running in the background (`http://localhost:11434`), then start the bot:
+   ```bash
+   python main.py
+   ```
+5. **Test in Discord**:
+   ```text
+   /ask question:Explain pointers in C
+   ```
 
 ---
 
 ## 🛠️ Discord Developer Portal Setup
 
-Follow these steps to set up your bot application in Discord:
-
-1. **Create Application**: Go to the [Discord Developer Portal](https://discord.com/developers/applications) and click **New Application**.
-2. **Add Bot**: Navigate to the **Bot** tab and click **Add Bot**.
-3. **Copy Bot Token**: Under the **Bot** section, click **Reset Token** and copy the generated token string.
-4. **Developer Mode**: In your Discord client, go to **User Settings > Advanced** and turn on **Developer Mode**.
-5. **Copy Server ID**: Right-click your private test Discord server icon and select **Copy Server ID**.
-6. **Generate Bot Invite URL**:
-   - Go to **OAuth2 > URL Generator** in the Developer Portal.
-   - Under **Scopes**, select:
-     - `bot`
-     - `applications.commands`
-   - Under **Bot Permissions**, select ONLY:
-     - `View Channels`
-     - `Send Messages`
-     - `Embed Links`
-     - `Use Application Commands`
-   - *(Do **NOT** request Administrator permissions, and do **NOT** enable Message Content Intent for Phase 1.)*
-7. **Invite Bot**: Copy the generated invite link, open it in a browser, and invite the bot to your private development server.
+1. **Create Application**: Go to the [Discord Developer Portal](https://discord.com/developers/applications) → **New Application**.
+2. **Add Bot**: Go to **Bot** tab → **Add Bot**.
+3. **Copy Bot Token**: Click **Reset Token** and copy the generated token string.
+4. **Developer Mode**: In Discord client, go to **User Settings > Advanced** and turn on **Developer Mode**.
+5. **Copy Server ID**: Right-click your private test server icon and select **Copy Server ID**.
+6. **Generate Invite Link**:
+   - Go to **OAuth2 > URL Generator**.
+   - Select Scopes: `bot`, `applications.commands`.
+   - Select Permissions: `View Channels`, `Send Messages`, `Embed Links`, `Use Application Commands`.
+   - *(Do **NOT** request Administrator permissions, and do **NOT** enable Message Content Intent yet.)*
+7. **Invite Bot**: Open the generated invite link to add the bot to your private test server.
 
 ---
 
@@ -70,7 +89,7 @@ cd uno-discord-bot
 # Create virtual environment
 python -m venv .venv
 
-# Activate on Windows PowerShell / CMD:
+# Activate on Windows:
 .venv\Scripts\activate
 
 # Activate on Linux / macOS:
@@ -78,8 +97,6 @@ source .venv/bin/activate
 ```
 
 ### 2. Install Project Dependencies
-
-Install the project in editable mode with development dependencies:
 
 ```bash
 pip install -e ".[dev]"
@@ -93,25 +110,26 @@ Copy `.env.example` to create your private `.env` file:
 cp .env.example .env
 ```
 
-Edit `.env` and set your credentials:
+Edit `.env`:
 
 ```env
 DISCORD_TOKEN=your_bot_token_here
 DEV_GUILD_ID=your_test_server_id_here
+
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=phi4-mini
 ```
 
-*(Warning: Never commit your `.env` file or bot secrets to Git! `.env` is listed in `.gitignore`.)*
-
-### 4. Run the Bot
-
-```bash
-python main.py
-```
-
-### 5. Run Automated Tests
+### 4. Run Automated Tests
 
 ```bash
 python -m pytest
+```
+
+### 5. Start Bot
+
+```bash
+python main.py
 ```
 
 ---

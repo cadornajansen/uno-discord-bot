@@ -28,7 +28,7 @@ class UnoDiscordBot(commands.Bot):
     async def setup_hook(self) -> None:
         """Asynchronous initialization executed prior to bot login."""
         # Load cogs
-        cogs_to_load = ["bot.cogs.general"]
+        cogs_to_load = ["bot.cogs.general", "bot.cogs.ai"]
         for extension in cogs_to_load:
             try:
                 await self.load_extension(extension)
