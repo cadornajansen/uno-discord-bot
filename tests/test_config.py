@@ -74,3 +74,19 @@ def test_invalid_indexed_channel_id(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ConfigError, match="Invalid channel ID 'invalid_id'"):
         load_settings()
+
+
+def test_ocr_channel_ids_and_settings_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test parsing OCR_CHANNEL_IDS, OCR_MAX_IMAGE_MB, OCR_MIN_TEXT_CHARS, OCR_MAX_IMAGES_PER_MESSAGE."""
+    monkeypatch.setenv("DISCORD_TOKEN", "mock_token")
+    monkeypatch.setenv("INDEXED_CHANNEL_IDS", "100, 200")
+    monkeypatch.setenv("OCR_CHANNEL_IDS", "200, 300")
+    monkeypatch.setenv("OCR_MAX_IMAGE_MB", "12")
+    monkeypatch.setenv("OCR_MIN_TEXT_CHARS", "15")
+    monkeypatch.setenv("OCR_MAX_IMAGES_PER_MESSAGE", "5")
+
+    settings = load_settings()
+    assert settings.ocr_channel_ids == frozenset({200, 300})
+    assert settings.ocr_max_image_mb == 12
+    assert settings.ocr_min_text_chars == 15
+    assert settings.ocr_max_images_per_message == 5

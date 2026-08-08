@@ -72,6 +72,11 @@ async def run_backfill(channel_id_filter: int | None, limit: int | None) -> int:
     intents = discord.Intents.default()
     intents.message_content = True
     bot = commands.Bot(command_prefix="!", intents=intents)
+    bot.settings = settings
+
+    from bot.cogs.knowledge import KnowledgeCog
+
+    cog = KnowledgeCog(bot)
 
     @bot.event
     async def on_ready():
@@ -101,33 +106,19 @@ async def run_backfill(channel_id_filter: int | None, limit: int | None) -> int:
 
             try:
                 async for message in channel.history(limit=limit, oldest_first=True):
-                    if not should_index_message(message, allowlist):
+                    if not should_index_message(
+                        message,
+                        indexed_channel_ids=settings.indexed_channel_ids,
+                        ocr_channel_ids=settings.ocr_channel_ids,
+                        ocr_max_image_mb=settings.ocr_max_image_mb,
+                    ):
                         ch_skipped += 1
                         continue
 
-                    content = message.content.strip()
-
-                    try:
-                        vector = await embedding_service.embed(content)
-                        payload = {
-                            "message_id": str(message.id),
-                            "guild_id": str(message.guild.id),
-                            "channel_id": str(message.channel.id),
-                            "author_id": str(message.author.id),
-                            "content": content,
-                            "created_at": message.created_at.isoformat(),
-                        }
-                        await vector_store.upsert_message(
-                            message_id=message.id,
-                            vector=vector,
-                            payload=payload,
-                        )
+                    success = await cog.index_message(message)
+                    if success:
                         ch_indexed += 1
-                    except (EmbeddingError, VectorStoreError) as e:
-                        logger.error(f"Backfill failed for message ID {message.id}: {e}")
-                        ch_failed += 1
-                    except Exception as e:
-                        logger.exception(f"Unexpected error indexing message ID {message.id}: {e}")
+                    else:
                         ch_failed += 1
 
             except Exception as hist_err:
@@ -145,7 +136,7 @@ async def run_backfill(channel_id_filter: int | None, limit: int | None) -> int:
             f"skipped: {total_skipped}, failed: {total_failed}"
         )
 
-        await vector_store.close()
+        await cog.vector_store.close()
         await bot.close()
 
     try:

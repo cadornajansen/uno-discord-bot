@@ -41,6 +41,10 @@ class Settings:
         weather_location_name: str,
         weather_timezone: str,
         pagasa_ncr_url: str,
+        ocr_channel_ids: frozenset[int],
+        ocr_max_image_mb: int,
+        ocr_min_text_chars: int,
+        ocr_max_images_per_message: int,
     ):
         self.discord_token = discord_token
         self.dev_guild_id = dev_guild_id
@@ -67,6 +71,10 @@ class Settings:
         self.weather_location_name = weather_location_name
         self.weather_timezone = weather_timezone
         self.pagasa_ncr_url = pagasa_ncr_url.strip()
+        self.ocr_channel_ids = ocr_channel_ids
+        self.ocr_max_image_mb = ocr_max_image_mb
+        self.ocr_min_text_chars = ocr_min_text_chars
+        self.ocr_max_images_per_message = ocr_max_images_per_message
 
 
 def load_settings() -> Settings:
@@ -193,6 +201,36 @@ def load_settings() -> Settings:
         "PAGASA_NCR_URL", "https://www.pagasa.dost.gov.ph/regional-forecast/ncrprsd"
     ).strip()
 
+    ocr_channels_raw = os.getenv("OCR_CHANNEL_IDS", "").strip()
+    ocr_channel_ids: set[int] = set()
+
+    if ocr_channels_raw:
+        for part in ocr_channels_raw.split(","):
+            cleaned = part.strip()
+            if not cleaned:
+                continue
+            if not cleaned.isdigit():
+                raise ConfigError(
+                    f"Invalid channel ID '{cleaned}' in OCR_CHANNEL_IDS. "
+                    "All channel IDs must be numeric integers."
+                )
+            ocr_channel_ids.add(int(cleaned))
+
+    ocr_max_image_mb_raw = os.getenv("OCR_MAX_IMAGE_MB", "8").strip()
+    if not ocr_max_image_mb_raw.isdigit() or int(ocr_max_image_mb_raw) <= 0:
+        raise ConfigError("OCR_MAX_IMAGE_MB must be a positive integer.")
+    ocr_max_image_mb = int(ocr_max_image_mb_raw)
+
+    ocr_min_text_chars_raw = os.getenv("OCR_MIN_TEXT_CHARS", "10").strip()
+    if not ocr_min_text_chars_raw.isdigit() or int(ocr_min_text_chars_raw) <= 0:
+        raise ConfigError("OCR_MIN_TEXT_CHARS must be a positive integer.")
+    ocr_min_text_chars = int(ocr_min_text_chars_raw)
+
+    ocr_max_images_per_message_raw = os.getenv("OCR_MAX_IMAGES_PER_MESSAGE", "3").strip()
+    if not ocr_max_images_per_message_raw.isdigit() or int(ocr_max_images_per_message_raw) <= 0:
+        raise ConfigError("OCR_MAX_IMAGES_PER_MESSAGE must be a positive integer.")
+    ocr_max_images_per_message = int(ocr_max_images_per_message_raw)
+
     return Settings(
         discord_token=token,
         dev_guild_id=dev_guild_id,
@@ -219,4 +257,8 @@ def load_settings() -> Settings:
         weather_location_name=weather_location_name,
         weather_timezone=weather_timezone,
         pagasa_ncr_url=pagasa_ncr_url,
+        ocr_channel_ids=frozenset(ocr_channel_ids),
+        ocr_max_image_mb=ocr_max_image_mb,
+        ocr_min_text_chars=ocr_min_text_chars,
+        ocr_max_images_per_message=ocr_max_images_per_message,
     )

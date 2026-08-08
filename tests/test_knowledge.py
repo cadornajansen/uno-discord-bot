@@ -110,6 +110,187 @@ def test_should_index_ignore_interaction_slash_command_messages():
     assert should_index_message(msg_with_metadata, allowlist) is False
 
 
+def test_should_index_image_only_in_ocr_channel_eligible():
+    """Test image-only message in indexed + OCR-enabled channel is eligible."""
+    att = MagicMock()
+    att.filename = "assignment.png"
+    att.content_type = "image/png"
+    att.size = 1000
+
+    message = MagicMock()
+    message.guild = MagicMock()
+    message.channel.id = 123
+    message.author.bot = False
+    message.webhook_id = None
+    message.interaction_metadata = None
+    message.content = ""
+    message.attachments = [att]
+
+    indexed = frozenset({123})
+    ocr = frozenset({123})
+
+    assert should_index_message(message, indexed_channel_ids=indexed, ocr_channel_ids=ocr) is True
+
+
+def test_should_index_image_only_outside_ocr_channel_skipped():
+    """Test image-only message in indexed channel NOT in ocr_channel_ids is skipped."""
+    att = MagicMock()
+    att.filename = "assignment.png"
+    att.content_type = "image/png"
+    att.size = 1000
+
+    message = MagicMock()
+    message.guild = MagicMock()
+    message.channel.id = 123
+    message.author.bot = False
+    message.webhook_id = None
+    message.interaction_metadata = None
+    message.content = ""
+    message.attachments = [att]
+
+    indexed = frozenset({123})
+    ocr = frozenset({999})  # Different channel
+
+    assert should_index_message(message, indexed_channel_ids=indexed, ocr_channel_ids=ocr) is False
+
+
+def test_should_index_unsupported_attachment_only_skipped():
+    """Test PDF/ZIP attachment-only message in OCR channel is skipped."""
+    att = MagicMock()
+    att.filename = "document.pdf"
+    att.content_type = "application/pdf"
+    att.size = 1000
+
+    message = MagicMock()
+    message.guild = MagicMock()
+    message.channel.id = 123
+    message.author.bot = False
+    message.webhook_id = None
+    message.interaction_metadata = None
+    message.content = ""
+    message.attachments = [att]
+
+    indexed = frozenset({123})
+    ocr = frozenset({123})
+
+    assert should_index_message(message, indexed_channel_ids=indexed, ocr_channel_ids=ocr) is False
+
+
+def test_should_index_oversized_image_attachment_only_skipped():
+    """Test oversized image attachment-only message in OCR channel is skipped."""
+    att = MagicMock()
+    att.filename = "huge.png"
+    att.content_type = "image/png"
+    att.size = 20 * 1024 * 1024  # 20 MB
+
+    message = MagicMock()
+    message.guild = MagicMock()
+    message.channel.id = 123
+    message.author.bot = False
+    message.webhook_id = None
+    message.interaction_metadata = None
+    message.content = ""
+    message.attachments = [att]
+
+    indexed = frozenset({123})
+    ocr = frozenset({123})
+
+    assert (
+        should_index_message(
+            message,
+            indexed_channel_ids=indexed,
+            ocr_channel_ids=ocr,
+            ocr_max_image_mb=8,
+        )
+        is False
+    )
+
+
+def test_index_message_combines_text_and_ocr():
+    """Test KnowledgeCog index_message combines message content and OCR text in Qdrant payload."""
+    async def _test():
+        bot = MagicMock()
+        cog = KnowledgeCog(bot)
+        cog.indexed_channel_ids = frozenset({123})
+        cog.ocr_channel_ids = frozenset({123})
+        cog.embedding_service.embed = AsyncMock(return_value=[0.1] * 768)
+        cog.vector_store.upsert_message = AsyncMock()
+        cog.ocr_service.extract_text = AsyncMock(return_value="Quiz on Chapter 4 due Aug 10")
+
+        att = MagicMock()
+        att.filename = "homework.png"
+        att.content_type = "image/png"
+        att.size = 500
+        att.read = AsyncMock(return_value=b"image_bytes")
+
+        message = MagicMock()
+        message.id = 777
+        message.guild.id = 111
+        message.channel.id = 123
+        message.author.id = 222
+        message.author.bot = False
+        message.webhook_id = None
+        message.interaction_metadata = None
+        message.content = "Check attached homework assignment."
+        message.attachments = [att]
+        message.created_at.isoformat.return_value = "2026-08-08T12:00:00Z"
+
+        success = await cog.index_message(message)
+        assert success is True
+
+        cog.vector_store.upsert_message.assert_called_once()
+        call_kwargs = cog.vector_store.upsert_message.call_args[1]
+        payload = call_kwargs["payload"]
+
+        assert "Discord message:\nCheck attached homework assignment." in payload["content"]
+        assert "Image text:\nQuiz on Chapter 4 due Aug 10" in payload["content"]
+        assert payload["source_type"] == "text_and_image_ocr"
+        assert payload["ocr_attachment_count"] == 1
+        assert payload["ocr_filenames"] == ["homework.png"]
+
+    asyncio.run(_test())
+
+
+def test_index_message_ocr_failure_preserves_normal_text():
+    """Test KnowledgeCog still indexes normal text if OCR raises an error."""
+    async def _test():
+        bot = MagicMock()
+        cog = KnowledgeCog(bot)
+        cog.indexed_channel_ids = frozenset({123})
+        cog.ocr_channel_ids = frozenset({123})
+        cog.embedding_service.embed = AsyncMock(return_value=[0.1] * 768)
+        cog.vector_store.upsert_message = AsyncMock()
+        cog.ocr_service.extract_text = AsyncMock(side_effect=Exception("Corrupt image"))
+
+        att = MagicMock()
+        att.filename = "bad.png"
+        att.content_type = "image/png"
+        att.size = 500
+        att.read = AsyncMock(return_value=b"corrupt")
+
+        message = MagicMock()
+        message.id = 888
+        message.guild.id = 111
+        message.channel.id = 123
+        message.author.id = 222
+        message.author.bot = False
+        message.webhook_id = None
+        message.interaction_metadata = None
+        message.content = "Please read textbook."
+        message.attachments = [att]
+        message.created_at.isoformat.return_value = "2026-08-08T12:00:00Z"
+
+        success = await cog.index_message(message)
+        assert success is True
+
+        payload = cog.vector_store.upsert_message.call_args[1]["payload"]
+        assert payload["content"] == "Please read textbook."
+        assert payload["source_type"] == "text"
+        assert payload["ocr_attachment_count"] == 0
+
+    asyncio.run(_test())
+
+
 def test_on_message_edit_reindexes_same_message_id():
     """Test on_message_edit re-embeds and updates point when content changes."""
     async def _test():
