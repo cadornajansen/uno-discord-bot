@@ -10,8 +10,8 @@ from bot.services.documents import (
     DocumentAnalysis,
     UnsupportedFileError,
     DocumentParseError,
-    DocumentError,
 )
+from bot.services.document_sessions import DocumentSessionService
 from bot.services.ai import (
     AIService,
     OllamaConnectionError,
@@ -24,6 +24,7 @@ from bot.utils.formatting import split_message
 logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = (".pdf", ".pptx")
+MAX_QUESTION_LENGTH = 500
 
 
 def format_document_response(analysis: DocumentAnalysis, summary: str) -> str:
@@ -59,7 +60,7 @@ def format_document_response(analysis: DocumentAnalysis, summary: str) -> str:
 
 
 class DocumentsCog(commands.Cog):
-    """Cog handling local analysis and summarization of PDF and PPTX file attachments."""
+    """Cog handling local analysis and interactive Q&A for PDF and PPTX file attachments."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -67,12 +68,14 @@ class DocumentsCog(commands.Cog):
 
         base_url = settings.ollama_base_url if settings else "http://localhost:11434"
         model = settings.ollama_model if settings else "phi4-mini"
-        max_chars = settings.document_max_chars if settings else 50000
+        max_chars = settings.document_max_chars if settings else 20000
+        ttl_minutes = settings.document_session_ttl_minutes if settings else 30
         self.max_size_mb = settings.document_max_size_mb if settings else 15
         self.max_size_bytes = self.max_size_mb * 1024 * 1024
 
         timeout = settings.ollama_timeout_seconds if settings else 180.0
         self.document_service = DocumentService(max_chars=max_chars)
+        self.session_service = DocumentSessionService(ttl_minutes=ttl_minutes)
         self.ai_service = AIService(base_url=base_url, model=model, default_timeout=timeout)
 
     @app_commands.command(
@@ -92,7 +95,7 @@ class DocumentsCog(commands.Cog):
         # 1. Validate file extension
         if ext not in SUPPORTED_EXTENSIONS:
             await interaction.response.send_message(
-                f"Unsupported file type '{ext}'. Uno currently supports only .pdf and .pptx files.",
+                f"Unsupported file format '{ext}'. Uno currently supports only .pdf and .pptx files.",
                 ephemeral=True,
             )
             return
@@ -100,8 +103,7 @@ class DocumentsCog(commands.Cog):
         # 2. Validate file size
         if file.size > self.max_size_bytes:
             await interaction.response.send_message(
-                f"File size is too large ({file.size / (1024 * 1024):.1f} MB). "
-                f"Maximum allowed limit is {self.max_size_mb} MB.",
+                f"File too large. Uno currently supports documents up to {self.max_size_mb} MB.",
                 ephemeral=True,
             )
             return
@@ -123,16 +125,32 @@ class DocumentsCog(commands.Cog):
                     filename=filename,
                 )
 
-            # Generate AI summary if extracted text exists
+            # Check if readable text content exists
             if not analysis.markdown.strip():
                 summary_text = "No readable text content was found in this file to summarize."
+                stored_session = False
             else:
+                # Store active document session in memory
+                self.session_service.set_session(
+                    guild_id=interaction.guild_id,
+                    channel_id=interaction.channel_id,
+                    user_id=interaction.user.id,
+                    filename=analysis.filename,
+                    markdown=analysis.markdown,
+                    warnings=analysis.warnings,
+                )
+                stored_session = True
+
                 summary_text = await self.ai_service.summarize_document(
                     markdown=analysis.markdown,
                     filename=analysis.filename,
                 )
 
             response_text = format_document_response(analysis, summary_text)
+
+            if stored_session:
+                response_text += f"\n\nDocument ready for questions. Use `/docask` within the next {self.session_service.ttl_minutes} minutes."
+
             chunks = split_message(response_text, limit=2000)
 
             if not chunks:
@@ -184,6 +202,106 @@ class DocumentsCog(commands.Cog):
             )
             await interaction.followup.send(
                 "Something went wrong while analyzing this document."
+            )
+
+    @app_commands.command(
+        name="docask",
+        description="Ask a question about your currently analyzed document.",
+    )
+    @app_commands.describe(question="The question to ask about your active document.")
+    async def docask(
+        self,
+        interaction: discord.Interaction,
+        question: str,
+    ) -> None:
+        """Slash command /docask question:<text>"""
+        cleaned_question = question.strip()
+
+        # 1. Validate question input
+        if not cleaned_question:
+            await interaction.response.send_message(
+                "Question cannot be empty or contain only whitespace.",
+                ephemeral=True,
+            )
+            return
+
+        if len(cleaned_question) > MAX_QUESTION_LENGTH:
+            await interaction.response.send_message(
+                f"Question is too long (maximum {MAX_QUESTION_LENGTH} characters).",
+                ephemeral=True,
+            )
+            return
+
+        # Defer interaction before retrieving session and calling LLM
+        await interaction.response.defer()
+
+        # 2. Retrieve active document session with lazy TTL check
+        session, was_expired = self.session_service.get_session(
+            guild_id=interaction.guild_id,
+            channel_id=interaction.channel_id,
+            user_id=interaction.user.id,
+        )
+
+        if was_expired:
+            await interaction.followup.send(
+                "Your document session expired. Run `/analyze` again to continue."
+            )
+            return
+
+        if session is None:
+            await interaction.followup.send(
+                "No active document found. Run `/analyze` with a PDF or PPTX first."
+            )
+            return
+
+        try:
+            answer_text = await self.ai_service.answer_document_question(
+                document=session.markdown,
+                question=cleaned_question,
+                filename=session.filename,
+            )
+
+            chunks = split_message(answer_text, limit=2000)
+            if not chunks:
+                await interaction.followup.send("The AI returned an empty response.")
+                return
+
+            for chunk in chunks:
+                await interaction.followup.send(chunk)
+
+        except OllamaConnectionError:
+            logger.warning(f"User {interaction.user.id} '/docask' failed: Ollama service offline.")
+            await interaction.followup.send(
+                "The local AI service is unavailable right now."
+            )
+
+        except OllamaModelNotFoundError:
+            logger.warning(
+                f"User {interaction.user.id} '/docask' failed: Model '{self.ai_service.model}' not found."
+            )
+            await interaction.followup.send(
+                "The configured AI model is not available."
+            )
+
+        except OllamaTimeoutError:
+            logger.warning(f"User {interaction.user.id} '/docask' failed: Inference timeout.")
+            await interaction.followup.send(
+                "The AI service took too long to respond. Please try again later."
+            )
+
+        except AIError as e:
+            logger.error(f"User {interaction.user.id} '/docask' failed with AI error: {e}")
+            await interaction.followup.send(
+                "An error occurred while communicating with the AI service."
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Unexpected error during '/docask' execution: {e}",
+                exc_info=True,
+            )
+            await interaction.followup.send(
+                "Something went wrong while running this command."
             )
 
 

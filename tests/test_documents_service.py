@@ -166,6 +166,6 @@ def test_character_budget_truncation_warning():
 
             assert len(analysis.markdown) == 20
             assert len(analysis.warnings) == 1
-            assert "exceeded the maximum character analysis limit" in analysis.warnings[0]
+            assert "This document exceeds Uno's current analysis limit" in analysis.warnings[0]
 
     asyncio.run(_test())

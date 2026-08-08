@@ -4,6 +4,7 @@ import pytest
 
 from bot.cogs.documents import DocumentsCog, format_document_response
 from bot.services.documents import DocumentAnalysis, DocumentParseError
+from bot.services.document_sessions import DocumentSession
 
 
 def test_format_document_response_helper():
@@ -66,6 +67,8 @@ def test_analyze_cog_file_size_exceeded():
         await cog.analyze.callback(cog, interaction, file=attachment)
 
         interaction.response.send_message.assert_called_once()
+        sent_msg = interaction.response.send_message.call_args[0][0]
+        assert "File too large. Uno currently supports documents up to 15 MB." in sent_msg
         _, kwargs = interaction.response.send_message.call_args
         assert kwargs.get("ephemeral") is True
         interaction.response.defer.assert_not_called()
@@ -74,7 +77,7 @@ def test_analyze_cog_file_size_exceeded():
 
 
 def test_analyze_cog_successful_flow():
-    """Test /analyze slash command successful file download, extraction, and summary."""
+    """Test /analyze slash command successful file download, extraction, summary, and session storage."""
     async def _test():
         bot = MagicMock(spec=[])
         cog = DocumentsCog(bot)
@@ -97,6 +100,9 @@ def test_analyze_cog_successful_flow():
         attachment.save = AsyncMock()
 
         interaction = MagicMock()
+        interaction.guild_id = 100
+        interaction.channel_id = 200
+        interaction.user.id = 300
         interaction.response.defer = AsyncMock()
         interaction.followup.send = AsyncMock()
 
@@ -109,36 +115,119 @@ def test_analyze_cog_successful_flow():
             markdown="Extracted PDF text",
             filename="lecture.pdf",
         )
-        interaction.followup.send.assert_called_once()
+
+        # Assert session stored
+        session, _ = cog.session_service.get_session(100, 200, 300)
+        assert session is not None
+        assert session.filename == "lecture.pdf"
+
+        # Assert footer prompt included
         sent_text = interaction.followup.send.call_args[0][0]
-        assert "**Document Analysis — lecture.pdf**" in sent_text
-        assert "• Summary point 1" in sent_text
+        assert "Document ready for questions. Use `/docask` within the next" in sent_text
 
     asyncio.run(_test())
 
 
-def test_analyze_cog_parse_error_handled():
-    """Test /analyze slash command sends user-friendly error when document parsing fails."""
+def test_docask_successful_qna():
+    """Test /docask retrieves active session and calls answer_document_question."""
     async def _test():
         bot = MagicMock(spec=[])
         cog = DocumentsCog(bot)
-        cog.document_service.extract = AsyncMock(side_effect=DocumentParseError("Corrupt file"))
 
-        attachment = MagicMock()
-        attachment.filename = "corrupt.pdf"
-        attachment.size = 1000
-        attachment.id = 12345
-        attachment.save = AsyncMock()
+        cog.session_service.set_session(
+            guild_id=100,
+            channel_id=200,
+            user_id=300,
+            filename="lecture.pdf",
+            markdown="Extracted text content",
+            warnings=(),
+        )
+
+        cog.ai_service.answer_document_question = AsyncMock(return_value="Final exam date is Dec 15.")
 
         interaction = MagicMock()
+        interaction.guild_id = 100
+        interaction.channel_id = 200
+        interaction.user.id = 300
         interaction.response.defer = AsyncMock()
         interaction.followup.send = AsyncMock()
 
-        await cog.analyze.callback(cog, interaction, file=attachment)
+        await cog.docask.callback(cog, interaction, question="What date is the final exam?")
 
         interaction.response.defer.assert_called_once()
-        interaction.followup.send.assert_called_once()
-        sent_text = interaction.followup.send.call_args[0][0]
-        assert "I couldn't read this file" in sent_text
+        cog.ai_service.answer_document_question.assert_called_once_with(
+            document="Extracted text content",
+            question="What date is the final exam?",
+            filename="lecture.pdf",
+        )
+        interaction.followup.send.assert_called_once_with("Final exam date is Dec 15.")
+
+    asyncio.run(_test())
+
+
+def test_docask_no_active_session():
+    """Test /docask returns clear message when no active document session exists."""
+    async def _test():
+        bot = MagicMock(spec=[])
+        cog = DocumentsCog(bot)
+
+        interaction = MagicMock()
+        interaction.guild_id = 100
+        interaction.channel_id = 200
+        interaction.user.id = 300
+        interaction.response.defer = AsyncMock()
+        interaction.followup.send = AsyncMock()
+
+        await cog.docask.callback(cog, interaction, question="Any question?")
+
+        interaction.response.defer.assert_called_once()
+        interaction.followup.send.assert_called_once_with(
+            "No active document found. Run `/analyze` with a PDF or PPTX first."
+        )
+
+    asyncio.run(_test())
+
+
+def test_docask_expired_session():
+    """Test /docask returns clear message when user session is expired."""
+    async def _test():
+        bot = MagicMock(spec=[])
+        cog = DocumentsCog(bot)
+
+        cog.session_service.get_session = MagicMock(return_value=(None, True))
+
+        interaction = MagicMock()
+        interaction.guild_id = 100
+        interaction.channel_id = 200
+        interaction.user.id = 300
+        interaction.response.defer = AsyncMock()
+        interaction.followup.send = AsyncMock()
+
+        await cog.docask.callback(cog, interaction, question="Any question?")
+
+        interaction.response.defer.assert_called_once()
+        interaction.followup.send.assert_called_once_with(
+            "Your document session expired. Run `/analyze` again to continue."
+        )
+
+    asyncio.run(_test())
+
+
+def test_docask_empty_question_rejected():
+    """Test /docask rejects empty question prior to deferring interaction."""
+    async def _test():
+        bot = MagicMock(spec=[])
+        cog = DocumentsCog(bot)
+
+        interaction = MagicMock()
+        interaction.response.send_message = AsyncMock()
+        interaction.response.defer = AsyncMock()
+
+        await cog.docask.callback(cog, interaction, question="   ")
+
+        interaction.response.send_message.assert_called_once()
+        _, kwargs = interaction.response.send_message.call_args
+        assert kwargs.get("ephemeral") is True
+        interaction.response.defer.assert_not_called()
 
     asyncio.run(_test())

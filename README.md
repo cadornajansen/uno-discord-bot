@@ -15,6 +15,7 @@ The bot is currently being developed and tested inside a private development ser
 - [x] **Phase 3 — Discord Knowledge Synchronization** (Live edit sync, delete sync, and historical backfill script)
 - [x] **Phase 4A — Academic Search via Serper** (`/search` slash command returning organic Google results)
 - [x] **Phase 4B — Local Document Analysis: PDF + PPTX** (`/analyze` slash command for local document summarization)
+- [x] **Phase 4C — Temporary Document Q&A** (`/docask` slash command for interactive document questions)
 
 ---
 
@@ -42,19 +43,23 @@ The bot is currently being developed and tested inside a private development ser
               ▼
         SearchCog ──> SearchService ──> Serper API ──> Organic Google Results
 
-3. Local Document Analysis Pipeline:
+3. Local Document Analysis & Interactive Q&A Pipeline:
    Discord Server /analyze file:<attachment>
               │
               ▼
         DocumentsCog (validates .pdf / .pptx extension & 15 MB size limit)
               │
               ▼
-        DocumentService
-        ├── PDF:  pdf-inspector ──> Structured Markdown + OCR warnings
-        └── PPTX: python-pptx   ──> Slide text + Tables + Notes + Visual warnings
+        DocumentService ──> Extracted Markdown (max 20,000 chars)
+              │
+              ├─► AIService (phi4-mini) ──> Document Summary
+              │
+              └─► DocumentSessionService (In-memory storage key: guild_id, channel_id, user_id; 30 min TTL)
+
+   Discord Server /docask question:<text>
               │
               ▼
-        AIService (phi4-mini @ /api/chat) ──> Structured Document Summary
+        Retrieve Active DocumentSession ──> AIService (phi4-mini) ──> Grounded Document Answer
 ```
 
 ---
@@ -66,7 +71,7 @@ The bot is currently being developed and tested inside a private development ser
 3. **Prompt Injection Boundary**: Retrieved Discord messages and uploaded document contents are injected as untrusted reference data with system instructions forbidding the model from executing commands found inside retrieved text.
 4. **Explicit Channel Allowlist**: Messages are only indexed from channels explicitly listed in `INDEXED_CHANNEL_IDS`. If empty, no messages are indexed.
 5. **External Web Search Privacy (`/search`)**: `/search` sends **only** the explicit user search query to Serper API to fetch Google search results. Discord guild messages, Qdrant vectors, user profile data, and local AI context are **never** sent with search requests.
-6. **Local Document Privacy (`/analyze`)**: File attachments are downloaded temporarily into a safe OS temporary directory, parsed locally (`pdf-inspector` / `python-pptx`), summarized via local Ollama (`phi4-mini`), and deleted immediately. Document content is **never** sent to Serper or external AI services.
+6. **Local Document Privacy (`/analyze` & `/docask`)**: File attachments are downloaded temporarily into an OS temporary directory, parsed locally (`pdf-inspector` / `python-pptx`), and deleted immediately. Extracted text is held temporarily in-memory for up to 30 minutes (`DOCUMENT_SESSION_TTL_MINUTES=30`) isolated per user and channel. Document content is **never** sent to disk, Qdrant, Serper, or external AI services.
 
 ---
 
@@ -140,6 +145,7 @@ DEV_GUILD_ID=your_test_server_id_here
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=phi4-mini
 OLLAMA_EMBEDDING_MODEL=embeddinggemma
+OLLAMA_TIMEOUT_SECONDS=180.0
 
 QDRANT_URL=http://localhost:6333
 QDRANT_COLLECTION=discord_messages
@@ -158,7 +164,8 @@ SEARCH_RESULT_LIMIT=5
 
 # Document Analysis Configuration
 DOCUMENT_MAX_SIZE_MB=15
-DOCUMENT_MAX_CHARS=50000
+DOCUMENT_MAX_CHARS=20000
+DOCUMENT_SESSION_TTL_MINUTES=30
 ```
 
 ### 3. Run Automated Tests

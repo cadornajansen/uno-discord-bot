@@ -113,7 +113,7 @@ class DocumentService:
         if len(analysis.markdown) > self.max_chars:
             truncated_md = analysis.markdown[: self.max_chars]
             new_warnings = list(analysis.warnings) + [
-                "The document exceeded the maximum character analysis limit; only the first portion was analyzed."
+                f"This document exceeds Uno's current analysis limit. Only the first {self.max_chars:,} characters were analyzed."
             ]
             return DocumentAnalysis(
                 filename=analysis.filename,

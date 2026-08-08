@@ -32,6 +32,7 @@ class Settings:
         search_result_limit: int,
         document_max_size_mb: int,
         document_max_chars: int,
+        document_session_ttl_minutes: int,
     ):
         self.discord_token = discord_token
         self.dev_guild_id = dev_guild_id
@@ -49,6 +50,7 @@ class Settings:
         self.search_result_limit = search_result_limit
         self.document_max_size_mb = document_max_size_mb
         self.document_max_chars = document_max_chars
+        self.document_session_ttl_minutes = document_session_ttl_minutes
 
 
 def load_settings() -> Settings:
@@ -138,6 +140,11 @@ def load_settings() -> Settings:
         raise ConfigError("DOCUMENT_MAX_CHARS must be a positive integer.")
     document_max_chars = int(doc_chars_raw)
 
+    ttl_raw = os.getenv("DOCUMENT_SESSION_TTL_MINUTES", "30").strip()
+    if not ttl_raw.isdigit() or int(ttl_raw) <= 0:
+        raise ConfigError("DOCUMENT_SESSION_TTL_MINUTES must be a positive integer.")
+    document_session_ttl_minutes = int(ttl_raw)
+
     return Settings(
         discord_token=token,
         dev_guild_id=dev_guild_id,
@@ -155,4 +162,5 @@ def load_settings() -> Settings:
         search_result_limit=search_result_limit,
         document_max_size_mb=document_max_size_mb,
         document_max_chars=document_max_chars,
+        document_session_ttl_minutes=document_session_ttl_minutes,
     )
