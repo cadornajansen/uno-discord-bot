@@ -28,11 +28,11 @@ RAIN_SHOWERS_CODES = (51, 52, 53, 54, 55, 56, 57, 61, 62, 63, 64, 65, 66, 67, 80
 
 
 def evaluate_disruption_risk(
-    current: str | None,
+    current: dict | None,
     hourly_6h: Sequence[dict],
     alerts: Sequence[dict],
 ) -> WeatherRisk:
-    """Evaluate weather disruption risk for classes over the next 6 hours.
+    """Evaluate weather disruption risk for classes based on current conditions and next 6 hours forecast.
 
     Args:
         current: Optional dict of current weather parameters.
@@ -69,7 +69,7 @@ def evaluate_disruption_risk(
         else:
             moderate_reasons.append(f"Government alert in effect: {event} ({sender})")
 
-    # 2. Evaluate Forecast Parameters (Hourly Next 6 Hours)
+    # 2. Evaluate Forecast & Current Parameters
     max_precip_prob = 0
     max_precip_mm = 0.0
     min_visibility_m = 999999.0
@@ -77,6 +77,22 @@ def evaluate_disruption_risk(
     has_thunderstorm_code = False
     has_rain_code = False
 
+    # Incorporate current conditions if present
+    if isinstance(current, dict):
+        c_precip = current.get("precipitation_mm") or 0.0
+        c_code = current.get("weather_code") or 0
+        c_gust = current.get("wind_gust_kmh") or 0.0
+
+        if c_precip > max_precip_mm:
+            max_precip_mm = c_precip
+        if c_gust > max_wind_gust:
+            max_wind_gust = c_gust
+        if c_code in THUNDERSTORM_CODES:
+            has_thunderstorm_code = True
+        if c_code in RAIN_SHOWERS_CODES:
+            has_rain_code = True
+
+    # Incorporate next 6 hours forecast entries
     for item in hourly_6h:
         prob = item.get("precipitation_probability") or 0
         precip = item.get("precipitation_mm") or 0.0

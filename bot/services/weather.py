@@ -342,8 +342,14 @@ class WeatherService:
                 "event": a.event,
             })
 
+        current_dict = {
+            "precipitation_mm": current_obj.precipitation_mm,
+            "weather_code": current_obj.weather_code,
+            "wind_gust_kmh": current_obj.wind_gust_kmh,
+        } if current_obj else None
+
         risk = evaluate_disruption_risk(
-            current=None,
+            current=current_dict,
             hourly_6h=hourly_6h_dicts,
             alerts=alerts_dicts,
         )

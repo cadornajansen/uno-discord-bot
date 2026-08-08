@@ -142,3 +142,26 @@ def test_high_risk_severe_government_alert():
     risk = evaluate_disruption_risk(current=None, hourly_6h=hourly_6h, alerts=alerts)
     assert risk.level == WeatherRiskLevel.HIGH
     assert any("PAGASA" in r for r in risk.reasons)
+
+
+def test_high_risk_from_current_wind_gust():
+    """Regression test: current wind gust >= 60.0 km/h triggers HIGH risk even if hourly entries are lower."""
+    current = {
+        "precipitation_mm": 0.0,
+        "weather_code": 1,
+        "wind_gust_kmh": 69.1,
+    }
+    hourly_6h = [
+        {
+            "precipitation_probability": 20,
+            "precipitation_mm": 0.0,
+            "weather_code": 1,
+            "visibility_m": 10000.0,
+            "wind_gust_kmh": 25.0,
+        }
+    ]
+
+    risk = evaluate_disruption_risk(current=current, hourly_6h=hourly_6h, alerts=[])
+    assert risk.level == WeatherRiskLevel.HIGH
+    assert any("Strong wind gusts forecast (69 km/h)" in r for r in risk.reasons)
+
