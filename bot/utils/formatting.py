@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+import discord
 
 
 def format_latency(latency_seconds: float) -> str:
@@ -97,3 +98,30 @@ def split_message(text: str, limit: int = 2000) -> list[str]:
         chunks.append(current_chunk)
 
     return [c for c in chunks if c]
+
+
+async def send_deferred_response(
+    interaction: "discord.Interaction",
+    content: str,
+    limit: int = 2000,
+) -> None:
+    """Send text content in response to a deferred slash command interaction.
+
+    Edits the original deferred response message with the first chunk to preserve
+    the 'user used /command' invocation header in Discord, and sends any remaining
+    chunks as followup messages.
+
+    Args:
+        interaction: Discord interaction object.
+        content: String content to send.
+        limit: Maximum character length per chunk (default: 2000).
+    """
+    chunks = split_message(content, limit=limit)
+    if not chunks:
+        await interaction.edit_original_response(content="No response generated.")
+        return
+
+    await interaction.edit_original_response(content=chunks[0])
+    for chunk in chunks[1:]:
+        await interaction.followup.send(content=chunk)
+

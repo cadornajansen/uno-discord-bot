@@ -62,15 +62,18 @@ def test_search_cog_command_execution():
 
         interaction = MagicMock()
         interaction.response.defer = AsyncMock()
+        interaction.edit_original_response = AsyncMock()
+        interaction.delete_original_response = AsyncMock()
         interaction.followup.send = AsyncMock()
 
         await cog.search.callback(cog, interaction, query="python binary search")
 
         interaction.response.defer.assert_called_once()
         cog.search_service.search.assert_called_once_with("python binary search", limit=5)
-        interaction.followup.send.assert_called_once()
+        interaction.edit_original_response.assert_called_once()
+        interaction.delete_original_response.assert_not_called()
 
-        sent_text = interaction.followup.send.call_args[0][0]
+        sent_text = interaction.edit_original_response.call_args[1]["content"]
         assert "Search results for: **python binary search**" in sent_text
         assert "**1. [Python Tutorial](https://python.org/doc)**" in sent_text
         assert "*python.org*" in sent_text
@@ -109,13 +112,16 @@ def test_search_cog_unconfigured_api_key_handled():
 
         interaction = MagicMock()
         interaction.response.defer = AsyncMock()
+        interaction.edit_original_response = AsyncMock()
+        interaction.delete_original_response = AsyncMock()
         interaction.followup.send = AsyncMock()
 
         await cog.search.callback(cog, interaction, query="rag tutorial")
 
         interaction.response.defer.assert_called_once()
-        interaction.followup.send.assert_called_once()
-        sent_text = interaction.followup.send.call_args[0][0]
+        interaction.edit_original_response.assert_called_once()
+        interaction.delete_original_response.assert_not_called()
+        sent_text = interaction.edit_original_response.call_args[1]["content"]
         assert "Web search is currently unavailable" in sent_text
 
     asyncio.run(_test())

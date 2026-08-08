@@ -104,6 +104,8 @@ def test_analyze_cog_successful_flow():
         interaction.channel_id = 200
         interaction.user.id = 300
         interaction.response.defer = AsyncMock()
+        interaction.edit_original_response = AsyncMock()
+        interaction.delete_original_response = AsyncMock()
         interaction.followup.send = AsyncMock()
 
         await cog.analyze.callback(cog, interaction, file=attachment)
@@ -121,8 +123,10 @@ def test_analyze_cog_successful_flow():
         assert session is not None
         assert session.filename == "lecture.pdf"
 
-        # Assert footer prompt included
-        sent_text = interaction.followup.send.call_args[0][0]
+        # Assert footer prompt included and original response edited
+        interaction.edit_original_response.assert_called_once()
+        interaction.delete_original_response.assert_not_called()
+        sent_text = interaction.edit_original_response.call_args[1]["content"]
         assert "Document ready for questions. Use `/docask` within the next" in sent_text
 
     asyncio.run(_test())
@@ -150,6 +154,8 @@ def test_docask_successful_qna():
         interaction.channel_id = 200
         interaction.user.id = 300
         interaction.response.defer = AsyncMock()
+        interaction.edit_original_response = AsyncMock()
+        interaction.delete_original_response = AsyncMock()
         interaction.followup.send = AsyncMock()
 
         await cog.docask.callback(cog, interaction, question="What date is the final exam?")
@@ -160,7 +166,8 @@ def test_docask_successful_qna():
             question="What date is the final exam?",
             filename="lecture.pdf",
         )
-        interaction.followup.send.assert_called_once_with("Final exam date is Dec 15.")
+        interaction.edit_original_response.assert_called_once_with(content="Final exam date is Dec 15.")
+        interaction.delete_original_response.assert_not_called()
 
     asyncio.run(_test())
 
@@ -176,14 +183,17 @@ def test_docask_no_active_session():
         interaction.channel_id = 200
         interaction.user.id = 300
         interaction.response.defer = AsyncMock()
+        interaction.edit_original_response = AsyncMock()
+        interaction.delete_original_response = AsyncMock()
         interaction.followup.send = AsyncMock()
 
         await cog.docask.callback(cog, interaction, question="Any question?")
 
         interaction.response.defer.assert_called_once()
-        interaction.followup.send.assert_called_once_with(
-            "No active document found. Run `/analyze` with a PDF or PPTX first."
+        interaction.edit_original_response.assert_called_once_with(
+            content="No active document found. Run `/analyze` with a PDF or PPTX first."
         )
+        interaction.delete_original_response.assert_not_called()
 
     asyncio.run(_test())
 
@@ -201,14 +211,17 @@ def test_docask_expired_session():
         interaction.channel_id = 200
         interaction.user.id = 300
         interaction.response.defer = AsyncMock()
+        interaction.edit_original_response = AsyncMock()
+        interaction.delete_original_response = AsyncMock()
         interaction.followup.send = AsyncMock()
 
         await cog.docask.callback(cog, interaction, question="Any question?")
 
         interaction.response.defer.assert_called_once()
-        interaction.followup.send.assert_called_once_with(
-            "Your document session expired. Run `/analyze` again to continue."
+        interaction.edit_original_response.assert_called_once_with(
+            content="Your document session expired. Run `/analyze` again to continue."
         )
+        interaction.delete_original_response.assert_not_called()
 
     asyncio.run(_test())
 

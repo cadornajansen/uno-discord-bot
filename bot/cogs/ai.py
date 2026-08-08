@@ -13,7 +13,7 @@ from bot.services.ai import (
 from bot.services.embeddings import EmbeddingService
 from bot.services.vector_store import VectorStore
 from bot.services.rag import RAGService
-from bot.utils.formatting import split_message
+from bot.utils.formatting import split_message, send_deferred_response
 
 logger = logging.getLogger(__name__)
 
@@ -87,44 +87,38 @@ class AICog(commands.Cog):
                 guild_id=interaction.guild.id,
             )
 
-            chunks = split_message(response_text, limit=2000)
-            if not chunks:
-                await interaction.followup.send("The AI returned an empty response.")
-                return
-
-            for chunk in chunks:
-                await interaction.followup.send(chunk)
+            await send_deferred_response(interaction, response_text)
 
         except OllamaConnectionError:
             logger.warning(
                 f"User {interaction.user.id} '/ask' failed: Ollama service offline."
             )
-            await interaction.followup.send(
-                "The local AI service is unavailable right now."
+            await interaction.edit_original_response(
+                content="The local AI service is unavailable right now."
             )
 
         except OllamaModelNotFoundError:
             logger.warning(
                 f"User {interaction.user.id} '/ask' failed: Model '{self.rag_service.ai_service.model}' not found."
             )
-            await interaction.followup.send(
-                "The configured AI model is not available."
+            await interaction.edit_original_response(
+                content="The configured AI model is not available."
             )
 
         except OllamaTimeoutError:
             logger.warning(
                 f"User {interaction.user.id} '/ask' failed: Local inference timed out."
             )
-            await interaction.followup.send(
-                "The AI service took too long to respond. Please try again later."
+            await interaction.edit_original_response(
+                content="The AI service took too long to respond. Please try again later."
             )
 
         except AIError as e:
             logger.error(
                 f"User {interaction.user.id} '/ask' failed with AI service error: {e}"
             )
-            await interaction.followup.send(
-                "An error occurred while communicating with the AI service."
+            await interaction.edit_original_response(
+                content="An error occurred while communicating with the AI service."
             )
 
         except Exception as e:
@@ -132,8 +126,8 @@ class AICog(commands.Cog):
                 f"Unexpected exception during '/ask' execution: {e}",
                 exc_info=True,
             )
-            await interaction.followup.send(
-                "Something went wrong while running this command."
+            await interaction.edit_original_response(
+                content="Something went wrong while running this command."
             )
 
 

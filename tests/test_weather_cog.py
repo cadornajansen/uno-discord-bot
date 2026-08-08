@@ -93,14 +93,17 @@ def test_weather_command_successful_execution():
         interaction = MagicMock()
         interaction.user.id = 12345
         interaction.response.defer = AsyncMock()
+        interaction.edit_original_response = AsyncMock()
+        interaction.delete_original_response = AsyncMock()
         interaction.followup.send = AsyncMock()
 
         await cog.weather.callback(cog, interaction)
 
         interaction.response.defer.assert_called_once()
         cog.weather_service.get_weather_report.assert_called_once()
-        interaction.followup.send.assert_called_once()
-        sent_msg = interaction.followup.send.call_args[0][0]
+        interaction.edit_original_response.assert_called_once()
+        interaction.delete_original_response.assert_not_called()
+        sent_msg = interaction.edit_original_response.call_args[1]["content"]
         assert "**Weather — Manila (PLM)**" in sent_msg
         assert "No active PAGASA rainfall or thunderstorm warnings found for Metro Manila." in sent_msg
 
@@ -120,13 +123,16 @@ def test_weather_command_openmeteo_failure_handled():
         interaction = MagicMock()
         interaction.user.id = 12345
         interaction.response.defer = AsyncMock()
+        interaction.edit_original_response = AsyncMock()
+        interaction.delete_original_response = AsyncMock()
         interaction.followup.send = AsyncMock()
 
         await cog.weather.callback(cog, interaction)
 
         interaction.response.defer.assert_called_once()
-        interaction.followup.send.assert_called_once_with(
-            "Weather forecast data is currently unavailable."
+        interaction.edit_original_response.assert_called_once_with(
+            content="Weather forecast data is currently unavailable."
         )
+        interaction.delete_original_response.assert_not_called()
 
     asyncio.run(_test())

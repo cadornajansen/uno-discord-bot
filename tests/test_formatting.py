@@ -53,3 +53,46 @@ def test_split_message_hard_split_long_word():
     assert chunks[1] == "A" * 50
     assert chunks[2] == "A" * 50
     assert "".join(chunks) == long_token
+
+
+def test_send_deferred_response_single_chunk():
+    """Test send_deferred_response edits original response for single chunk and calls no followup send."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+    from bot.utils.formatting import send_deferred_response
+
+    async def _test():
+        interaction = MagicMock()
+        interaction.edit_original_response = AsyncMock()
+        interaction.delete_original_response = AsyncMock()
+        interaction.followup.send = AsyncMock()
+
+        await send_deferred_response(interaction, "Hello world!")
+
+        interaction.edit_original_response.assert_called_once_with(content="Hello world!")
+        interaction.delete_original_response.assert_not_called()
+        interaction.followup.send.assert_not_called()
+
+    asyncio.run(_test())
+
+
+def test_send_deferred_response_multi_chunk():
+    """Test send_deferred_response edits original response with chunk 0 and sends chunk 1 as followup."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+    from bot.utils.formatting import send_deferred_response
+
+    async def _test():
+        interaction = MagicMock()
+        interaction.edit_original_response = AsyncMock()
+        interaction.delete_original_response = AsyncMock()
+        interaction.followup.send = AsyncMock()
+
+        text = "Line 1\nLine 2"
+        await send_deferred_response(interaction, text, limit=10)
+
+        interaction.edit_original_response.assert_called_once_with(content="Line 1")
+        interaction.delete_original_response.assert_not_called()
+        interaction.followup.send.assert_called_once_with(content="Line 2")
+
+    asyncio.run(_test())

@@ -11,7 +11,7 @@ from bot.services.weather import (
     OpenMeteoError,
     format_wmo_code,
 )
-from bot.utils.formatting import split_message
+from bot.utils.formatting import split_message, send_deferred_response
 
 logger = logging.getLogger(__name__)
 
@@ -122,18 +122,15 @@ class WeatherCog(commands.Cog):
             )
 
             formatted_text = format_weather_response(report)
-            chunks = split_message(formatted_text, limit=2000)
-
-            for chunk in chunks:
-                await interaction.followup.send(chunk)
+            await send_deferred_response(interaction, formatted_text)
 
         except (WeatherError, OpenMeteoError) as e:
             logger.error(f"User {interaction.user.id} '/weather' failed: {e}")
-            await interaction.followup.send("Weather forecast data is currently unavailable.")
+            await interaction.edit_original_response(content="Weather forecast data is currently unavailable.")
 
         except Exception as e:
             logger.error(f"Unexpected error executing '/weather': {e}", exc_info=True)
-            await interaction.followup.send("Something went wrong while fetching weather data.")
+            await interaction.edit_original_response(content="Something went wrong while fetching weather data.")
 
 
 async def setup(bot: commands.Bot) -> None:

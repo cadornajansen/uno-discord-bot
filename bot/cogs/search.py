@@ -14,7 +14,7 @@ from bot.services.search import (
     SearchError,
     MAX_QUERY_LENGTH,
 )
-from bot.utils.formatting import split_message
+from bot.utils.formatting import split_message, send_deferred_response
 
 logger = logging.getLogger(__name__)
 
@@ -110,45 +110,36 @@ class SearchCog(commands.Cog):
             )
 
             formatted = format_search_results(cleaned_query, results)
-            chunks = split_message(formatted, limit=2000)
-
-            if not chunks:
-                await interaction.followup.send(
-                    f"No search results found for **{cleaned_query}**."
-                )
-                return
-
-            for chunk in chunks:
-                await interaction.followup.send(chunk)
+            await send_deferred_response(interaction, formatted)
 
         except SearchConfigError:
             logger.warning(f"User {interaction.user.id} '/search' failed: API key unconfigured.")
-            await interaction.followup.send(
-                "Web search is currently unavailable (API key not configured)."
+            await interaction.edit_original_response(
+                content="Web search is currently unavailable (API key not configured)."
             )
 
         except SearchConnectionError:
             logger.warning(f"User {interaction.user.id} '/search' failed: Connection error.")
-            await interaction.followup.send(
-                "Unable to connect to the search service right now. Please try again later."
+            await interaction.edit_original_response(
+                content="Unable to connect to the search service right now. Please try again later."
             )
 
         except SearchTimeoutError:
             logger.warning(f"User {interaction.user.id} '/search' failed: Request timeout.")
-            await interaction.followup.send(
-                "The search request took too long to respond. Please try again later."
+            await interaction.edit_original_response(
+                content="The search request took too long to respond. Please try again later."
             )
 
         except SerperAPIError as e:
             logger.error(f"User {interaction.user.id} '/search' failed with API error: {e}")
-            await interaction.followup.send(
-                "An error occurred while communicating with the search service."
+            await interaction.edit_original_response(
+                content="An error occurred while communicating with the search service."
             )
 
         except SearchError as e:
             logger.warning(f"User {interaction.user.id} '/search' failed with search error: {e}")
-            await interaction.followup.send(
-                f"Could not complete search: {e}"
+            await interaction.edit_original_response(
+                content=f"Could not complete search: {e}"
             )
 
         except Exception as e:
@@ -156,8 +147,8 @@ class SearchCog(commands.Cog):
                 f"Unexpected exception during '/search' execution: {e}",
                 exc_info=True,
             )
-            await interaction.followup.send(
-                "Something went wrong while running this command."
+            await interaction.edit_original_response(
+                content="Something went wrong while running this command."
             )
 
 
