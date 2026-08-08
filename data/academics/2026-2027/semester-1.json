@@ -1,0 +1,185 @@
+{
+  "school_year": "2026-2027",
+  "semester": 1,
+  "timezone": "Asia/Manila",
+  "subjects": [
+    {
+      "code": "CIST101L",
+      "name": "Introduction to Computing (Lab)",
+      "professor": "Jonathan Morano",
+      "class_type": "Lab",
+      "schedules": [
+        {
+          "day": "Monday",
+          "start": "07:00",
+          "end": "10:00",
+          "location": "Comp Lab 3"
+        }
+      ]
+    },
+    {
+      "code": "CIST_101",
+      "name": "Introduction to Computing (Lecture)",
+      "professor": "Jonathan Morano",
+      "class_type": "Lecture",
+      "schedules": [
+        {
+          "day": "Monday",
+          "start": "10:00",
+          "end": "12:00",
+          "location": "Comp Lab 3"
+        }
+      ]
+    },
+    {
+      "code": "GEC_STAS",
+      "name": "Science, Technology and Society",
+      "professor": "Roberto Vitancol",
+      "class_type": "General Education",
+      "schedules": [
+        {
+          "day": "Tuesday",
+          "start": "07:00",
+          "end": "08:30",
+          "location": "GCA 307"
+        },
+        {
+          "day": "Friday",
+          "start": "07:00",
+          "end": "08:30",
+          "location": "MS Teams"
+        }
+      ]
+    },
+    {
+      "code": "GEC_MATH",
+      "name": "Mathematics in the Modern World",
+      "professor": "Chedy Lamprea",
+      "class_type": "General Education",
+      "schedules": [
+        {
+          "day": "Tuesday",
+          "start": "08:30",
+          "end": "10:00",
+          "location": "Field"
+        },
+        {
+          "day": "Friday",
+          "start": "08:30",
+          "end": "10:00",
+          "location": "MS Teams"
+        }
+      ]
+    },
+    {
+      "code": "GEC_PCOM",
+      "name": "Purposive Communication",
+      "professor": "Risa Asuncion",
+      "class_type": "General Education",
+      "schedules": [
+        {
+          "day": "Tuesday",
+          "start": "10:00",
+          "end": "12:00",
+          "location": "GCA 307"
+        },
+        {
+          "day": "Friday",
+          "start": "10:00",
+          "end": "12:00",
+          "location": "MS Teams"
+        }
+      ]
+    },
+    {
+      "code": "CIST_102",
+      "name": "Fundamentals of Programming (Lecture)",
+      "professor": "Richard Regala",
+      "class_type": "Lecture",
+      "schedules": [
+        {
+          "day": "Wednesday",
+          "start": "10:00",
+          "end": "12:00",
+          "location": "Comp Lab 4"
+        }
+      ]
+    },
+    {
+      "code": "PLM_IR01",
+      "name": "Interdisiplinaryong Pagbasa at Pagsulat Tungo sa Mabisang Pagpapahayag",
+      "professor": "Lucita Dela Cruz",
+      "class_type": "General Education",
+      "schedules": [
+        {
+          "day": "Tuesday",
+          "start": "13:00",
+          "end": "14:30",
+          "location": "GV 307"
+        },
+        {
+          "day": "Friday",
+          "start": "13:00",
+          "end": "14:30",
+          "location": "MS Teams"
+        }
+      ]
+    },
+    {
+      "code": "CIST102L",
+      "name": "Fundamentals of Programming (Lab)",
+      "professor": "Richard Regala",
+      "class_type": "Lab",
+      "schedules": [
+        {
+          "day": "Wednesday",
+          "start": "13:00",
+          "end": "16:00",
+          "location": "Comp Lab 4"
+        }
+      ]
+    },
+    {
+      "code": "NSTP3",
+      "name": "National Service Training Program 1 (CWTS 1)",
+      "professor": "Mark John Bonifacio",
+      "class_type": "NSTP",
+      "schedules": [
+        {
+          "day": "Saturday",
+          "start": "13:00",
+          "end": "16:00",
+          "location": "Field"
+        }
+      ]
+    },
+    {
+      "code": "PATHFIT1",
+      "name": "Physical Activities Towards Health and Fitness 1",
+      "professor": "Karen Grace Ordillano",
+      "class_type": "PE",
+      "schedules": [
+        {
+          "day": "Monday",
+          "start": "15:00",
+          "end": "17:00",
+          "location": "Gym"
+        }
+      ]
+    },
+    {
+      "code": "BSCS_P01",
+      "name": "Discrete Structures 1",
+      "professor": "Jesse Emmanuel Cadacio",
+      "class_type": "Lecture",
+      "schedules": [
+        {
+          "day": "Wednesday",
+          "start": "18:00",
+          "end": "21:00",
+          "location": "GCA 306"
+        }
+      ]
+    }
+  ]
+}

@@ -16,6 +16,7 @@ The bot is currently being developed and tested inside a private development ser
 - [x] **Phase 4A — Academic Search via Serper** (`/search` slash command returning organic Google results)
 - [x] **Phase 4B — Local Document Analysis: PDF + PPTX** (`/analyze` slash command for local document summarization)
 - [x] **Phase 4C — Temporary Document Q&A** (`/docask` slash command for interactive document questions)
+- [x] **Phase 5A — Academic Schedule + Professor Lookup** (`/today`, `/schedule`, `/nextclass`, `/prof` offline commands)
 
 ---
 
@@ -60,6 +61,15 @@ The bot is currently being developed and tested inside a private development ser
               │
               ▼
         Retrieve Active DocumentSession ──> AIService (phi4-mini) ──> Grounded Document Answer
+
+4. Offline Academic Schedule & Professor Lookup Pipeline:
+   Discord Server /today, /schedule, /nextclass, /prof
+              │
+              ▼
+        AcademicsCog ──> AcademicScheduleService
+              │
+              ▼
+        data/academics/{school_year}/semester-{semester}.json (Local Offline Data)
 ```
 
 ---
@@ -72,6 +82,7 @@ The bot is currently being developed and tested inside a private development ser
 4. **Explicit Channel Allowlist**: Messages are only indexed from channels explicitly listed in `INDEXED_CHANNEL_IDS`. If empty, no messages are indexed.
 5. **External Web Search Privacy (`/search`)**: `/search` sends **only** the explicit user search query to Serper API to fetch Google search results. Discord guild messages, Qdrant vectors, user profile data, and local AI context are **never** sent with search requests.
 6. **Local Document Privacy (`/analyze` & `/docask`)**: File attachments are downloaded temporarily into an OS temporary directory, parsed locally (`pdf-inspector` / `python-pptx`), and deleted immediately. Extracted text is held temporarily in-memory for up to 30 minutes (`DOCUMENT_SESSION_TTL_MINUTES=30`) isolated per user and channel. Document content is **never** sent to disk, Qdrant, Serper, or external AI services.
+7. **Offline Academic Schedule (`/today`, `/schedule`, `/nextclass`, `/prof`)**: Schedule data is loaded directly from local JSON files (`data/academics/`) without any database, external API calls, or AI LLM processing. For details on customizing or adding schedule data for your school, see [`data/academics/README.md`](data/academics/README.md).
 
 ---
 
@@ -166,6 +177,11 @@ SEARCH_RESULT_LIMIT=5
 DOCUMENT_MAX_SIZE_MB=15
 DOCUMENT_MAX_CHARS=20000
 DOCUMENT_SESSION_TTL_MINUTES=30
+
+# Academic Schedule Configuration
+ACADEMIC_SCHOOL_YEAR=2026-2027
+ACADEMIC_SEMESTER=1
+ACADEMIC_TIMEZONE=Asia/Manila
 ```
 
 ### 3. Run Automated Tests

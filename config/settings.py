@@ -33,6 +33,9 @@ class Settings:
         document_max_size_mb: int,
         document_max_chars: int,
         document_session_ttl_minutes: int,
+        academic_school_year: str,
+        academic_semester: int,
+        academic_timezone: str,
     ):
         self.discord_token = discord_token
         self.dev_guild_id = dev_guild_id
@@ -51,6 +54,9 @@ class Settings:
         self.document_max_size_mb = document_max_size_mb
         self.document_max_chars = document_max_chars
         self.document_session_ttl_minutes = document_session_ttl_minutes
+        self.academic_school_year = academic_school_year
+        self.academic_semester = academic_semester
+        self.academic_timezone = academic_timezone
 
 
 def load_settings() -> Settings:
@@ -145,6 +151,15 @@ def load_settings() -> Settings:
         raise ConfigError("DOCUMENT_SESSION_TTL_MINUTES must be a positive integer.")
     document_session_ttl_minutes = int(ttl_raw)
 
+    academic_school_year = os.getenv("ACADEMIC_SCHOOL_YEAR", "2026-2027").strip()
+
+    semester_raw = os.getenv("ACADEMIC_SEMESTER", "1").strip()
+    if not semester_raw.isdigit() or int(semester_raw) <= 0:
+        raise ConfigError("ACADEMIC_SEMESTER must be a positive integer.")
+    academic_semester = int(semester_raw)
+
+    academic_timezone = os.getenv("ACADEMIC_TIMEZONE", "Asia/Manila").strip()
+
     return Settings(
         discord_token=token,
         dev_guild_id=dev_guild_id,
@@ -163,4 +178,7 @@ def load_settings() -> Settings:
         document_max_size_mb=document_max_size_mb,
         document_max_chars=document_max_chars,
         document_session_ttl_minutes=document_session_ttl_minutes,
+        academic_school_year=academic_school_year,
+        academic_semester=academic_semester,
+        academic_timezone=academic_timezone,
     )
