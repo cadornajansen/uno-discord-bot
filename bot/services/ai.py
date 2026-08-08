@@ -5,8 +5,8 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# Default timeout in seconds for local inference.
-OLLAMA_TIMEOUT_SECONDS = 90.0
+# Default fallback timeout in seconds for local inference if unconfigured.
+DEFAULT_OLLAMA_TIMEOUT_SECONDS = 180.0
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are Uno, an assistant for a Computer Science college block.\n\n"
@@ -70,15 +70,22 @@ class OllamaAPIError(AIError):
 class AIService:
     """Service handling direct HTTP communication with local Ollama instance."""
 
-    def __init__(self, base_url: str = "http://localhost:11434", model: str = "phi4-mini"):
+    def __init__(
+        self,
+        base_url: str = "http://localhost:11434",
+        model: str = "phi4-mini",
+        default_timeout: float = DEFAULT_OLLAMA_TIMEOUT_SECONDS,
+    ):
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.default_timeout = default_timeout
 
     async def ask(
         self,
         question: str,
         system_prompt: Optional[str] = None,
         context: Optional[str] = None,
+        timeout_seconds: Optional[float] = None,
     ) -> str:
         """Send a prompt to the local Ollama chat API and return the response."""
         endpoint = f"{self.base_url}/api/chat"
@@ -103,10 +110,13 @@ class AIService:
             "stream": False,
         }
 
-        logger.info(f"AI request started with model '{self.model}' (RAG context: {bool(context)})")
+        effective_timeout = timeout_seconds if timeout_seconds is not None else self.default_timeout
+        logger.info(
+            f"AI request started with model '{self.model}' (RAG context: {bool(context)}, timeout: {effective_timeout}s)"
+        )
         start_time = time.perf_counter()
 
-        timeout = httpx.Timeout(OLLAMA_TIMEOUT_SECONDS)
+        timeout = httpx.Timeout(effective_timeout)
 
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
@@ -142,9 +152,9 @@ class AIService:
 
         except httpx.TimeoutException as e:
             duration = time.perf_counter() - start_time
-            logger.error(f"Ollama request timed out after {duration:.2f}s")
+            logger.error(f"Ollama request timed out after {duration:.2f}s (configured limit: {effective_timeout}s)")
             raise OllamaTimeoutError(
-                f"AI request timed out after {OLLAMA_TIMEOUT_SECONDS} seconds."
+                f"AI request timed out after {effective_timeout} seconds."
             ) from e
 
         except httpx.HTTPStatusError as e:
@@ -157,16 +167,13 @@ class AIService:
             logger.error(f"Failed to parse Ollama JSON response: {e}")
             raise OllamaAPIError("Failed to parse response payload from Ollama.") from e
 
-    async def summarize_document(self, markdown: str, filename: str) -> str:
-        """Summarize extracted document content using local Ollama model.
-
-        Args:
-            markdown: Extracted document Markdown text.
-            filename: Document filename for contextual labeling.
-
-        Returns:
-            Structured summary response string.
-        """
+    async def summarize_document(
+        self,
+        markdown: str,
+        filename: str,
+        timeout_seconds: Optional[float] = None,
+    ) -> str:
+        """Summarize extracted document content using local Ollama model."""
         user_prompt = (
             f"Please analyze and summarize the following document.\n\n"
             f"Document Filename: {filename}\n\n"
@@ -175,4 +182,5 @@ class AIService:
         return await self.ask(
             question=user_prompt,
             system_prompt=DOCUMENT_SUMMARY_SYSTEM_PROMPT,
+            timeout_seconds=timeout_seconds,
         )

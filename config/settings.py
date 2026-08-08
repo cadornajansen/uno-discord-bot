@@ -21,6 +21,7 @@ class Settings:
         ollama_base_url: str,
         ollama_model: str,
         ollama_embedding_model: str,
+        ollama_timeout_seconds: float,
         qdrant_url: str,
         qdrant_collection: str,
         indexed_channel_ids: frozenset[int],
@@ -37,6 +38,7 @@ class Settings:
         self.ollama_base_url = ollama_base_url.rstrip("/")
         self.ollama_model = ollama_model
         self.ollama_embedding_model = ollama_embedding_model
+        self.ollama_timeout_seconds = ollama_timeout_seconds
         self.qdrant_url = qdrant_url.rstrip("/")
         self.qdrant_collection = qdrant_collection
         self.indexed_channel_ids = indexed_channel_ids
@@ -78,6 +80,14 @@ def load_settings() -> Settings:
     ollama_embedding_model = os.getenv(
         "OLLAMA_EMBEDDING_MODEL", "embeddinggemma"
     ).strip()
+
+    timeout_raw = os.getenv("OLLAMA_TIMEOUT_SECONDS", "180.0").strip()
+    try:
+        ollama_timeout_seconds = float(timeout_raw)
+        if ollama_timeout_seconds <= 0:
+            raise ValueError()
+    except ValueError:
+        raise ConfigError("OLLAMA_TIMEOUT_SECONDS must be a positive float.")
 
     qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333").strip()
     qdrant_collection = os.getenv("QDRANT_COLLECTION", "discord_messages").strip()
@@ -123,7 +133,7 @@ def load_settings() -> Settings:
         raise ConfigError("DOCUMENT_MAX_SIZE_MB must be a positive integer.")
     document_max_size_mb = int(doc_size_raw)
 
-    doc_chars_raw = os.getenv("DOCUMENT_MAX_CHARS", "50000").strip()
+    doc_chars_raw = os.getenv("DOCUMENT_MAX_CHARS", "20000").strip()
     if not doc_chars_raw.isdigit() or int(doc_chars_raw) <= 0:
         raise ConfigError("DOCUMENT_MAX_CHARS must be a positive integer.")
     document_max_chars = int(doc_chars_raw)
@@ -134,6 +144,7 @@ def load_settings() -> Settings:
         ollama_base_url=ollama_base_url,
         ollama_model=ollama_model,
         ollama_embedding_model=ollama_embedding_model,
+        ollama_timeout_seconds=ollama_timeout_seconds,
         qdrant_url=qdrant_url,
         qdrant_collection=qdrant_collection,
         indexed_channel_ids=frozenset(indexed_channel_ids),

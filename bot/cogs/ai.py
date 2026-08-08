@@ -36,7 +36,8 @@ class AICog(commands.Cog):
         top_k = settings.rag_top_k if settings else 5
         min_score = settings.rag_min_score if settings else 0.30
 
-        ai_service = AIService(base_url=base_url, model=model)
+        timeout = settings.ollama_timeout_seconds if settings else 180.0
+        ai_service = AIService(base_url=base_url, model=model, default_timeout=timeout)
         embedding_service = EmbeddingService(base_url=base_url, model=embed_model)
         vector_store = VectorStore(url=qdrant_url, collection_name=qdrant_coll)
 

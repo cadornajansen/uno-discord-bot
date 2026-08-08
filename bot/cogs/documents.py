@@ -71,8 +71,9 @@ class DocumentsCog(commands.Cog):
         self.max_size_mb = settings.document_max_size_mb if settings else 15
         self.max_size_bytes = self.max_size_mb * 1024 * 1024
 
+        timeout = settings.ollama_timeout_seconds if settings else 180.0
         self.document_service = DocumentService(max_chars=max_chars)
-        self.ai_service = AIService(base_url=base_url, model=model)
+        self.ai_service = AIService(base_url=base_url, model=model, default_timeout=timeout)
 
     @app_commands.command(
         name="analyze",
