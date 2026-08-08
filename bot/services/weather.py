@@ -202,11 +202,17 @@ class OpenWeatherClient:
                 try:
                     response = await client.get(endpoint, params=params)
                     if response.status_code == 404:
+                        logger.warning(f"OpenWeather endpoint '{endpoint}' returned HTTP 404 Not Found.")
                         continue
+                    if response.status_code != 200:
+                        logger.warning(
+                            f"OpenWeather endpoint '{endpoint}' returned HTTP status {response.status_code}: {response.text}"
+                        )
                     response.raise_for_status()
                     data = response.json()
                     break
                 except Exception as e:
+                    logger.warning(f"OpenWeather API request to '{endpoint}' failed: {e}")
                     last_error = e
 
         if data is None:
@@ -321,7 +327,7 @@ class WeatherService:
                 if not alerts:
                     alert_status_note = "No active government weather alerts returned for this location."
             except Exception as e:
-                logger.warning(f"OpenWeather alerts fetch degraded: {e}")
+                logger.warning(f"OpenWeather alerts fetch degraded: {e}", exc_info=True)
                 alert_status_note = "Official alert data is temporarily unavailable."
 
         # 3. Evaluate Disruption Risk over next 6 hours
