@@ -18,26 +18,28 @@ The bot is currently being developed and tested inside a private development ser
 - [x] **Phase 4C — Temporary Document Q&A** (`/docask` slash command for interactive document questions)
 - [x] **Phase 5A — Academic Schedule + Professor Lookup** (`/today`, `/schedule`, `/nextclass`, `/prof` offline commands)
 - [x] **Phase 6A — Weather Forecast + PAGASA Alerts + Disruption Risk** (`/weather` slash command)
+- [x] **Phase 6B — Local Image OCR Ingestion for Homework Channels** (RapidOCR + ONNX Runtime image text extraction)
 
 ---
 
 ## 🏗️ Architecture & Model Responsibilities
 
 ```text
-1. Discord RAG Pipeline:
-   Discord Server /ask question:<text>
+1. Discord RAG Pipeline & Image OCR Ingestion:
+   Discord Server Message / Homework Attachment (.png, .jpg, .jpeg, .webp)
               │
               ▼
-        EmbeddingService (embeddinggemma @ /api/embed)
+        KnowledgeCog / Ingestion Pipeline (checks INDEXED_CHANNEL_IDS & OCR_CHANNEL_IDS)
               │
-              ▼
-        VectorStore (Qdrant search_similar, strictly filtered by current guild_id)
-              │
-              ▼
-        RAGService (formats compact context + untrusted-data safety instructions)
-              │
-              ▼
-        AIService (phi4-mini @ /api/chat) ──> Grounded Answer + Clickable Sources
+              ├─► Image Attachment? ──> OCRService (RapidOCR + ONNX Runtime) ──> Extracted OCR Text
+              │                                                                         │
+              └─────────────── Combined Text Content ◄──────────────────────────────────┘
+                                      │
+                                      ▼
+                        EmbeddingService (embeddinggemma @ /api/embed)
+                                      │
+                                      ▼
+                        VectorStore (Qdrant Point with stable Discord Message ID)
 
 2. External Search Pipeline:
    Discord Server /search query:<text>
@@ -91,11 +93,12 @@ The bot is currently being developed and tested inside a private development ser
 2. **Server-Only `/ask`**: `/ask` commands in Direct Messages (DMs) return a clear message: `"This command currently works inside a server."`
 3. **Prompt Injection Boundary**: Retrieved Discord messages and uploaded document contents are injected as untrusted reference data with system instructions forbidding the model from executing commands found inside retrieved text.
 4. **Explicit Channel Allowlist**: Messages are only indexed from channels explicitly listed in `INDEXED_CHANNEL_IDS`. If empty, no messages are indexed.
-5. **External Web Search Privacy (`/search`)**: `/search` sends **only** the explicit user search query to Serper API to fetch Google search results. Discord guild messages, Qdrant vectors, user profile data, and local AI context are **never** sent with search requests.
-6. **Local Document Privacy (`/analyze` & `/docask`)**: File attachments are downloaded temporarily into an OS temporary directory, parsed locally (`pdf-inspector` / `python-pptx`), and deleted immediately. Extracted text is held temporarily in-memory for up to 30 minutes (`DOCUMENT_SESSION_TTL_MINUTES=30`) isolated per user and channel. Document content is **never** sent to disk, Qdrant, Serper, or external AI services.
-7. **Offline Academic Schedule (`/today`, `/schedule`, `/nextclass`, `/prof`)**: Schedule data is loaded directly from local JSON files (`data/academics/`) without any database, external API calls, or AI LLM processing. For details on customizing or adding schedule data for your school, see [`data/academics/README.md`](data/academics/README.md).
-8. **Weather Privacy (`/weather`)**: Uses public configured campus coordinates (`WEATHER_LATITUDE=14.5869`, `WEATHER_LONGITUDE=120.9762`, `"Manila (PLM)"`). Open-Meteo receives only the configured latitude/longitude. PAGASA receives a standard HTTP GET request to its public NCR regional forecast page (`PAGASA_NCR_URL`). No user geolocation, Discord chat history, user profiles, or Qdrant data is collected or transmitted.
-9. **Class Suspension Disclaimer**: Uno's Weather Disruption Risk level (`LOW`, `MODERATE`, `HIGH`) is a deterministic heuristic estimate based on weather conditions and official PAGASA warnings. Uno **never** claims that classes are officially suspended. Class suspension decisions rest solely with official university and government authorities.
+5. **Local Image OCR (`OCR_CHANNEL_IDS`)**: Image text extraction is performed **locally** using RapidOCR and ONNX Runtime only for supported image attachments (`.png`, `.jpg`, `.jpeg`, `.webp` up to 8 MB) in channels explicitly listed in both `INDEXED_CHANNEL_IDS` and `OCR_CHANNEL_IDS`. Image OCR is intended for assignment and homework screenshots containing text. Uno cannot understand arbitrary visual diagrams or photos from OCR alone. Images are processed strictly in-memory / locally and are **never** sent to cloud OCR services, Firecrawl, OpenAI, Gemini, or external vision models.
+6. **External Web Search Privacy (`/search`)**: `/search` sends **only** the explicit user search query to Serper API to fetch Google search results. Discord guild messages, Qdrant vectors, user profile data, and local AI context are **never** sent with search requests.
+7. **Local Document Privacy (`/analyze` & `/docask`)**: File attachments are downloaded temporarily into an OS temporary directory, parsed locally (`pdf-inspector` / `python-pptx`), and deleted immediately. Extracted text is held temporarily in-memory for up to 30 minutes (`DOCUMENT_SESSION_TTL_MINUTES=30`) isolated per user and channel. Document content is **never** sent to disk, Qdrant, Serper, or external AI services.
+8. **Offline Academic Schedule (`/today`, `/schedule`, `/nextclass`, `/prof`)**: Schedule data is loaded directly from local JSON files (`data/academics/`) without any database, external API calls, or AI LLM processing. For details on customizing or adding schedule data for your school, see [`data/academics/README.md`](data/academics/README.md).
+9. **Weather Privacy (`/weather`)**: Uses public configured campus coordinates (`WEATHER_LATITUDE=14.5869`, `WEATHER_LONGITUDE=120.9762`, `"Manila (PLM)"`). Open-Meteo receives only the configured latitude/longitude. PAGASA receives a standard HTTP GET request to its public NCR regional forecast page (`PAGASA_NCR_URL`). No user geolocation, Discord chat history, user profiles, or Qdrant data is collected or transmitted.
+10. **Class Suspension Disclaimer**: Uno's Weather Disruption Risk level (`LOW`, `MODERATE`, `HIGH`) is a deterministic heuristic estimate based on weather conditions and official PAGASA warnings. Uno **never** claims that classes are officially suspended. Class suspension decisions rest solely with official university and government authorities.
 
 ---
 
