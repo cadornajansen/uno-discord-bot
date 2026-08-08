@@ -122,6 +122,29 @@ def test_parse_pagasa_alerts_red_elsewhere_orange_metro_manila():
     assert alerts[0].affects_metro_manila is True
 
 
+def test_parse_pagasa_alerts_metro_manila_hazard_isolation():
+    """Test Metro Manila receives ONLY its block's associated hazard and NOT a neighboring RED block's hazard."""
+    html = """
+    <div id="rainfalls">
+      <h4>Heavy Rainfall Warning No. 26 #NCR_PRSD</h4>
+      <p>Issued at: 11:00 AM, 08 August 2026</p>
+      <p>RED WARNING LEVEL: Zambales, Bataan.</p>
+      <p>ASSOCIATED HAZARD: Serious FLOODING is expected in low-lying areas.</p>
+      <p>ORANGE WARNING LEVEL: Metro Manila, Cavite.</p>
+      <p>ASSOCIATED HAZARD: FLOODING is still THREATENING.</p>
+    </div>
+    """
+
+    alerts = parse_pagasa_alerts(html)
+    assert len(alerts) == 1
+    alert = alerts[0]
+
+    assert alert.severity == "ORANGE"
+    assert alert.affects_metro_manila is True
+    assert alert.associated_hazard == "Flooding is still threatening."
+    assert "Serious FLOODING" not in (alert.associated_hazard or "")
+
+
 def test_parse_pagasa_alerts_unrelated_province_does_not_affect_metro_manila():
     """Test warning for unrelated provinces (no Metro Manila) flags affects_metro_manila=False."""
     html = """

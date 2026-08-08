@@ -67,9 +67,13 @@ def format_weather_response(report: WeatherReport) -> str:
 
     if active_mm_alerts:
         for alert in active_mm_alerts:
-            sev_str = f" · Severity: {alert.severity}" if alert.severity else ""
+            sev_str = f" — {alert.severity} WARNING" if alert.severity else ""
             issued_str = f"\nIssued: {alert.issued_at.strftime('%I:%M %p').lstrip('0')}" if alert.issued_at else ""
-            sections.append(f"**{alert.event}**{sev_str}{issued_str}\n{alert.description}")
+            
+            entry = f"**{alert.event}**\nMetro Manila{sev_str}{issued_str}"
+            if alert.associated_hazard:
+                entry += f"\nAssociated Hazard: {alert.associated_hazard}"
+            sections.append(entry)
     elif report.alert_status_note:
         sections.append(report.alert_status_note)
 

@@ -35,8 +35,9 @@ def test_format_weather_response_helper():
                 event="Heavy Rainfall Warning No. 26",
                 issued_at=datetime(2026, 8, 8, 11, 0, tzinfo=timezone.utc),
                 severity="ORANGE",
-                description="FLOODING is still THREATENING.",
+                description="RED WARNING LEVEL: Zambales, Bataan.\nORANGE WARNING LEVEL: Metro Manila, Cavite.",
                 affects_metro_manila=True,
+                associated_hazard="Flooding is still threatening.",
             ),
         ),
         alert_status_note=None,
@@ -54,7 +55,12 @@ def test_format_weather_response_helper():
     assert "**Weather Disruption Risk: HIGH**" in text
     assert "**Official PAGASA Warnings**" in text
     assert "Heavy Rainfall Warning No. 26" in text
-    assert "Severity: ORANGE" in text
+    assert "Metro Manila — ORANGE WARNING" in text
+    assert "Issued: 11:00 AM" in text
+    assert "Associated Hazard: Flooding is still threatening." in text
+    assert "Zambales" not in text
+    assert "Bataan" not in text
+    assert "Batangas" not in text
     assert "*Uno's risk level is a weather-based estimate only. Class suspension decisions come from official authorities.*" in text
 
 

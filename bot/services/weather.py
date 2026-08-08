@@ -108,6 +108,7 @@ class WeatherAlert:
     severity: Optional[str]
     description: str
     affects_metro_manila: bool
+    associated_hazard: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -141,7 +142,7 @@ def parse_pagasa_alerts(html: str) -> tuple[WeatherAlert, ...]:
     # 1. Parse #rainfalls section
     rain_section = soup.find(id="rainfalls") or soup.select_one("#rainfalls")
     if rain_section:
-        rain_text = rain_section.get_text(separator=" ").strip()
+        rain_text = rain_section.get_text(separator="\n").strip()
 
         if "heavy rainfall warning" in rain_text.lower():
             h4 = rain_section.find("h4")
@@ -161,37 +162,38 @@ def parse_pagasa_alerts(html: str) -> tuple[WeatherAlert, ...]:
                 except ValueError:
                     logger.debug(f"Could not parse PAGASA time string: '{date_str} {time_str}'")
 
-            severity_found = None
-            affects_mm = False
+            blocks = re.split(
+                r"(RED WARNING LEVEL|ORANGE WARNING LEVEL|YELLOW WARNING LEVEL)",
+                rain_text,
+                flags=re.IGNORECASE,
+            )
+
+            matched_mm_severity = None
+            matched_mm_hazard = None
             highest_overall_severity = None
 
-            levels = [
-                ("RED", r"RED WARNING LEVEL:?([^;.\n]+)"),
-                ("ORANGE", r"ORANGE WARNING LEVEL:?([^;.\n]+)"),
-                ("YELLOW", r"YELLOW WARNING LEVEL:?([^;.\n]+)"),
-            ]
+            for i in range(1, len(blocks) - 1, 2):
+                sev_name = blocks[i].strip().upper().replace(" WARNING LEVEL", "")
+                block_content = blocks[i + 1]
 
-            for sev_name, pattern in levels:
-                matches = re.finditer(pattern, rain_text, re.IGNORECASE)
-                for m in matches:
-                    if highest_overall_severity is None:
-                        highest_overall_severity = sev_name
-                    location_text = m.group(1).lower()
-                    if "metro manila" in location_text:
-                        if severity_found is None:
-                            severity_found = sev_name
-                            affects_mm = True
+                if highest_overall_severity is None:
+                    highest_overall_severity = sev_name
 
-            final_severity = severity_found if affects_mm else highest_overall_severity
+                hazard_match = re.search(r"ASSOCIATED HAZARD:?\s*([^\n;]+)", block_content, re.IGNORECASE)
+                raw_hazard = hazard_match.group(1).strip() if hazard_match else None
 
-            desc_lines = []
-            for line in rain_text.split("\n"):
-                line_s = line.strip()
-                if any(k in line_s.upper() for k in ("WARNING LEVEL", "ASSOCIATED HAZARD", "ISSUED AT")):
-                    if len(desc_lines) < 4:
-                        desc_lines.append(line_s)
+                loc_part = block_content.split("ASSOCIATED HAZARD")[0].lower()
 
-            description = " | ".join(desc_lines) if desc_lines else rain_text[:300]
+                if "metro manila" in loc_part:
+                    if matched_mm_severity is None:
+                        matched_mm_severity = sev_name
+                        if raw_hazard:
+                            clean_hz = raw_hazard.strip(". ")
+                            if clean_hz:
+                                matched_mm_hazard = clean_hz[0].upper() + clean_hz[1:].lower() + "."
+
+            final_severity = matched_mm_severity if matched_mm_severity else highest_overall_severity
+            affects_mm = matched_mm_severity is not None
 
             alerts.append(
                 WeatherAlert(
@@ -199,8 +201,9 @@ def parse_pagasa_alerts(html: str) -> tuple[WeatherAlert, ...]:
                     event=event_name,
                     issued_at=issued_at,
                     severity=final_severity,
-                    description=description,
+                    description=rain_text,
                     affects_metro_manila=affects_mm,
+                    associated_hazard=matched_mm_hazard if affects_mm else None,
                 )
             )
 
