@@ -34,6 +34,7 @@ class UnoDiscordBot(commands.Bot):
             "bot.cogs.search",
             "bot.cogs.documents",
             "bot.cogs.academics",
+            "bot.cogs.weather",
         ]
         for extension in cogs_to_load:
             try:

@@ -17,6 +17,7 @@ The bot is currently being developed and tested inside a private development ser
 - [x] **Phase 4B — Local Document Analysis: PDF + PPTX** (`/analyze` slash command for local document summarization)
 - [x] **Phase 4C — Temporary Document Q&A** (`/docask` slash command for interactive document questions)
 - [x] **Phase 5A — Academic Schedule + Professor Lookup** (`/today`, `/schedule`, `/nextclass`, `/prof` offline commands)
+- [x] **Phase 6A — Weather Forecast + PAGASA Alerts + Disruption Risk** (`/weather` slash command)
 
 ---
 
@@ -70,6 +71,16 @@ The bot is currently being developed and tested inside a private development ser
               │
               ▼
         data/academics/{school_year}/semester-{semester}.json (Local Offline Data)
+
+5. Weather Forecast & Disruption Risk Pipeline:
+   Discord Server /weather
+              │
+              ▼
+        WeatherCog ──> WeatherService
+              │
+              ├──► OpenMeteoClient (Current & Hourly Forecast)
+              ├──► OpenWeatherClient (Government & PAGASA Weather Alerts)
+              └──► WeatherRiskService (Deterministic LOW / MODERATE / HIGH Disruption Risk)
 ```
 
 ---
@@ -83,6 +94,8 @@ The bot is currently being developed and tested inside a private development ser
 5. **External Web Search Privacy (`/search`)**: `/search` sends **only** the explicit user search query to Serper API to fetch Google search results. Discord guild messages, Qdrant vectors, user profile data, and local AI context are **never** sent with search requests.
 6. **Local Document Privacy (`/analyze` & `/docask`)**: File attachments are downloaded temporarily into an OS temporary directory, parsed locally (`pdf-inspector` / `python-pptx`), and deleted immediately. Extracted text is held temporarily in-memory for up to 30 minutes (`DOCUMENT_SESSION_TTL_MINUTES=30`) isolated per user and channel. Document content is **never** sent to disk, Qdrant, Serper, or external AI services.
 7. **Offline Academic Schedule (`/today`, `/schedule`, `/nextclass`, `/prof`)**: Schedule data is loaded directly from local JSON files (`data/academics/`) without any database, external API calls, or AI LLM processing. For details on customizing or adding schedule data for your school, see [`data/academics/README.md`](data/academics/README.md).
+8. **Weather Privacy (`/weather`)**: Uses public configured campus coordinates (`WEATHER_LATITUDE=14.5869`, `WEATHER_LONGITUDE=120.9762`, `"Manila (PLM)"`). Open-Meteo and OpenWeather APIs receive only the configured latitude/longitude. No user geolocation, Discord chat history, user profiles, or Qdrant data is collected or transmitted.
+9. **Class Suspension Disclaimer**: Uno's Weather Disruption Risk level (`LOW`, `MODERATE`, `HIGH`) is a deterministic heuristic estimate based on weather conditions. Uno **never** claims that classes are officially suspended. Class suspension decisions rest solely with official university and government authorities.
 
 ---
 
@@ -182,6 +195,16 @@ DOCUMENT_SESSION_TTL_MINUTES=30
 ACADEMIC_SCHOOL_YEAR=2026-2027
 ACADEMIC_SEMESTER=1
 ACADEMIC_TIMEZONE=Asia/Manila
+
+# Weather Configuration
+WEATHER_LATITUDE=14.5869
+WEATHER_LONGITUDE=120.9762
+WEATHER_LOCATION_NAME=Manila (PLM)
+WEATHER_TIMEZONE=Asia/Manila
+
+# OpenWeather Alert Configuration (Optional)
+OPENWEATHER_API_KEY=your_openweather_key_here
+OPENWEATHER_BASE_URL=https://api.openweathermap.org
 ```
 
 ### 3. Run Automated Tests

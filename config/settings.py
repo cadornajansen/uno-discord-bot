@@ -36,6 +36,12 @@ class Settings:
         academic_school_year: str,
         academic_semester: int,
         academic_timezone: str,
+        weather_latitude: float,
+        weather_longitude: float,
+        weather_location_name: str,
+        weather_timezone: str,
+        openweather_api_key: str,
+        openweather_base_url: str,
     ):
         self.discord_token = discord_token
         self.dev_guild_id = dev_guild_id
@@ -57,6 +63,12 @@ class Settings:
         self.academic_school_year = academic_school_year
         self.academic_semester = academic_semester
         self.academic_timezone = academic_timezone
+        self.weather_latitude = weather_latitude
+        self.weather_longitude = weather_longitude
+        self.weather_location_name = weather_location_name
+        self.weather_timezone = weather_timezone
+        self.openweather_api_key = openweather_api_key
+        self.openweather_base_url = openweather_base_url.rstrip("/")
 
 
 def load_settings() -> Settings:
@@ -160,6 +172,28 @@ def load_settings() -> Settings:
 
     academic_timezone = os.getenv("ACADEMIC_TIMEZONE", "Asia/Manila").strip()
 
+    lat_raw = os.getenv("WEATHER_LATITUDE", "14.5869").strip()
+    try:
+        weather_latitude = float(lat_raw)
+        if not (-90.0 <= weather_latitude <= 90.0):
+            raise ValueError()
+    except ValueError:
+        raise ConfigError("WEATHER_LATITUDE must be a float between -90.0 and 90.0.")
+
+    lon_raw = os.getenv("WEATHER_LONGITUDE", "120.9762").strip()
+    try:
+        weather_longitude = float(lon_raw)
+        if not (-180.0 <= weather_longitude <= 180.0):
+            raise ValueError()
+    except ValueError:
+        raise ConfigError("WEATHER_LONGITUDE must be a float between -180.0 and 180.0.")
+
+    weather_location_name = os.getenv("WEATHER_LOCATION_NAME", "Manila (PLM)").strip()
+    weather_timezone = os.getenv("WEATHER_TIMEZONE", "Asia/Manila").strip()
+
+    openweather_api_key = os.getenv("OPENWEATHER_API_KEY", "").strip()
+    openweather_base_url = os.getenv("OPENWEATHER_BASE_URL", "https://api.openweathermap.org").strip()
+
     return Settings(
         discord_token=token,
         dev_guild_id=dev_guild_id,
@@ -181,4 +215,10 @@ def load_settings() -> Settings:
         academic_school_year=academic_school_year,
         academic_semester=academic_semester,
         academic_timezone=academic_timezone,
+        weather_latitude=weather_latitude,
+        weather_longitude=weather_longitude,
+        weather_location_name=weather_location_name,
+        weather_timezone=weather_timezone,
+        openweather_api_key=openweather_api_key,
+        openweather_base_url=openweather_base_url,
     )
