@@ -26,6 +26,9 @@ class Settings:
         indexed_channel_ids: frozenset[int],
         rag_top_k: int,
         rag_min_score: float,
+        serper_api_key: str,
+        serper_base_url: str,
+        search_result_limit: int,
     ):
         self.discord_token = discord_token
         self.dev_guild_id = dev_guild_id
@@ -37,6 +40,9 @@ class Settings:
         self.indexed_channel_ids = indexed_channel_ids
         self.rag_top_k = rag_top_k
         self.rag_min_score = rag_min_score
+        self.serper_api_key = serper_api_key
+        self.serper_base_url = serper_base_url.rstrip("/")
+        self.search_result_limit = search_result_limit
 
 
 def load_settings() -> Settings:
@@ -100,6 +106,14 @@ def load_settings() -> Settings:
     except ValueError:
         raise ConfigError("RAG_MIN_SCORE must be a float between 0.0 and 1.0.")
 
+    serper_api_key = os.getenv("SERPER_API_KEY", "").strip()
+    serper_base_url = os.getenv("SERPER_BASE_URL", "https://google.serper.dev").strip()
+
+    search_limit_raw = os.getenv("SEARCH_RESULT_LIMIT", "5").strip()
+    if not search_limit_raw.isdigit() or not (1 <= int(search_limit_raw) <= 10):
+        raise ConfigError("SEARCH_RESULT_LIMIT must be an integer between 1 and 10.")
+    search_result_limit = int(search_limit_raw)
+
     return Settings(
         discord_token=token,
         dev_guild_id=dev_guild_id,
@@ -111,4 +125,7 @@ def load_settings() -> Settings:
         indexed_channel_ids=frozenset(indexed_channel_ids),
         rag_top_k=rag_top_k,
         rag_min_score=rag_min_score,
+        serper_api_key=serper_api_key,
+        serper_base_url=serper_base_url,
+        search_result_limit=search_result_limit,
     )
