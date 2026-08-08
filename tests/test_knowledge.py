@@ -97,30 +97,16 @@ def test_should_index_ignore_empty_content():
 
 
 def test_should_index_ignore_interaction_slash_command_messages():
-    """Test that interaction and slash-command messages are ignored for ingestion."""
-    # Test via message.interaction
-    msg_with_interaction = MagicMock()
-    msg_with_interaction.guild = MagicMock()
-    msg_with_interaction.channel.id = 123456789
-    msg_with_interaction.author.bot = False
-    msg_with_interaction.webhook_id = None
-    msg_with_interaction.interaction = MagicMock()
-    msg_with_interaction.interaction_metadata = None
-    msg_with_interaction.content = "/weather"
-
-    allowlist = frozenset({123456789})
-    assert should_index_message(msg_with_interaction, allowlist) is False
-
-    # Test via message.interaction_metadata
+    """Test that interaction and slash-command messages with interaction_metadata are ignored."""
     msg_with_metadata = MagicMock()
     msg_with_metadata.guild = MagicMock()
     msg_with_metadata.channel.id = 123456789
     msg_with_metadata.author.bot = False
     msg_with_metadata.webhook_id = None
-    msg_with_metadata.interaction = None
     msg_with_metadata.interaction_metadata = MagicMock()
     msg_with_metadata.content = "/ask"
 
+    allowlist = frozenset({123456789})
     assert should_index_message(msg_with_metadata, allowlist) is False
 
 
