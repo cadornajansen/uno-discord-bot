@@ -202,6 +202,30 @@ class VectorStore:
             logger.error(f"Failed to search Qdrant collection '{self.collection_name}': {e}")
             raise VectorStoreConnectionError(f"Qdrant search failed: {e}") from e
 
+    async def delete_message(self, message_id: int) -> None:
+        """Delete a point from Qdrant by its integer Discord message ID.
+
+        Args:
+            message_id: Discord message ID corresponding to Qdrant Point ID.
+
+        Raises:
+            VectorStoreConnectionError: If unable to communicate with Qdrant.
+        """
+        try:
+            exists = await self.client.collection_exists(self.collection_name)
+            if not exists:
+                logger.debug(f"Collection '{self.collection_name}' does not exist. Skipping point deletion.")
+                return
+
+            await self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.PointIdsList(points=[message_id]),
+            )
+            logger.info(f"Deleted point ID {message_id} from Qdrant collection '{self.collection_name}'")
+        except Exception as e:
+            logger.error(f"Failed to delete point {message_id} from Qdrant collection '{self.collection_name}': {e}")
+            raise VectorStoreConnectionError(f"Qdrant point deletion failed: {e}") from e
+
     async def query_similar(
         self,
         vector: list[float],

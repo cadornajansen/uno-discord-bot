@@ -12,6 +12,7 @@ The bot is currently being developed and tested inside a private development ser
 - [x] **Phase 2A — Local Ollama AI Integration** (`/ask` slash command via `phi4-mini`)
 - [x] **Phase 2B — Controlled Discord Knowledge Ingestion** (Background indexing into Qdrant via `embeddinggemma`)
 - [x] **Phase 2C — Discord Chat RAG Integration** (Grounded `/ask` answers using retrieved server messages)
+- [x] **Phase 3 — Discord Knowledge Synchronization** (Live edit sync, delete sync, and historical backfill script)
 
 ---
 
@@ -30,12 +31,14 @@ Discord Server /ask question:<text>
      RAGService (formats compact context + untrusted-data safety instructions)
            │
            ▼
-     AIService (phi4-mini @ /api/chat) ──> Grounded Answer + Lightweight Sources
+     AIService (phi4-mini @ /api/chat) ──> Grounded Answer + Clickable Sources
 ```
 
-- **`phi4-mini`**: Chat / response generation model.
-- **`embeddinggemma`**: Dense text vector embedding model.
-- **`Qdrant`**: Local vector database (`http://localhost:6333`).
+### Knowledge Synchronization Pipeline:
+1. **New Message (`on_message`)**: Automatically embeds and upserts to Qdrant.
+2. **Message Edit (`on_message_edit`)**: Re-embeds edited text and updates the Qdrant point using the same Discord `message.id`. If edited to empty text, deletes the point.
+3. **Message Delete (`on_raw_message_delete`)**: Intercepts raw message deletions and deletes the Qdrant point by `message.id`.
+4. **Historical Backfill**: Manual CLI script to index historical messages from allowlisted channels.
 
 ---
 
@@ -146,11 +149,20 @@ RAG_MIN_SCORE=0.30
 python -m pytest
 ```
 
-### 4. Developer Semantic Search Verification CLI
+### 4. Developer CLI Scripts
 
-```bash
-python scripts/test_semantic_search.py "When is the data structures quiz?"
-```
+- **Semantic Search Test**:
+  ```bash
+  python scripts/test_semantic_search.py "When is the data structures quiz?"
+  ```
+- **Historical Message Backfill**:
+  ```bash
+  # Backfill all allowlisted channels (up to 200 messages each)
+  python scripts/backfill_discord_history.py --limit 200
+
+  # Backfill a specific channel
+  python scripts/backfill_discord_history.py --channel-id 123456789012345678 --limit 500
+  ```
 
 ### 5. Launch Bot
 

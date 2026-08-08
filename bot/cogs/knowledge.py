@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 
 def should_index_message(message: discord.Message, indexed_channel_ids: frozenset[int]) -> bool:
-    """Determine whether a Discord message meets all Phase 2B knowledge ingestion rules.
+    """Determine whether a Discord message meets all knowledge ingestion rules.
 
     Args:
         message: The Discord message object to evaluate.
@@ -42,7 +42,7 @@ def should_index_message(message: discord.Message, indexed_channel_ids: frozense
 
 
 class KnowledgeCog(commands.Cog):
-    """Cog handling controlled background ingestion of eligible Discord text messages."""
+    """Cog handling controlled background ingestion & synchronization of Discord messages."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -60,19 +60,25 @@ class KnowledgeCog(commands.Cog):
         self.embedding_service = EmbeddingService(base_url=base_url, model=embed_model)
         self.vector_store = VectorStore(url=qdrant_url, collection_name=qdrant_coll)
 
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message) -> None:
-        """Background event listener for incoming Discord messages."""
+    async def index_message(self, message: discord.Message) -> bool:
+        """Reusable method to validate, embed, and upsert a Discord message into Qdrant.
+
+        Args:
+            message: Discord message to process.
+
+        Returns:
+            True if indexing succeeded; False if skipped or failed.
+        """
         if not should_index_message(message, self.indexed_channel_ids):
-            return
+            return False
 
         content = message.content.strip()
 
         try:
-            # 1. Generate vector embedding using Ollama embeddinggemma
+            # 1. Generate dense vector embedding
             vector = await self.embedding_service.embed(content)
 
-            # 2. Construct minimal metadata payload
+            # 2. Build metadata payload
             payload = {
                 "message_id": str(message.id),
                 "guild_id": str(message.guild.id),
@@ -82,7 +88,7 @@ class KnowledgeCog(commands.Cog):
                 "created_at": message.created_at.isoformat(),
             }
 
-            # 3. Upsert point into Qdrant vector database
+            # 3. Upsert into Qdrant using Discord message ID as canonical Point ID
             await self.vector_store.upsert_message(
                 message_id=message.id,
                 vector=vector,
@@ -90,20 +96,80 @@ class KnowledgeCog(commands.Cog):
             )
 
             logger.info(
-                f"Successfully indexed message (ID: {message.id}) "
-                f"from Channel ID {message.channel.id} into Qdrant"
+                f"Indexed message ID {message.id} (Channel ID: {message.channel.id}) into Qdrant"
             )
+            return True
 
         except (EmbeddingError, VectorStoreError) as e:
-            # Background ingestion failures must log errors without interrupting bot operation or chat
             logger.error(
-                f"Knowledge ingestion failed for message ID {message.id} "
+                f"Knowledge indexing failed for message ID {message.id} "
                 f"in channel ID {message.channel.id}: {e}"
             )
+            return False
         except Exception as e:
             logger.exception(
-                f"Unexpected failure during knowledge ingestion for message ID {message.id}: {e}"
+                f"Unexpected failure during knowledge indexing for message ID {message.id}: {e}"
             )
+            return False
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message) -> None:
+        """Listener for new Discord text messages."""
+        await self.index_message(message)
+
+    @commands.Cog.listener()
+    async def on_message_edit(
+        self,
+        before: discord.Message,
+        after: discord.Message,
+    ) -> None:
+        """Listener for edited Discord text messages."""
+        # Skip if message text content did not change
+        if before.content == after.content:
+            return
+
+        # If edited message is still eligible, re-embed and update Qdrant point
+        if should_index_message(after, self.indexed_channel_ids):
+            logger.info(f"Processing edited message ID {after.id}")
+            await self.index_message(after)
+        else:
+            # If message became ineligible after editing (e.g. edited to empty text),
+            # delete existing point if original message was in an allowlisted channel & guild
+            if (
+                before.guild is not None
+                and before.channel.id in self.indexed_channel_ids
+            ):
+                logger.info(
+                    f"Edited message ID {after.id} became ineligible. Removing from Qdrant."
+                )
+                try:
+                    await self.vector_store.delete_message(after.id)
+                except VectorStoreError as e:
+                    logger.error(
+                        f"Failed to delete point for ineligible edited message ID {after.id}: {e}"
+                    )
+
+    @commands.Cog.listener()
+    async def on_raw_message_delete(
+        self,
+        payload: discord.RawMessageDeleteEvent,
+    ) -> None:
+        """Raw listener for deleted Discord messages (handles both cached and uncached messages)."""
+        # Delete only if deletion occurred inside a guild and allowlisted channel
+        if (
+            payload.guild_id is not None
+            and payload.channel_id in self.indexed_channel_ids
+        ):
+            logger.info(
+                f"Processing message deletion for message ID {payload.message_id} "
+                f"in channel ID {payload.channel_id}"
+            )
+            try:
+                await self.vector_store.delete_message(payload.message_id)
+            except VectorStoreError as e:
+                logger.error(
+                    f"Failed to delete point for message ID {payload.message_id} from Qdrant: {e}"
+                )
 
 
 async def setup(bot: commands.Bot) -> None:

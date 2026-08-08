@@ -54,6 +54,27 @@ def test_upsert_message_success():
     asyncio.run(_test())
 
 
+def test_delete_message_success():
+    """Test VectorStore delete_message calls client.delete using exact integer message ID."""
+    async def _test():
+        store = VectorStore(url="http://localhost:6333", collection_name="discord_messages")
+
+        mock_client = AsyncMock()
+        mock_client.collection_exists.return_value = True
+        store._client = mock_client
+
+        await store.delete_message(message_id=987654321)
+
+        mock_client.delete.assert_called_once()
+        _, kwargs = mock_client.delete.call_args
+        assert kwargs["collection_name"] == "discord_messages"
+        selector = kwargs["points_selector"]
+        assert isinstance(selector, models.PointIdsList)
+        assert selector.points == [987654321]
+
+    asyncio.run(_test())
+
+
 def test_search_similar_success():
     """Test VectorStore search_similar returns ranked items with payload and scores."""
     async def _test():
