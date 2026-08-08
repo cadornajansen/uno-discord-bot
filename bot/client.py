@@ -32,6 +32,7 @@ class UnoDiscordBot(commands.Bot):
             "bot.cogs.ai",
             "bot.cogs.knowledge",
             "bot.cogs.search",
+            "bot.cogs.documents",
         ]
         for extension in cogs_to_load:
             try:

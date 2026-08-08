@@ -29,6 +29,8 @@ class Settings:
         serper_api_key: str,
         serper_base_url: str,
         search_result_limit: int,
+        document_max_size_mb: int,
+        document_max_chars: int,
     ):
         self.discord_token = discord_token
         self.dev_guild_id = dev_guild_id
@@ -43,6 +45,8 @@ class Settings:
         self.serper_api_key = serper_api_key
         self.serper_base_url = serper_base_url.rstrip("/")
         self.search_result_limit = search_result_limit
+        self.document_max_size_mb = document_max_size_mb
+        self.document_max_chars = document_max_chars
 
 
 def load_settings() -> Settings:
@@ -114,6 +118,16 @@ def load_settings() -> Settings:
         raise ConfigError("SEARCH_RESULT_LIMIT must be an integer between 1 and 10.")
     search_result_limit = int(search_limit_raw)
 
+    doc_size_raw = os.getenv("DOCUMENT_MAX_SIZE_MB", "15").strip()
+    if not doc_size_raw.isdigit() or int(doc_size_raw) <= 0:
+        raise ConfigError("DOCUMENT_MAX_SIZE_MB must be a positive integer.")
+    document_max_size_mb = int(doc_size_raw)
+
+    doc_chars_raw = os.getenv("DOCUMENT_MAX_CHARS", "50000").strip()
+    if not doc_chars_raw.isdigit() or int(doc_chars_raw) <= 0:
+        raise ConfigError("DOCUMENT_MAX_CHARS must be a positive integer.")
+    document_max_chars = int(doc_chars_raw)
+
     return Settings(
         discord_token=token,
         dev_guild_id=dev_guild_id,
@@ -128,4 +142,6 @@ def load_settings() -> Settings:
         serper_api_key=serper_api_key,
         serper_base_url=serper_base_url,
         search_result_limit=search_result_limit,
+        document_max_size_mb=document_max_size_mb,
+        document_max_chars=document_max_chars,
     )
