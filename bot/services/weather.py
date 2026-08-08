@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import logging
+import re
 from typing import Optional, Sequence
 import zoneinfo
+from bs4 import BeautifulSoup
 import httpx
 
 from bot.services.weather_risk import (
@@ -62,8 +64,8 @@ class OpenMeteoError(WeatherError):
     pass
 
 
-class OpenWeatherError(WeatherError):
-    """Raised when fetching or parsing data from OpenWeather fails."""
+class PagasaError(WeatherError):
+    """Raised when fetching or parsing PAGASA warnings fails."""
 
     pass
 
@@ -98,13 +100,14 @@ class HourlyWeather:
 
 @dataclass(frozen=True)
 class WeatherAlert:
-    """Holds government weather alert information."""
+    """Holds official government weather warning information."""
 
-    sender: str
+    source: str
     event: str
-    start: datetime
-    end: datetime
+    issued_at: Optional[datetime]
+    severity: Optional[str]
     description: str
+    affects_metro_manila: bool
 
 
 @dataclass(frozen=True)
@@ -117,6 +120,127 @@ class WeatherReport:
     alerts: tuple[WeatherAlert, ...]
     alert_status_note: Optional[str]
     risk: WeatherRisk
+
+
+def parse_pagasa_alerts(html: str) -> tuple[WeatherAlert, ...]:
+    """Parse PAGASA NCR-PRSD HTML for active rainfall warnings and thunderstorm advisories.
+
+    Args:
+        html: Raw HTML string of the PAGASA NCR-PRSD regional forecast page.
+
+    Returns:
+        Tuple of WeatherAlert instances.
+    """
+    if not html or not html.strip():
+        return ()
+
+    soup = BeautifulSoup(html, "html.parser")
+    alerts: list[WeatherAlert] = []
+    tz = zoneinfo.ZoneInfo("Asia/Manila")
+
+    # 1. Parse #rainfalls section
+    rain_section = soup.find(id="rainfalls") or soup.select_one("#rainfalls")
+    if rain_section:
+        rain_text = rain_section.get_text(separator=" ").strip()
+
+        if "heavy rainfall warning" in rain_text.lower():
+            h4 = rain_section.find("h4")
+            event_name = h4.get_text().strip() if h4 else "Heavy Rainfall Warning"
+
+            issued_at = None
+            match_time = re.search(
+                r"Issued at:\s*(\d{1,2}:\d{2}\s*(?:AM|PM)),?\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+                rain_text,
+                re.IGNORECASE,
+            )
+            if match_time:
+                time_str, date_str = match_time.group(1), match_time.group(2)
+                try:
+                    dt_naive = datetime.strptime(f"{date_str} {time_str}", "%d %B %Y %I:%M %p")
+                    issued_at = dt_naive.replace(tzinfo=tz)
+                except ValueError:
+                    logger.debug(f"Could not parse PAGASA time string: '{date_str} {time_str}'")
+
+            severity_found = None
+            affects_mm = False
+            highest_overall_severity = None
+
+            levels = [
+                ("RED", r"RED WARNING LEVEL:?([^;.\n]+)"),
+                ("ORANGE", r"ORANGE WARNING LEVEL:?([^;.\n]+)"),
+                ("YELLOW", r"YELLOW WARNING LEVEL:?([^;.\n]+)"),
+            ]
+
+            for sev_name, pattern in levels:
+                matches = re.finditer(pattern, rain_text, re.IGNORECASE)
+                for m in matches:
+                    if highest_overall_severity is None:
+                        highest_overall_severity = sev_name
+                    location_text = m.group(1).lower()
+                    if "metro manila" in location_text:
+                        if severity_found is None:
+                            severity_found = sev_name
+                            affects_mm = True
+
+            final_severity = severity_found if affects_mm else highest_overall_severity
+
+            desc_lines = []
+            for line in rain_text.split("\n"):
+                line_s = line.strip()
+                if any(k in line_s.upper() for k in ("WARNING LEVEL", "ASSOCIATED HAZARD", "ISSUED AT")):
+                    if len(desc_lines) < 4:
+                        desc_lines.append(line_s)
+
+            description = " | ".join(desc_lines) if desc_lines else rain_text[:300]
+
+            alerts.append(
+                WeatherAlert(
+                    source="PAGASA NCR-PRSD",
+                    event=event_name,
+                    issued_at=issued_at,
+                    severity=final_severity,
+                    description=description,
+                    affects_metro_manila=affects_mm,
+                )
+            )
+
+    # 2. Parse #thunderstorms section
+    ts_section = soup.find(id="thunderstorms") or soup.select_one("#thunderstorms")
+    if ts_section:
+        ts_text = ts_section.get_text(separator="\n").strip()
+
+        if ts_text and "no thunderstorm advisory issued" not in ts_text.lower():
+            h4 = ts_section.find("h4")
+            event_name = h4.get_text().strip() if h4 else "Thunderstorm Advisory"
+
+            issued_at = None
+            match_time = re.search(
+                r"Issued at:\s*(\d{1,2}:\d{2}\s*(?:AM|PM)),?\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})",
+                ts_text,
+                re.IGNORECASE,
+            )
+            if match_time:
+                time_str, date_str = match_time.group(1), match_time.group(2)
+                try:
+                    dt_naive = datetime.strptime(f"{date_str} {time_str}", "%d %B %Y %I:%M %p")
+                    issued_at = dt_naive.replace(tzinfo=tz)
+                except ValueError:
+                    pass
+
+            affects_mm = "metro manila" in ts_text.lower()
+
+            alerts.append(
+                WeatherAlert(
+                    source="PAGASA NCR-PRSD",
+                    event=event_name,
+                    issued_at=issued_at,
+                    severity=None,
+                    description=ts_text[:300],
+                    affects_metro_manila=affects_mm,
+                )
+            )
+
+    return tuple(alerts)
 
 
 class OpenMeteoClient:
@@ -165,97 +289,47 @@ class OpenMeteoClient:
             raise OpenMeteoError(f"Failed to fetch forecast from Open-Meteo: {e}") from e
 
 
-class OpenWeatherClient:
-    """Client for fetching government weather alerts from the OpenWeather One Call API."""
+class PagasaAlertClient:
+    """Client for fetching official regional weather warnings from PAGASA NCR-PRSD."""
 
-    def __init__(self, base_url: str = "https://api.openweathermap.org"):
-        self.base_url = base_url.rstrip("/")
+    def __init__(self, base_url: str = "https://www.pagasa.dost.gov.ph/regional-forecast/ncrprsd"):
+        self.base_url = base_url
 
     async def fetch_alerts(
         self,
-        lat: float,
-        lon: float,
-        api_key: str,
+        url: Optional[str] = None,
         timeout_seconds: float = 10.0,
     ) -> tuple[WeatherAlert, ...]:
-        """Fetch government weather alerts from OpenWeather One Call API."""
-        if not api_key:
-            return ()
+        """Fetch and parse official weather warnings from PAGASA NCR-PRSD."""
+        target_url = url or self.base_url
+        headers = {"User-Agent": "Uno-AI-Discord-Bot/1.0"}
 
-        # Try One Call 4.0 endpoint first, then 3.0, then 2.5 fallback
-        endpoints = [
-            f"{self.base_url}/data/4.0/onecall",
-            f"{self.base_url}/data/3.0/onecall",
-            f"{self.base_url}/data/2.5/onecall",
-        ]
-
-        data = None
-        last_error = None
-
-        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_seconds)) as client:
-            for endpoint in endpoints:
-                params = {
-                    "lat": lat,
-                    "lon": lon,
-                    "appid": api_key,
-                    "exclude": "current,minutely,hourly,daily",
-                }
-                try:
-                    response = await client.get(endpoint, params=params)
-                    if response.status_code == 404:
-                        logger.warning(f"OpenWeather endpoint '{endpoint}' returned HTTP 404 Not Found.")
-                        continue
-                    if response.status_code != 200:
-                        logger.warning(
-                            f"OpenWeather endpoint '{endpoint}' returned HTTP status {response.status_code}: {response.text}"
-                        )
-                    response.raise_for_status()
-                    data = response.json()
-                    break
-                except Exception as e:
-                    logger.warning(f"OpenWeather API request to '{endpoint}' failed: {e}")
-                    last_error = e
-
-        if data is None:
-            logger.warning(f"OpenWeather alerts fetch failed or returned error: {last_error}")
-            raise OpenWeatherError(f"Could not retrieve alerts from OpenWeather: {last_error}")
-
-        alerts_raw = data.get("alerts", [])
-        parsed_alerts = []
-
-        for item in alerts_raw:
-            sender = item.get("sender_name") or "Government Weather Agency"
-            event = item.get("event") or "Weather Alert"
-            start_ts = item.get("start", 0)
-            end_ts = item.get("end", 0)
-            desc = item.get("description", "").strip()
-
-            start_dt = datetime.fromtimestamp(start_ts, tz=timezone.utc)
-            end_dt = datetime.fromtimestamp(end_ts, tz=timezone.utc)
-
-            parsed_alerts.append(
-                WeatherAlert(
-                    sender=sender,
-                    event=event,
-                    start=start_dt,
-                    end=end_dt,
-                    description=desc,
-                )
-            )
-
-        return tuple(parsed_alerts)
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_seconds), follow_redirects=True) as client:
+                response = await client.get(target_url, headers=headers)
+                response.raise_for_status()
+                return parse_pagasa_alerts(response.text)
+        except httpx.HTTPStatusError as e:
+            logger.error(f"PAGASA returned HTTP status {e.response.status_code}")
+            raise PagasaError(f"PAGASA HTTP error status {e.response.status_code}") from e
+        except httpx.TimeoutException as e:
+            logger.error(f"PAGASA request timed out after {timeout_seconds}s")
+            raise PagasaError(f"PAGASA request timed out after {timeout_seconds}s") from e
+        except Exception as e:
+            logger.error(f"PAGASA fetch failed: {e}")
+            raise PagasaError(f"Failed to fetch PAGASA warnings: {e}") from e
 
 
 class WeatherService:
-    """Service managing weather forecast retrieval, alert integration, and risk calculation."""
+    """Service managing weather forecast retrieval, PAGASA alert integration, and risk calculation."""
 
     def __init__(
         self,
         open_meteo_client: Optional[OpenMeteoClient] = None,
-        open_weather_client: Optional[OpenWeatherClient] = None,
+        pagasa_client: Optional[PagasaAlertClient] = None,
     ):
         self.open_meteo_client = open_meteo_client or OpenMeteoClient()
-        self.open_weather_client = open_weather_client or OpenWeatherClient()
+        self.pagasa_client = pagasa_client or PagasaAlertClient()
 
     async def get_weather_report(
         self,
@@ -263,10 +337,9 @@ class WeatherService:
         lon: float = 120.9762,
         location_name: str = "Manila (PLM)",
         tz_name: str = "Asia/Manila",
-        openweather_api_key: str = "",
-        openweather_base_url: str = "https://api.openweathermap.org",
+        pagasa_ncr_url: str = "https://www.pagasa.dost.gov.ph/regional-forecast/ncrprsd",
     ) -> WeatherReport:
-        """Fetch combined forecast and government alerts and evaluate disruption risk."""
+        """Fetch combined forecast and PAGASA warnings and evaluate disruption risk."""
         # 1. Fetch Open-Meteo forecast data
         meteo_data = await self.open_meteo_client.fetch_forecast(lat=lat, lon=lon, tz_name=tz_name)
 
@@ -311,25 +384,18 @@ class WeatherService:
                 )
             )
 
-        # 2. Fetch OpenWeather alerts with graceful degradation
+        # 2. Fetch PAGASA warnings with graceful degradation
         alerts: tuple[WeatherAlert, ...] = ()
         alert_status_note: Optional[str] = None
 
-        if not openweather_api_key.strip():
-            alert_status_note = "Official alert integration is not configured."
-        else:
-            try:
-                self.open_weather_client.base_url = openweather_base_url.rstrip("/")
-                alerts = await self.open_weather_client.fetch_alerts(
-                    lat=lat,
-                    lon=lon,
-                    api_key=openweather_api_key,
-                )
-                if not alerts:
-                    alert_status_note = "No active government weather alerts returned for this location."
-            except Exception as e:
-                logger.warning(f"OpenWeather alerts fetch degraded: {e}", exc_info=True)
-                alert_status_note = "Official alert data is temporarily unavailable."
+        try:
+            alerts = await self.pagasa_client.fetch_alerts(url=pagasa_ncr_url)
+            mm_alerts = [a for a in alerts if a.affects_metro_manila]
+            if not mm_alerts:
+                alert_status_note = "No active PAGASA rainfall or thunderstorm warnings found for Metro Manila."
+        except Exception as e:
+            logger.warning(f"PAGASA warnings fetch degraded: {e}")
+            alert_status_note = "Official PAGASA warning data is temporarily unavailable."
 
         # 3. Evaluate Disruption Risk over next 6 hours
         hourly_6h_dicts = []
@@ -345,8 +411,10 @@ class WeatherService:
         alerts_dicts = []
         for a in alerts:
             alerts_dicts.append({
-                "sender": a.sender,
+                "source": a.source,
                 "event": a.event,
+                "severity": a.severity,
+                "affects_metro_manila": a.affects_metro_manila,
             })
 
         current_dict = {

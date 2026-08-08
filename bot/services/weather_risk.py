@@ -45,29 +45,26 @@ def evaluate_disruption_risk(
     high_reasons = []
     moderate_reasons = []
 
-    # 1. Evaluate Government Alerts
+    # 1. Evaluate PAGASA & Government Alerts (Metro Manila targeted)
     for alert in alerts:
-        event = alert.get("event", "")
-        sender = alert.get("sender", "")
-        event_lower = event.lower()
+        affects_mm = alert.get("affects_metro_manila", True)
+        if not affects_mm:
+            continue
 
-        is_severe_alert = any(
-            kw in event_lower
-            for kw in (
-                "severe",
-                "extreme",
-                "warning",
-                "typhoon",
-                "signal",
-                "heavy rainfall warning",
-                "torrential",
-            )
-        )
+        severity = (alert.get("severity") or "").upper()
+        event = alert.get("event") or "Weather Warning"
 
-        if is_severe_alert:
-            high_reasons.append(f"Severe government alert in effect: {event} ({sender})")
+        if severity in ("RED", "ORANGE") or "thunderstorm advisory" in event.lower():
+            label = f"{severity} WARNING" if severity else "ADVISORY"
+            high_reasons.append(f"Official PAGASA warning for Metro Manila: {event} ({label})")
+        elif severity == "YELLOW":
+            moderate_reasons.append(f"Official PAGASA warning for Metro Manila: {event} (YELLOW WARNING)")
         else:
-            moderate_reasons.append(f"Government alert in effect: {event} ({sender})")
+            event_lower = event.lower()
+            if any(kw in event_lower for kw in ("severe", "extreme", "warning", "typhoon", "signal", "torrential")):
+                high_reasons.append(f"Official weather warning in effect: {event}")
+            else:
+                moderate_reasons.append(f"Official weather advisory in effect: {event}")
 
     # 2. Evaluate Forecast & Current Parameters
     max_precip_prob = 0

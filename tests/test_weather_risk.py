@@ -124,26 +124,6 @@ def test_high_risk_strong_gusts():
     assert any("Strong wind gusts forecast (68 km/h)" in r for r in risk.reasons)
 
 
-def test_high_risk_severe_government_alert():
-    """Test active severe government alert triggers HIGH risk."""
-    hourly_6h = [
-        {
-            "precipitation_probability": 10,
-            "precipitation_mm": 0.0,
-            "weather_code": 1,
-            "visibility_m": 10000.0,
-            "wind_gust_kmh": 10.0,
-        }
-    ]
-    alerts = [
-        {"sender": "PAGASA", "event": "Heavy Rainfall Warning Signal No. 1"}
-    ]
-
-    risk = evaluate_disruption_risk(current=None, hourly_6h=hourly_6h, alerts=alerts)
-    assert risk.level == WeatherRiskLevel.HIGH
-    assert any("PAGASA" in r for r in risk.reasons)
-
-
 def test_high_risk_from_current_wind_gust():
     """Regression test: current wind gust >= 60.0 km/h triggers HIGH risk even if hourly entries are lower."""
     current = {
@@ -165,3 +145,51 @@ def test_high_risk_from_current_wind_gust():
     assert risk.level == WeatherRiskLevel.HIGH
     assert any("Strong wind gusts forecast (69 km/h)" in r for r in risk.reasons)
 
+
+def test_pagasa_yellow_warning_triggers_moderate_risk():
+    """Test PAGASA YELLOW rainfall warning affecting Metro Manila escalates risk to at least MODERATE."""
+    hourly_6h = [{"precipitation_probability": 10, "precipitation_mm": 0.0, "weather_code": 0, "visibility_m": 10000.0, "wind_gust_kmh": 10.0}]
+    alerts = [{"source": "PAGASA NCR-PRSD", "event": "Heavy Rainfall Warning", "severity": "YELLOW", "affects_metro_manila": True}]
+
+    risk = evaluate_disruption_risk(current=None, hourly_6h=hourly_6h, alerts=alerts)
+    assert risk.level == WeatherRiskLevel.MODERATE
+    assert any("PAGASA" in r and "YELLOW" in r for r in risk.reasons)
+
+
+def test_pagasa_orange_warning_triggers_high_risk():
+    """Test PAGASA ORANGE rainfall warning affecting Metro Manila escalates risk to HIGH."""
+    hourly_6h = [{"precipitation_probability": 10, "precipitation_mm": 0.0, "weather_code": 0, "visibility_m": 10000.0, "wind_gust_kmh": 10.0}]
+    alerts = [{"source": "PAGASA NCR-PRSD", "event": "Heavy Rainfall Warning", "severity": "ORANGE", "affects_metro_manila": True}]
+
+    risk = evaluate_disruption_risk(current=None, hourly_6h=hourly_6h, alerts=alerts)
+    assert risk.level == WeatherRiskLevel.HIGH
+    assert any("ORANGE WARNING" in r for r in risk.reasons)
+
+
+def test_pagasa_red_warning_triggers_high_risk():
+    """Test PAGASA RED rainfall warning affecting Metro Manila escalates risk to HIGH."""
+    hourly_6h = [{"precipitation_probability": 10, "precipitation_mm": 0.0, "weather_code": 0, "visibility_m": 10000.0, "wind_gust_kmh": 10.0}]
+    alerts = [{"source": "PAGASA NCR-PRSD", "event": "Heavy Rainfall Warning", "severity": "RED", "affects_metro_manila": True}]
+
+    risk = evaluate_disruption_risk(current=None, hourly_6h=hourly_6h, alerts=alerts)
+    assert risk.level == WeatherRiskLevel.HIGH
+    assert any("RED WARNING" in r for r in risk.reasons)
+
+
+def test_pagasa_unrelated_province_warning_does_not_escalate_risk():
+    """Test PAGASA warning targeting another province (affects_metro_manila=False) does not escalate risk for Metro Manila."""
+    hourly_6h = [{"precipitation_probability": 10, "precipitation_mm": 0.0, "weather_code": 0, "visibility_m": 10000.0, "wind_gust_kmh": 10.0}]
+    alerts = [{"source": "PAGASA NCR-PRSD", "event": "Heavy Rainfall Warning", "severity": "RED", "affects_metro_manila": False}]
+
+    risk = evaluate_disruption_risk(current=None, hourly_6h=hourly_6h, alerts=alerts)
+    assert risk.level == WeatherRiskLevel.LOW
+
+
+def test_pagasa_thunderstorm_advisory_triggers_high_risk():
+    """Test active PAGASA thunderstorm advisory affecting Metro Manila escalates risk to HIGH."""
+    hourly_6h = [{"precipitation_probability": 10, "precipitation_mm": 0.0, "weather_code": 0, "visibility_m": 10000.0, "wind_gust_kmh": 10.0}]
+    alerts = [{"source": "PAGASA NCR-PRSD", "event": "Thunderstorm Advisory No. 5", "severity": None, "affects_metro_manila": True}]
+
+    risk = evaluate_disruption_risk(current=None, hourly_6h=hourly_6h, alerts=alerts)
+    assert risk.level == WeatherRiskLevel.HIGH
+    assert any("Thunderstorm Advisory" in r for r in risk.reasons)

@@ -1,6 +1,5 @@
 import logging
 from typing import Optional
-import zoneinfo
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -12,7 +11,6 @@ from bot.services.weather import (
     OpenMeteoError,
     format_wmo_code,
 )
-from bot.services.weather_risk import WeatherRiskLevel
 from bot.utils.formatting import split_message
 
 logger = logging.getLogger(__name__)
@@ -33,7 +31,6 @@ def format_weather_response(report: WeatherReport) -> str:
         wmo_desc = format_wmo_code(curr.weather_code)
         sections.append(wmo_desc)
 
-        # Rain & Wind metrics from current or next 3 hours
         details = []
         if curr.humidity_percent is not None:
             details.append(f"Humidity: {int(curr.humidity_percent)}%")
@@ -64,13 +61,15 @@ def format_weather_response(report: WeatherReport) -> str:
     for reason in report.risk.reasons:
         sections.append(f"• {reason}")
 
-    # Official Government Weather Alerts section
-    sections.append("\n**Official Weather Alerts**")
-    if report.alerts:
-        for alert in report.alerts:
-            sender_prefix = f"{alert.sender} — " if alert.sender else ""
-            valid_end_str = alert.end.strftime("%I:%M %p").lstrip("0")
-            sections.append(f"{sender_prefix}{alert.event}\nValid until {valid_end_str}")
+    # Official PAGASA Warnings section
+    sections.append("\n**Official PAGASA Warnings**")
+    active_mm_alerts = [a for a in report.alerts if a.affects_metro_manila]
+
+    if active_mm_alerts:
+        for alert in active_mm_alerts:
+            sev_str = f" · Severity: {alert.severity}" if alert.severity else ""
+            issued_str = f"\nIssued: {alert.issued_at.strftime('%I:%M %p').lstrip('0')}" if alert.issued_at else ""
+            sections.append(f"**{alert.event}**{sev_str}{issued_str}\n{alert.description}")
     elif report.alert_status_note:
         sections.append(report.alert_status_note)
 
@@ -93,14 +92,17 @@ class WeatherCog(commands.Cog):
         self.lon = settings.weather_longitude if settings else 120.9762
         self.location_name = settings.weather_location_name if settings else "Manila (PLM)"
         self.tz_name = settings.weather_timezone if settings else "Asia/Manila"
-        self.openweather_api_key = settings.openweather_api_key if settings else ""
-        self.openweather_base_url = settings.openweather_base_url if settings else "https://api.openweathermap.org"
+        self.pagasa_ncr_url = (
+            settings.pagasa_ncr_url
+            if settings
+            else "https://www.pagasa.dost.gov.ph/regional-forecast/ncrprsd"
+        )
 
         self.weather_service = WeatherService()
 
     @app_commands.command(
         name="weather",
-        description="Show Manila weather forecast, government alerts, and weather disruption risk.",
+        description="Show Manila weather forecast, PAGASA warnings, and weather disruption risk.",
     )
     async def weather(self, interaction: discord.Interaction) -> None:
         """Slash command /weather"""
@@ -112,8 +114,7 @@ class WeatherCog(commands.Cog):
                 lon=self.lon,
                 location_name=self.location_name,
                 tz_name=self.tz_name,
-                openweather_api_key=self.openweather_api_key,
-                openweather_base_url=self.openweather_base_url,
+                pagasa_ncr_url=self.pagasa_ncr_url,
             )
 
             formatted_text = format_weather_response(report)

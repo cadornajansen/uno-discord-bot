@@ -40,8 +40,7 @@ class Settings:
         weather_longitude: float,
         weather_location_name: str,
         weather_timezone: str,
-        openweather_api_key: str,
-        openweather_base_url: str,
+        pagasa_ncr_url: str,
     ):
         self.discord_token = discord_token
         self.dev_guild_id = dev_guild_id
@@ -67,8 +66,7 @@ class Settings:
         self.weather_longitude = weather_longitude
         self.weather_location_name = weather_location_name
         self.weather_timezone = weather_timezone
-        self.openweather_api_key = openweather_api_key
-        self.openweather_base_url = openweather_base_url.rstrip("/")
+        self.pagasa_ncr_url = pagasa_ncr_url.strip()
 
 
 def load_settings() -> Settings:
@@ -191,8 +189,9 @@ def load_settings() -> Settings:
     weather_location_name = os.getenv("WEATHER_LOCATION_NAME", "Manila (PLM)").strip()
     weather_timezone = os.getenv("WEATHER_TIMEZONE", "Asia/Manila").strip()
 
-    openweather_api_key = os.getenv("OPENWEATHER_API_KEY", "").strip()
-    openweather_base_url = os.getenv("OPENWEATHER_BASE_URL", "https://api.openweathermap.org").strip()
+    pagasa_ncr_url = os.getenv(
+        "PAGASA_NCR_URL", "https://www.pagasa.dost.gov.ph/regional-forecast/ncrprsd"
+    ).strip()
 
     return Settings(
         discord_token=token,
@@ -219,6 +218,5 @@ def load_settings() -> Settings:
         weather_longitude=weather_longitude,
         weather_location_name=weather_location_name,
         weather_timezone=weather_timezone,
-        openweather_api_key=openweather_api_key,
-        openweather_base_url=openweather_base_url,
+        pagasa_ncr_url=pagasa_ncr_url,
     )

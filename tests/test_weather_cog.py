@@ -15,7 +15,7 @@ from bot.services.weather_risk import WeatherRisk, WeatherRiskLevel
 
 
 def test_format_weather_response_helper():
-    """Test format_weather_response formats report, risk, alerts, and disclaimer."""
+    """Test format_weather_response formats report, risk, PAGASA warnings, and disclaimer."""
     report = WeatherReport(
         location_name="Manila (PLM)",
         current=CurrentWeather(
@@ -31,17 +31,18 @@ def test_format_weather_response_helper():
         hourly=(),
         alerts=(
             WeatherAlert(
-                sender="PAGASA",
-                event="Heavy Rainfall Warning",
-                start=datetime(2026, 8, 8, 12, 0, tzinfo=timezone.utc),
-                end=datetime(2026, 8, 8, 16, 0, tzinfo=timezone.utc),
-                description="Heavy rainfall expected",
+                source="PAGASA NCR-PRSD",
+                event="Heavy Rainfall Warning No. 26",
+                issued_at=datetime(2026, 8, 8, 11, 0, tzinfo=timezone.utc),
+                severity="ORANGE",
+                description="FLOODING is still THREATENING.",
+                affects_metro_manila=True,
             ),
         ),
         alert_status_note=None,
         risk=WeatherRisk(
             level=WeatherRiskLevel.HIGH,
-            reasons=("Thunderstorms forecast within class hours", "Heavy rainfall forecast"),
+            reasons=("Official PAGASA warning for Metro Manila: Heavy Rainfall Warning No. 26 (ORANGE WARNING)",),
         ),
     )
 
@@ -51,7 +52,9 @@ def test_format_weather_response_helper():
     assert "28°C · Feels like 32°C" in text
     assert "Thunderstorms" in text
     assert "**Weather Disruption Risk: HIGH**" in text
-    assert "PAGASA — Heavy Rainfall Warning" in text
+    assert "**Official PAGASA Warnings**" in text
+    assert "Heavy Rainfall Warning No. 26" in text
+    assert "Severity: ORANGE" in text
     assert "*Uno's risk level is a weather-based estimate only. Class suspension decisions come from official authorities.*" in text
 
 
@@ -75,7 +78,7 @@ def test_weather_command_successful_execution():
             ),
             hourly=(),
             alerts=(),
-            alert_status_note="No active government weather alerts returned for this location.",
+            alert_status_note="No active PAGASA rainfall or thunderstorm warnings found for Metro Manila.",
             risk=WeatherRisk(level=WeatherRiskLevel.LOW, reasons=("Normal weather",)),
         )
 
@@ -93,7 +96,9 @@ def test_weather_command_successful_execution():
         interaction.followup.send.assert_called_once()
         sent_msg = interaction.followup.send.call_args[0][0]
         assert "**Weather — Manila (PLM)**" in sent_msg
-        assert "No active government weather alerts returned for this location." in sent_msg
+        assert "No active PAGASA rainfall or thunderstorm warnings found for Metro Manila." in sent_msg
+
+    asyncio.run(_test())
 
 
 def test_weather_command_openmeteo_failure_handled():
