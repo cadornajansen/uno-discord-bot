@@ -182,8 +182,9 @@ class OpenWeatherClient:
         if not api_key:
             return ()
 
-        # Try One Call 3.0 endpoint first, fallback to 2.5 if 3.0 unavailable
+        # Try One Call 4.0 endpoint first, then 3.0, then 2.5 fallback
         endpoints = [
+            f"{self.base_url}/data/4.0/onecall",
             f"{self.base_url}/data/3.0/onecall",
             f"{self.base_url}/data/2.5/onecall",
         ]
