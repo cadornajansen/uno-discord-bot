@@ -13,6 +13,8 @@ def test_should_index_valid_message():
     message.channel.id = 123456789
     message.author.bot = False
     message.webhook_id = None
+    message.interaction = None
+    message.interaction_metadata = None
     message.content = "Our DSA quiz is on Friday."
 
     allowlist = frozenset({123456789, 987654321})
@@ -26,6 +28,8 @@ def test_should_index_ignore_dm():
     message.channel.id = 123456789
     message.author.bot = False
     message.webhook_id = None
+    message.interaction = None
+    message.interaction_metadata = None
     message.content = "Hello in DM"
 
     allowlist = frozenset({123456789})
@@ -39,6 +43,8 @@ def test_should_index_unapproved_channel():
     message.channel.id = 999999999
     message.author.bot = False
     message.webhook_id = None
+    message.interaction = None
+    message.interaction_metadata = None
     message.content = "Random chat"
 
     allowlist = frozenset({123456789})
@@ -52,6 +58,8 @@ def test_should_index_ignore_bots():
     message.channel.id = 123456789
     message.author.bot = True
     message.webhook_id = None
+    message.interaction = None
+    message.interaction_metadata = None
     message.content = "Automated bot message"
 
     allowlist = frozenset({123456789})
@@ -65,6 +73,8 @@ def test_should_index_ignore_webhooks():
     message.channel.id = 123456789
     message.author.bot = False
     message.webhook_id = 55555
+    message.interaction = None
+    message.interaction_metadata = None
     message.content = "Webhook message"
 
     allowlist = frozenset({123456789})
@@ -78,10 +88,40 @@ def test_should_index_ignore_empty_content():
     message.channel.id = 123456789
     message.author.bot = False
     message.webhook_id = None
+    message.interaction = None
+    message.interaction_metadata = None
     message.content = "   "
 
     allowlist = frozenset({123456789})
     assert should_index_message(message, allowlist) is False
+
+
+def test_should_index_ignore_interaction_slash_command_messages():
+    """Test that interaction and slash-command messages are ignored for ingestion."""
+    # Test via message.interaction
+    msg_with_interaction = MagicMock()
+    msg_with_interaction.guild = MagicMock()
+    msg_with_interaction.channel.id = 123456789
+    msg_with_interaction.author.bot = False
+    msg_with_interaction.webhook_id = None
+    msg_with_interaction.interaction = MagicMock()
+    msg_with_interaction.interaction_metadata = None
+    msg_with_interaction.content = "/weather"
+
+    allowlist = frozenset({123456789})
+    assert should_index_message(msg_with_interaction, allowlist) is False
+
+    # Test via message.interaction_metadata
+    msg_with_metadata = MagicMock()
+    msg_with_metadata.guild = MagicMock()
+    msg_with_metadata.channel.id = 123456789
+    msg_with_metadata.author.bot = False
+    msg_with_metadata.webhook_id = None
+    msg_with_metadata.interaction = None
+    msg_with_metadata.interaction_metadata = MagicMock()
+    msg_with_metadata.content = "/ask"
+
+    assert should_index_message(msg_with_metadata, allowlist) is False
 
 
 def test_on_message_edit_reindexes_same_message_id():
@@ -102,6 +142,8 @@ def test_on_message_edit_reindexes_same_message_id():
         after.channel.id = 123
         after.author.bot = False
         after.webhook_id = None
+        after.interaction = None
+        after.interaction_metadata = None
         after.content = "Our quiz is Monday."
 
         await cog.on_message_edit(before, after)

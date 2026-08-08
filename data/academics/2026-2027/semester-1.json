@@ -140,9 +140,23 @@
       ]
     },
     {
-      "code": "NSTP3",
-      "name": "National Service Training Program 1 (CWTS 1)",
-      "professor": "Mark John Bonifacio",
+      "code": "NSTP 1-2",
+      "name": "National Service Training Program 1 (CWTS 1-2)",
+      "professor": "Edwhin C. Agustin",
+      "class_type": "NSTP",
+      "schedules": [
+        {
+          "day": "Saturday",
+          "start": "13:00",
+          "end": "16:00",
+          "location": "Field"
+        }
+      ]
+    },
+    {
+      "code": "NSTP 1-1",
+      "name": "National Service Training Program 1 (CWTS 1-1)",
+      "professor": "Unknown",
       "class_type": "NSTP",
       "schedules": [
         {

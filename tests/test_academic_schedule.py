@@ -29,7 +29,7 @@ def test_loads_valid_semester_json():
     assert term.school_year == "2026-2027"
     assert term.semester == 1
     assert term.timezone == "Asia/Manila"
-    assert len(term.subjects) == 11
+    assert len(term.subjects) == 12
 
 
 def test_parses_multiple_schedules():

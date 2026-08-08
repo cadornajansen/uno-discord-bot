@@ -34,7 +34,14 @@ def should_index_message(message: discord.Message, indexed_channel_ids: frozense
     if getattr(message, "webhook_id", None) is not None:
         return False
 
-    # Rule 5: Message must contain non-empty text content
+    # Rule 5: Message must not be an interaction or slash-command invocation
+    if (
+        getattr(message, "interaction", None) is not None
+        or getattr(message, "interaction_metadata", None) is not None
+    ):
+        return False
+
+    # Rule 6: Message must contain non-empty text content
     if not message.content or not message.content.strip():
         return False
 
