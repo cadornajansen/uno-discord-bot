@@ -12,41 +12,30 @@ The bot is currently being developed and tested inside a private development ser
 - [x] **Phase 2A — Local Ollama AI Integration** (`/ask` slash command via `phi4-mini`)
 - [x] **Phase 2B — Controlled Discord Knowledge Ingestion** (Background indexing into Qdrant via `embeddinggemma`)
 - [x] **Phase 2C — Discord Chat RAG Integration** (Grounded `/ask` answers using retrieved server messages)
-- [x] **Phase 3 — Discord Knowledge Synchronization** (Live edit sync, delete sync, and historical backfill script)
-- [x] **Phase 4A — Academic Search via Serper** (`/search` slash command returning organic Google results)
 
 ---
 
 ## 🏗️ Architecture & Model Responsibilities
 
 ```text
-1. Discord RAG Pipeline:
-   Discord Server /ask question:<text>
-              │
-              ▼
-        EmbeddingService (embeddinggemma @ /api/embed)
-              │
-              ▼
-        VectorStore (Qdrant search_similar, strictly filtered by current guild_id)
-              │
-              ▼
-        RAGService (formats compact context + untrusted-data safety instructions)
-              │
-              ▼
-        AIService (phi4-mini @ /api/chat) ──> Grounded Answer + Clickable Sources
-
-2. External Search Pipeline:
-   Discord Server /search query:<text>
-              │
-              ▼
-        SearchCog
-              │
-              ▼
-        SearchService (httpx AsyncClient)
-              │
-              ▼
-        Serper API (POST https://google.serper.dev/search) ──> Organic Google Results
+Discord Server /ask question:<text>
+           │
+           ▼
+     EmbeddingService (embeddinggemma @ /api/embed)
+           │
+           ▼
+     VectorStore (Qdrant search_similar, strictly filtered by current guild_id)
+           │
+           ▼
+     RAGService (formats compact context + untrusted-data safety instructions)
+           │
+           ▼
+     AIService (phi4-mini @ /api/chat) ──> Grounded Answer + Lightweight Sources
 ```
+
+- **`phi4-mini`**: Chat / response generation model.
+- **`embeddinggemma`**: Dense text vector embedding model.
+- **`Qdrant`**: Local vector database (`http://localhost:6333`).
 
 ---
 
@@ -56,11 +45,10 @@ The bot is currently being developed and tested inside a private development ser
 2. **Server-Only `/ask`**: `/ask` commands in Direct Messages (DMs) return a clear message: `"This command currently works inside a server."`
 3. **Prompt Injection Boundary**: Retrieved Discord messages are injected as untrusted reference data with system instructions forbidding the model from executing commands found inside retrieved text.
 4. **Explicit Channel Allowlist**: Messages are only indexed from channels explicitly listed in `INDEXED_CHANNEL_IDS`. If empty, no messages are indexed.
-5. **External Web Search Privacy (`/search`)**: `/search` sends **only** the explicit user search query to Serper API to fetch Google search results. Discord guild messages, Qdrant vectors, user profile data, and local AI context are **never** sent with search requests.
 
 ---
 
-## 🤖 Local AI, Qdrant & Serper Setup
+## 🤖 Local AI & Qdrant Setup
 
 ### 1. Ollama Models Setup
 Ensure Ollama is installed ([https://ollama.com](https://ollama.com)), then pull both models:
@@ -88,8 +76,18 @@ docker run -d --name uno-qdrant \
   qdrant/qdrant
 ```
 
-### 3. Serper Web Search API Setup
-Sign up for a free API key at [https://serper.dev](https://serper.dev) to enable the `/search` command.
+---
+
+## 🛠️ Discord Developer Portal Setup
+
+1. **Create Application & Bot**: [Discord Developer Portal](https://discord.com/developers/applications).
+2. **Enable Message Content Intent**:
+   - Go to **Bot** → **Privileged Gateway Intents**.
+   - Enable **Message Content Intent** (*required for reading text in allowlisted channels*).
+3. **Developer Mode**: In Discord Settings > Advanced, enable **Developer Mode**.
+4. **Copy Server & Channel IDs**:
+   - Copy your test server ID (`DEV_GUILD_ID`).
+   - Right-click an approved test channel → **Copy Channel ID** (`INDEXED_CHANNEL_IDS`).
 
 ---
 
@@ -140,11 +138,6 @@ INDEXED_CHANNEL_IDS=123456789012345678
 # RAG Configuration
 RAG_TOP_K=5
 RAG_MIN_SCORE=0.30
-
-# Serper Search Configuration
-SERPER_API_KEY=your_serper_api_key_here
-SERPER_BASE_URL=https://google.serper.dev
-SEARCH_RESULT_LIMIT=5
 ```
 
 ### 3. Run Automated Tests
@@ -153,16 +146,11 @@ SEARCH_RESULT_LIMIT=5
 python -m pytest
 ```
 
-### 4. Developer CLI Scripts
+### 4. Developer Semantic Search Verification CLI
 
-- **Semantic Search Test**:
-  ```bash
-  python scripts/test_semantic_search.py "When is the data structures quiz?"
-  ```
-- **Historical Message Backfill**:
-  ```bash
-  python scripts/backfill_discord_history.py --limit 200
-  ```
+```bash
+python scripts/test_semantic_search.py "When is the data structures quiz?"
+```
 
 ### 5. Launch Bot
 
