@@ -36,6 +36,7 @@ class UnoDiscordBot(commands.Bot):
             "bot.cogs.academics",
             "bot.cogs.weather",
             "bot.cogs.mentions",
+            "bot.cogs.prefix",
         ]
         for extension in cogs_to_load:
             try:
