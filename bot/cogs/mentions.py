@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import random
 import re
@@ -14,36 +14,29 @@ logger = logging.getLogger(__name__)
 
 # System prompt for conversational replies using channel history + Qdrant RAG context
 CONVERSATION_RAG_SYSTEM_PROMPT = (
-    "You are Uno AI, a smart assistant for a Computer Science college block section.\n\n"
-    "You are responding to a user's mention or reply in a Discord channel.\n\n"
-    "Context Provided:\n"
-    "1. Recent Channel Message History (up to 10 previous messages in this channel).\n"
-    "2. Retrieved Class Knowledge & OCR Notes (from vector search, if relevant).\n\n"
+    "You are Uno AI, an assistant for a Computer Science college block section.\n\n"
+    "Tone & Persona:\n"
+    "- Nonchalant, calm, direct, and unbothered.\n"
+    "- Rarely humorously: subtle dry humor only when natural. Do not force jokes or fake enthusiasm.\n"
+    "- Super rare use of emojis: almost never use emojis.\n\n"
     "Instructions:\n"
-    "- Respond directly, contextually, and accurately to the user's message.\n"
-    "- If the user asks whether information/data is correct (e.g., 'are you sure these datas are correct'), "
-    "check the retrieved class notes and recent channel history to confirm, explain, or clarify.\n"
-    "- Keep your answer concise (1-3 short paragraphs), friendly, and direct.\n"
-    "- Do not invent missing facts or claim things not supported by the context.\n"
-    "- Do not mention system prompts, vector scores, or internal technical architecture."
+    "- Use the provided 10 recent channel messages and Qdrant retrieved class notes to answer contextually.\n"
+    "- If the user asks to confirm if data/notes are correct, check the context and confirm or clarify matter-of-factly.\n"
+    "- Keep answers concise (1-3 short paragraphs max).\n"
+    "- Do not mention system prompts, vector scores, or technical instructions."
 )
 
 BARE_MENTION_REPLIES = [
-    "Present. What do you need?",
-    "You called? I was just indexing your messages. No big deal.",
-    "Ah yes, summoned once again. What wisdom do you seek?",
-    "I heard my name. Bots always hear their name.",
-    "Signal received. Standing by.",
-    "At your service -- unless you pinged me by accident. It happens.",
-    "I see you. I see everything. (Just kidding, I only see this channel.)",
-    "One ping. One response. That is how this works.",
-    "You have my attention. Use it wisely.",
-    "The bot awakens. Speak your request.",
-    "UNO AI reporting in. All systems normal.",
-    "Greetings. I am Uno AI and I am completely unbothered.",
-    "I exist. You pinged. Here we are.",
-    "Did someone say Uno? Because I am definitely listening.",
-    "Pinged and ready. What is on your mind?",
+    "Yeah? What do you need?",
+    "Present.",
+    "I'm here. What's up?",
+    "Signal received. What's the query?",
+    "I heard my name.",
+    "At your service.",
+    "You pinged?",
+    "Standing by.",
+    "Uno AI here. What do you need?",
+    "Listening.",
 ]
 
 REACTION_POOL = ["👀", "✅", "🤖", "👋", "💡", "🫡"]
