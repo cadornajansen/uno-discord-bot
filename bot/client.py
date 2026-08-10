@@ -71,12 +71,31 @@ class UnoDiscordBot(commands.Bot):
 
 
 def configure_logging() -> None:
-    """Setup clean console logging formatting."""
+    """Setup clean console + rotating file logging for production."""
+    import os
+    from logging.handlers import RotatingFileHandler
+
+    log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+
+    # Write logs to file if LOG_FILE env var is set (recommended for deployment)
+    log_file = os.getenv("LOG_FILE", "").strip()
+    if log_file:
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=5 * 1024 * 1024,  # 5 MB per file
+            backupCount=3,
+            encoding="utf-8",
+        )
+        file_handler.setFormatter(logging.Formatter(log_format))
+        handlers.append(file_handler)
+
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
+        format=log_format,
+        handlers=handlers,
     )
+
 
 
 def run_bot() -> None:
