@@ -151,6 +151,7 @@ class GeneralCog(commands.Cog):
                 "`/hello` - Say hi.\n"
                 "`/userinfo [member]` - View public account info for yourself or another member.\n"
                 "`/serverinfo` - View details about this server.\n"
+                "`/about` - Learn how Uno AI works and why it doesn't need a data center.\n"
                 "`/help` - Show this command list."
             ),
             inline=False,
@@ -169,6 +170,61 @@ class GeneralCog(commands.Cog):
         )
 
         embed.set_footer(text="Uno AI - Powered by Ollama (phi4-mini) + Qdrant")
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="about", description="Learn how Uno AI works in simple terms.")
+    async def about_command(self, interaction: discord.Interaction) -> None:
+        """Brief friendly explanation of how Uno AI works and why it runs locally."""
+        embed = discord.Embed(
+            title="How does Uno AI work?",
+            color=discord.Color.og_blurple(),
+        )
+
+        embed.add_field(
+            name="The short version",
+            value=(
+                "Uno AI is a bot that runs an actual AI model directly on our own computer -- "
+                "no sending your messages to OpenAI, Google, or any cloud service. "
+                "Everything stays local."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="What happens when you use /ask",
+            value=(
+                "1. Your question gets converted into numbers (an embedding) on the local machine.\n"
+                "2. Those numbers are compared against indexed class messages stored in a local database (Qdrant).\n"
+                "3. If something relevant is found, it's passed to the AI as context.\n"
+                "4. The AI model (phi4-mini, running locally via Ollama) generates a response.\n"
+                "5. The answer comes back to Discord -- all without leaving the computer."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="Why does this matter?",
+            value=(
+                "Large cloud AI services (ChatGPT, Gemini, etc.) run in massive data centers "
+                "that consume enormous amounts of electricity and water to stay cool.\n\n"
+                "Uno AI runs on a regular computer in the room. "
+                "No data center. No water cooling towers. No cloud bill. "
+                "Your class messages never leave the machine."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="What gets stored?",
+            value=(
+                "Messages from approved channels are saved locally as vector embeddings -- "
+                "mathematical representations of meaning, not raw copies of every message. "
+                "This is what lets /ask understand context from past class discussions."
+            ),
+            inline=False,
+        )
+
+        embed.set_footer(text="Locally hosted. Privately run. No cloud. No water.")
         await interaction.response.send_message(embed=embed)
 
     async def cog_app_command_error(
