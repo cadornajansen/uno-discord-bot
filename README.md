@@ -1,169 +1,179 @@
-# UNO Discord Bot (`uno-discord-bot`)
+﻿<div align="center">
 
-An open-source Python Discord bot foundation built for our Computer Science college block section. 
+![Uno AI Banner](uno-banner.png)
 
-The bot is currently being developed and tested inside a private development server before eventual deployment to the main block server.
+# 🤖 Uno AI (`uno-discord-bot`)
 
----
+**The local-first Discord AI assistant built for BSCS 1-4**  
+*Pamantasan ng Lungsod ng Maynila (PLM)*
 
-## 📌 Current Phase Status
+[![Python 3.14](https://img.shields.io/badge/Python-3.14-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![Discord.py](https://img.shields.io/badge/Discord.py-2.3+-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discordpy.readthedocs.io/)
+[![Ollama Local AI](https://img.shields.io/badge/Ollama-phi4--mini-000000?style=flat-square&logo=ollama&logoColor=white)](https://ollama.com)
+[![Qdrant Vector DB](https://img.shields.io/badge/Qdrant-Vector--DB-DC2626?style=flat-square&logo=qdrant&logoColor=white)](https://qdrant.tech)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
-- [x] **Phase 1 — Core Bot Foundation** (`/ping`, `/hello`, `/userinfo`, `/serverinfo`, `/help`, `/about`)
-- [x] **Phase 2A — Local Ollama AI Integration** (`/ask` slash command via `phi4-mini`)
-- [x] **Phase 2B — Controlled Discord Knowledge Ingestion** (Background indexing into Qdrant via `embeddinggemma`)
-- [x] **Phase 2C — Discord Chat RAG Integration** (Grounded `/ask` answers using retrieved server messages)
-- [x] **Phase 3 — Discord Knowledge Synchronization** (Live edit sync, delete sync, and historical backfill script)
-- [x] **Phase 4A — Academic Search via Serper** (`/search` slash command returning organic Google results)
-- [x] **Phase 4B — Local Document Analysis: PDF + PPTX** (`/analyze` slash command for local document summarization)
-- [x] **Phase 4C — Temporary Document Q&A** (`/docask` slash command for interactive document questions)
-- [x] **Phase 5A — Academic Schedule + Professor Lookup** (`/today`, `/schedule`, `/nextclass`, `/prof` offline commands)
-- [x] **Phase 6A — Weather Forecast + PAGASA Alerts + Disruption Risk** (`/weather` slash command)
-- [x] **Phase 6B — Local Image OCR Ingestion for Homework Channels** (RapidOCR + ONNX Runtime image text extraction)
-- [x] **Phase 7A — Global `!` Prefix Aliases & Contextual Mention RAG** (Prefix support, 10-message channel history RAG, nonchalant persona)
-
-`/ask` and `!ask` use Discord RAG only when retrieved messages meet the configured relevance
-threshold (`RAG_MIN_SCORE`). General questions use plain local AI without Sources;
-Sources indicate that Discord context contributed to the answer. Responses default
-to a concise, nonchalant, Discord-friendly format. Emojis are used super rarely.
+</div>
 
 ---
 
-## 🏗️ Architecture & Model Responsibilities
+## 👋 Welcome Freshmen! What is Uno AI?
+
+**Uno AI** is a smart, nonchalant Discord bot designed specifically for our Computer Science college block section (**BSCS 1-4**).
+
+Unlike typical bots that send your messages to cloud data centers (like ChatGPT or Gemini), **Uno AI runs 100% locally** on a regular computer. It reads class announcements, scans homework screenshots, keeps track of our schedule, and answers questions -- all without sending your data to external servers or consuming massive cloud data center resources.
+
+---
+
+## ⚡ Quick Command Reference
+
+Uno AI supports both **Slash Commands (`/`)** and **Prefix Commands (`!`)**. Commands work identically in both formats!
+
+### 🤖 AI & Knowledge Retrieval
+| Slash Command | Prefix Alias | What It Does |
+|---|---|---|
+| `/ask question:<text>` | `!ask <question>` | Ask Uno AI anything! Uses class message memory & OCR homework notes when relevant. |
+| `/search query:<text>` | `!search <query>` | Search Google for programming docs or academic topics (returns clean, preview-free links). |
+
+### 📄 Document Analysis (Slash-Only)
+| Slash Command | What It Does |
+|---|---|
+| `/analyze file:<attachment>` | Upload a PDF or PPTX slide deck to get an instant AI summary. |
+| `/docask question:<text>` | Ask follow-up questions grounded strictly in your uploaded document. |
+
+### 📅 Academic Schedule & Professors
+| Slash Command | Prefix Alias | What It Does |
+|---|---|---|
+| `/today` | `!today` | Show today's class schedule, room assignments, and times. |
+| `/schedule` | `!schedule` | Display the full weekly section schedule. |
+| `/nextclass` | `!nextclass` | View the next upcoming class for today. |
+| `/prof subject:<name>` | `!prof <subject>` | Look up instructor name, email, and subject details. |
+
+### ⛅ Weather & Disruption Risk
+| Slash Command | Prefix Alias | What It Does |
+|---|---|---|
+| `/weather` | `!weather` | Real-time weather, 6-hour forecast, official PAGASA NCR warnings, and class disruption risk (*LOW*, *MODERATE*, *HIGH*). |
+
+### ⚙️ General & Info
+| Slash Command | Prefix Alias | What It Does |
+|---|---|---|
+| `/about` | `!about` | Learn how Uno AI works and why local AI matters. |
+| `/help` | `!help` | Open the interactive command guide. |
+| `/ping` | `!ping` | Check bot connection latency. |
+| `/userinfo` | `!userinfo` | View public account details. |
+| `/serverinfo` | `!serverinfo` | View server metadata. |
+
+---
+
+## 💡 Casual Chat & Mention Feature
+
+You don't always need to run a command!
+- **`@Uno AI` in chat**: Tag Uno AI anywhere in a channel and it will reply contextually.
+- **Reply to Uno AI**: Reply to any message sent by Uno AI, and it will read the last 10 messages in the channel to understand the conversation flow and give a natural, nonchalant answer.
+
+---
+
+## 🧩 How Uno AI Works (Under the Hood)
+
+Here is how the system works in simple terms:
 
 ```text
-1. Discord RAG Pipeline & Image OCR Ingestion:
-   Discord Server Message / Homework Attachment (.png, .jpg, .jpeg, .webp)
-              │
-              ▼
-        KnowledgeCog / Ingestion Pipeline (checks INDEXED_CHANNEL_IDS & OCR_CHANNEL_IDS)
-              │
-              ├─► Image Attachment? ──> OCRService (RapidOCR + ONNX Runtime) ──> Extracted OCR Text
-              │                                                                         │
-              └─────────────── Combined Text Content ◄──────────────────────────────────┘
-                                      │
-                                      ▼
-                        EmbeddingService (embeddinggemma @ /api/embed)
-                                      │
-                                      ▼
-                        VectorStore (Qdrant Point with stable Discord Message ID)
-
-2. External Search Pipeline:
-   Discord Server /search query:<text>
-              │
-              ▼
-        SearchCog ──> SearchService ──> Serper API ──> Organic Google Results
-
-3. Local Document Analysis & Interactive Q&A Pipeline:
-   Discord Server /analyze file:<attachment>
-              │
-              ▼
-        DocumentsCog (validates .pdf / .pptx extension & 15 MB size limit)
-              │
-              ▼
-        DocumentService ──> Extracted Markdown (max 20,000 chars)
-              │
-              ├─► AIService (phi4-mini) ──> Document Summary
-              │
-              └─► DocumentSessionService (In-memory storage key: guild_id, channel_id, user_id; 30 min TTL)
-
-   Discord Server /docask question:<text>
-              │
-              ▼
-        Retrieve Active DocumentSession ──> AIService (phi4-mini) ──> Grounded Document Answer
-
-4. Offline Academic Schedule & Professor Lookup Pipeline:
-   Discord Server /today, /schedule, /nextclass, /prof
-              │
-              ▼
-        AcademicsCog ──> AcademicScheduleService
-              │
-              ▼
-        data/academics/{school_year}/semester-{semester}.json (Local Offline Data)
-
-5. Weather Forecast & Disruption Risk Pipeline:
-   Discord Server /weather
-              │
-              ▼
-        WeatherCog ──> WeatherService
-              │
-              ├──► OpenMeteoClient (Current & Hourly Forecast)
-              ├──► PagasaAlertClient (Official PAGASA NCR-PRSD Regional Forecast & Warnings)
-              └──► WeatherRiskService (Deterministic LOW / MODERATE / HIGH Disruption Risk)
+                                  +---------------------------------------+
+                                  |            Discord Client             |
+                                  +-------------------+-------------------+
+                                                      |
+                                                      v
+                                        +---------------------------+
+                                        |  UnoDiscordBot (client.py)|
+                                        +-------------+-------------+
+                                                      |
+         +-------------------+------------------------+-----------------------+-------------------+
+         |                   |                        |                       |                   |
+         v                   v                        v                       v                   v
+  +--------------+   +---------------+        +---------------+       +---------------+   +---------------+
+  |   AICog      |   | KnowledgeCog  |        |  MentionsCog  |       |  AcademicsCog |   |  WeatherCog   |
+  | (/ask, !ask) |   |  (Ingestion)  |        | (@Uno AI &    |       | (/today,      |   |  (/weather,   |
+  +------+-------+   +-------+-------+        |   replies)    |       |  /schedule)   |   |   !weather)   |
+         |                   |                +-------+-------+       +-------+-------+   +-------+-------+
+         |                   |                        |                       |                   |
+         v                   v                        v                       v                   v
+  +--------------+   +---------------+        +---------------+       +---------------+   +---------------+
+  | RAGService   |   |  OCRService   |        | RAG + 10-Msg  |       | Local JSON    |   | Open-Meteo +  |
+  | (Vector Search   | (RapidOCR +   |        | Channel Hist  |       | Schedule Data |   | PAGASA Parser |
+  |  + Grounded) |   |  ONNX Local)  |        +-------+-------+       +---------------+   +---------------+
+  +------+-------+   +-------+-------+                |
+         |                   |                        |
+         +-------------------+------------------------+
+                             |
+                             v
+               +---------------------------+
+               | VectorStore (Qdrant DB)   |
+               | & Ollama (phi4-mini)      |
+               +---------------------------+
 ```
 
----
-
-## 🔒 Security & Privacy Boundaries
-
-1. **Guild Isolation**: Vector retrieval is strictly filtered by the current Discord `guild_id`. Data from one Discord server can **never** be retrieved in another server.
-2. **Server-Only `/ask`**: `/ask` commands in Direct Messages (DMs) return a clear message: `"This command currently works inside a server."`
-3. **Prompt Injection Boundary**: Retrieved Discord messages and uploaded document contents are injected as untrusted reference data with system instructions forbidding the model from executing commands found inside retrieved text.
-4. **Explicit Channel Allowlist**: Messages are only indexed from channels explicitly listed in `INDEXED_CHANNEL_IDS`. If empty, no messages are indexed. On each bot process start, Uno synchronizes the available history of every allowlisted text channel, then its live Discord listeners continue indexing new messages and synchronizing edits and deletions.
-5. **Local Image OCR (`OCR_CHANNEL_IDS`)**: Image text extraction is performed **locally** using RapidOCR and ONNX Runtime only for supported image attachments (`.png`, `.jpg`, `.jpeg`, `.webp` up to 8 MB) in channels explicitly listed in both `INDEXED_CHANNEL_IDS` and `OCR_CHANNEL_IDS`. Image OCR is intended for assignment and homework screenshots containing text. Uno cannot understand arbitrary visual diagrams or photos from OCR alone. Images are processed strictly in-memory / locally and are **never** sent to cloud OCR services, Firecrawl, OpenAI, Gemini, or external vision models.
-6. **External Web Search Privacy (`/search`)**: `/search` sends **only** the explicit user search query to Serper API to fetch Google search results. Discord guild messages, Qdrant vectors, user profile data, and local AI context are **never** sent with search requests.
-7. **Local Document Privacy (`/analyze` & `/docask`)**: File attachments are downloaded temporarily into an OS temporary directory, parsed locally (`pdf-inspector` / `python-pptx`), and deleted immediately. Extracted text is held temporarily in-memory for up to 30 minutes (`DOCUMENT_SESSION_TTL_MINUTES=30`) isolated per user and channel. Document content is **never** sent to disk, Qdrant, Serper, or external AI services.
-8. **Offline Academic Schedule (`/today`, `/schedule`, `/nextclass`, `/prof`)**: Schedule data is loaded directly from local JSON files (`data/academics/`) without any database, external API calls, or AI LLM processing. For details on customizing or adding schedule data for your school, see [`data/academics/README.md`](data/academics/README.md).
-9. **Weather Privacy (`/weather`)**: Uses public configured campus coordinates (`WEATHER_LATITUDE=14.5869`, `WEATHER_LONGITUDE=120.9762`, `"Manila (PLM)"`). Open-Meteo receives only the configured latitude/longitude. PAGASA receives a standard HTTP GET request to its public NCR regional forecast page (`PAGASA_NCR_URL`). No user geolocation, Discord chat history, user profiles, or Qdrant data is collected or transmitted.
-10. **Class Suspension Disclaimer**: Uno's Weather Disruption Risk level (`LOW`, `MODERATE`, `HIGH`) is a deterministic heuristic estimate based on weather conditions and official PAGASA warnings. Uno **never** claims that classes are officially suspended. Class suspension decisions rest solely with official university and government authorities.
-11. **Global `!` Prefix Aliases**: All non-document commands (`ask`, `search`, `ping`, `hello`, `userinfo`, `serverinfo`, `help`, `about`, `today`, `schedule`, `nextclass`, `prof`, `weather`) are accessible via `!` prefix. Prefix commands reply directly to the invocation message line without creating a thread, and embed link previews are suppressed (`suppress_embeds=True` / `<url>`). Prefix invocations (`!ask ...`) are excluded from Qdrant knowledge indexing to prevent command duplication. Document commands (`!analyze`, `!docask`) redirect cleanly to their slash equivalents.
-12. **Contextual Mention & Thread RAG (@Uno AI & replies)**: When users `@Uno AI` or reply to a message sent by Uno AI, the bot fetches up to 10 recent messages in the channel to preserve conversation context, queries Qdrant for relevant class/OCR notes, and generates a grounded response using local AI. Uno AI adopts a nonchalant, unbothered tone with subtle dry humor and super rare emoji usage.
+1. 🧠 **Ollama (`phi4-mini`)**: The local AI brain running on CPU/GPU. It generates text answers locally without any cloud subscription.
+2. 📦 **Qdrant Vector Database**: A local database that converts text into mathematical numbers (embeddings via `embeddinggemma`). This acts as Uno AI's memory vault for past class messages.
+3. 👁️ **RapidOCR (Local OCR)**: Scans homework images (`.png`, `.jpg`) posted in approved homework channels and extracts the text so `/ask` can recall assignments from screenshots.
+4. ⛅ **Open-Meteo & PAGASA Scraper**: Pulls live Manila weather data and scrapes official PAGASA NCR-PRSD rainfall/thunderstorm warnings to compute class disruption risk.
 
 ---
 
-## 🤖 Local AI, Qdrant & Serper Setup
+## 🔒 Security & Privacy Guarantees
 
-### 1. Ollama Models Setup
-Ensure Ollama is installed ([https://ollama.com](https://ollama.com)), then pull both models:
+- **100% Local & Private**: Your messages are stored locally in Qdrant. They are **never** sent to OpenAI, Google, Anthropic, or any third-party AI provider.
+- **Guild Isolation**: Knowledge indexed in one Discord server can **never** be accessed or retrieved in another server.
+- **Allowlisted Channels**: Uno AI only indexes messages from channels explicitly specified in `INDEXED_CHANNEL_IDS`.
+- **Command Disconnection**: Commands (like `!ask` or `/search`) are excluded from Qdrant indexing so bot prompts are never re-indexed as knowledge.
+
+---
+
+## 💻 Developer Setup Guide (How to Run Locally)
+
+Want to run Uno AI on your own computer or contribute code? Follow these steps:
+
+### 1. Prerequisites
+- **Python 3.11+** installed
+- **Docker Desktop** installed (for Qdrant)
+- **Ollama** installed ([ollama.com](https://ollama.com))
+
+### 2. Pull Required Ollama Models
 
 ```bash
-# Pull chat model
+# Pull the chat model
 ollama pull phi4-mini
 
-# Pull embedding model
+# Pull the embedding model
 ollama pull embeddinggemma
 ```
 
-### 2. Qdrant Vector Database Setup
-Run Qdrant locally using Docker:
+### 3. Start Qdrant Vector Database
 
 ```bash
-# Create persistent storage volume
 docker volume create uno_qdrant_storage
 
-# Run Qdrant container
 docker run -d --name uno-qdrant \
   -p 6333:6333 \
-  -p 6334:6334 \
   -v uno_qdrant_storage:/qdrant/storage \
   qdrant/qdrant
 ```
 
-### 3. Serper Web Search API Setup
-Sign up for a free API key at [https://serper.dev](https://serper.dev) to enable the `/search` command.
-
----
-
-## 🚀 Environment Configuration & Execution
-
-### 1. Virtual Environment Setup
+### 4. Clone & Setup Project Environment
 
 ```bash
-git clone https://github.com/your-username/uno-discord-bot.git
+git clone https://github.com/cadornajansen/uno-discord-bot.git
 cd uno-discord-bot
 
+# Create and activate virtual environment
 python -m venv .venv
+.venv\Scripts\activate       # On Windows
+# source .venv/bin/activate  # On Linux/macOS
 
-# Activate on Windows:
-.venv\Scripts\activate
-
-# Activate on Linux / macOS:
-source .venv/bin/activate
-
-# Install dependencies in editable mode
+# Install dependencies
 pip install -e ".[dev]"
 ```
 
-### 2. Configure Environment (`.env`)
+### 5. Configure `.env` File
 
 Copy `.env.example` to `.env`:
 
@@ -171,7 +181,7 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-Edit `.env`:
+Fill in your `.env` configuration:
 
 ```env
 DISCORD_TOKEN=your_bot_token_here
@@ -185,59 +195,30 @@ OLLAMA_MAX_TOKENS=400
 
 QDRANT_URL=http://localhost:6333
 QDRANT_COLLECTION=discord_messages
-
-# Comma-separated allowlist of channel IDs eligible for indexing:
 INDEXED_CHANNEL_IDS=123456789012345678
+OCR_CHANNEL_IDS=123456789012345678
 
-# RAG Configuration
 RAG_TOP_K=5
 RAG_MIN_SCORE=0.50
 RAG_MAX_CONTEXT_RESULTS=3
 
-# Serper Search Configuration
-SERPER_API_KEY=your_serper_api_key_here
-SERPER_BASE_URL=https://google.serper.dev
-SEARCH_RESULT_LIMIT=5
-
-# Document Analysis Configuration
-DOCUMENT_MAX_SIZE_MB=15
-DOCUMENT_MAX_CHARS=20000
-DOCUMENT_SESSION_TTL_MINUTES=30
-
-# Academic Schedule Configuration
-ACADEMIC_SCHOOL_YEAR=2026-2027
-ACADEMIC_SEMESTER=1
-ACADEMIC_TIMEZONE=Asia/Manila
-
-# Weather Configuration
-WEATHER_LATITUDE=14.5869
-WEATHER_LONGITUDE=120.9762
-WEATHER_LOCATION_NAME=Manila (PLM)
-WEATHER_TIMEZONE=Asia/Manila
-PAGASA_NCR_URL=https://www.pagasa.dost.gov.ph/regional-forecast/ncrprsd
+SERPER_API_KEY=your_serper_key_here
 ```
 
-### 3. Run Automated Tests
+### 6. Run Automated Tests
 
 ```bash
 python -m pytest
 ```
 
-### 4. Developer CLI Scripts
+### 7. Launch the Bot
 
-- **Semantic Search Test**:
-  ```bash
-  python scripts/test_semantic_search.py "When is the data structures quiz?"
-  ```
-- **Historical Message Backfill**:
-  ```bash
-  python scripts/backfill_discord_history.py --limit 200
-  ```
-
-### 5. Launch Bot
-
-```bash
+```powershell
+# Standard run:
 python main.py
+
+# Or use the production auto-restart launcher:
+.\start.ps1
 ```
 
 ---
