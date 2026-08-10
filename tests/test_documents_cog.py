@@ -2,7 +2,11 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
-from bot.cogs.documents import DocumentsCog, format_document_response
+from bot.cogs.documents import (
+    DocumentsCog,
+    build_document_response_pages,
+    format_document_response,
+)
 from bot.services.documents import DocumentAnalysis, DocumentParseError
 from bot.services.document_sessions import DocumentSession
 
@@ -21,8 +25,36 @@ def test_format_document_response_helper():
 
     assert "**Document Analysis — lecture.pptx**" in formatted
     assert "• Key point 1" in formatted
-    assert "Type: PPTX | Slides: 12" in formatted
+    assert "**Details**\n• Slides: 12" in formatted
+    assert "**Document:** PPTX" in formatted
     assert "⚠️ Visual content present" in formatted
+    assert formatted.index("**Details**") < formatted.index("**Summary**")
+    assert formatted.index("**Summary**") < formatted.index("**Document:** PPTX")
+
+
+def test_document_response_pages_keep_card_metadata_on_first_page():
+    """A long summary keeps the requested document card on its first page."""
+    analysis = DocumentAnalysis(
+        filename="lecture.pdf",
+        file_type="PDF",
+        markdown="Sample markdown",
+        warnings=(),
+        page_count=20,
+    )
+
+    pages = build_document_response_pages(
+        analysis,
+        summary="Long explanation. " * 200,
+        session_note="Document ready for questions.",
+    )
+
+    assert len(pages) > 1
+    assert pages[0].startswith("**Document Analysis — lecture.pdf**")
+    assert "**Details**\n• Pages: 20" in pages[0]
+    assert "**Summary**" in pages[0]
+    assert "**Document:** PDF" in pages[0]
+    assert "Document ready for questions." in pages[0]
+    assert pages[1].startswith("**Summary Continued**")
 
 
 def test_analyze_cog_unsupported_file_extension():
