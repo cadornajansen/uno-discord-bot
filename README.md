@@ -8,7 +8,7 @@ The bot is currently being developed and tested inside a private development ser
 
 ## 📌 Current Phase Status
 
-- [x] **Phase 1 — Core Bot Foundation** (`/ping`, `/hello`, `/userinfo`, `/serverinfo`, `/help`)
+- [x] **Phase 1 — Core Bot Foundation** (`/ping`, `/hello`, `/userinfo`, `/serverinfo`, `/help`, `/about`)
 - [x] **Phase 2A — Local Ollama AI Integration** (`/ask` slash command via `phi4-mini`)
 - [x] **Phase 2B — Controlled Discord Knowledge Ingestion** (Background indexing into Qdrant via `embeddinggemma`)
 - [x] **Phase 2C — Discord Chat RAG Integration** (Grounded `/ask` answers using retrieved server messages)
@@ -19,6 +19,12 @@ The bot is currently being developed and tested inside a private development ser
 - [x] **Phase 5A — Academic Schedule + Professor Lookup** (`/today`, `/schedule`, `/nextclass`, `/prof` offline commands)
 - [x] **Phase 6A — Weather Forecast + PAGASA Alerts + Disruption Risk** (`/weather` slash command)
 - [x] **Phase 6B — Local Image OCR Ingestion for Homework Channels** (RapidOCR + ONNX Runtime image text extraction)
+- [x] **Phase 7A — Global `!` Prefix Aliases & Contextual Mention RAG** (Prefix support, 10-message channel history RAG, nonchalant persona)
+
+`/ask` and `!ask` use Discord RAG only when retrieved messages meet the configured relevance
+threshold (`RAG_MIN_SCORE`). General questions use plain local AI without Sources;
+Sources indicate that Discord context contributed to the answer. Responses default
+to a concise, nonchalant, Discord-friendly format. Emojis are used super rarely.
 
 ---
 
@@ -92,13 +98,15 @@ The bot is currently being developed and tested inside a private development ser
 1. **Guild Isolation**: Vector retrieval is strictly filtered by the current Discord `guild_id`. Data from one Discord server can **never** be retrieved in another server.
 2. **Server-Only `/ask`**: `/ask` commands in Direct Messages (DMs) return a clear message: `"This command currently works inside a server."`
 3. **Prompt Injection Boundary**: Retrieved Discord messages and uploaded document contents are injected as untrusted reference data with system instructions forbidding the model from executing commands found inside retrieved text.
-4. **Explicit Channel Allowlist**: Messages are only indexed from channels explicitly listed in `INDEXED_CHANNEL_IDS`. If empty, no messages are indexed.
+4. **Explicit Channel Allowlist**: Messages are only indexed from channels explicitly listed in `INDEXED_CHANNEL_IDS`. If empty, no messages are indexed. On each bot process start, Uno synchronizes the available history of every allowlisted text channel, then its live Discord listeners continue indexing new messages and synchronizing edits and deletions.
 5. **Local Image OCR (`OCR_CHANNEL_IDS`)**: Image text extraction is performed **locally** using RapidOCR and ONNX Runtime only for supported image attachments (`.png`, `.jpg`, `.jpeg`, `.webp` up to 8 MB) in channels explicitly listed in both `INDEXED_CHANNEL_IDS` and `OCR_CHANNEL_IDS`. Image OCR is intended for assignment and homework screenshots containing text. Uno cannot understand arbitrary visual diagrams or photos from OCR alone. Images are processed strictly in-memory / locally and are **never** sent to cloud OCR services, Firecrawl, OpenAI, Gemini, or external vision models.
 6. **External Web Search Privacy (`/search`)**: `/search` sends **only** the explicit user search query to Serper API to fetch Google search results. Discord guild messages, Qdrant vectors, user profile data, and local AI context are **never** sent with search requests.
 7. **Local Document Privacy (`/analyze` & `/docask`)**: File attachments are downloaded temporarily into an OS temporary directory, parsed locally (`pdf-inspector` / `python-pptx`), and deleted immediately. Extracted text is held temporarily in-memory for up to 30 minutes (`DOCUMENT_SESSION_TTL_MINUTES=30`) isolated per user and channel. Document content is **never** sent to disk, Qdrant, Serper, or external AI services.
 8. **Offline Academic Schedule (`/today`, `/schedule`, `/nextclass`, `/prof`)**: Schedule data is loaded directly from local JSON files (`data/academics/`) without any database, external API calls, or AI LLM processing. For details on customizing or adding schedule data for your school, see [`data/academics/README.md`](data/academics/README.md).
 9. **Weather Privacy (`/weather`)**: Uses public configured campus coordinates (`WEATHER_LATITUDE=14.5869`, `WEATHER_LONGITUDE=120.9762`, `"Manila (PLM)"`). Open-Meteo receives only the configured latitude/longitude. PAGASA receives a standard HTTP GET request to its public NCR regional forecast page (`PAGASA_NCR_URL`). No user geolocation, Discord chat history, user profiles, or Qdrant data is collected or transmitted.
 10. **Class Suspension Disclaimer**: Uno's Weather Disruption Risk level (`LOW`, `MODERATE`, `HIGH`) is a deterministic heuristic estimate based on weather conditions and official PAGASA warnings. Uno **never** claims that classes are officially suspended. Class suspension decisions rest solely with official university and government authorities.
+11. **Global `!` Prefix Aliases**: All non-document commands (`ask`, `search`, `ping`, `hello`, `userinfo`, `serverinfo`, `help`, `about`, `today`, `schedule`, `nextclass`, `prof`, `weather`) are accessible via `!` prefix. Prefix commands reply directly to the invocation message line without creating a thread, and embed link previews are suppressed (`suppress_embeds=True` / `<url>`). Prefix invocations (`!ask ...`) are excluded from Qdrant knowledge indexing to prevent command duplication. Document commands (`!analyze`, `!docask`) redirect cleanly to their slash equivalents.
+12. **Contextual Mention & Thread RAG (@Uno AI & replies)**: When users `@Uno AI` or reply to a message sent by Uno AI, the bot fetches up to 10 recent messages in the channel to preserve conversation context, queries Qdrant for relevant class/OCR notes, and generates a grounded response using local AI. Uno AI adopts a nonchalant, unbothered tone with subtle dry humor and super rare emoji usage.
 
 ---
 
@@ -173,6 +181,7 @@ OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=phi4-mini
 OLLAMA_EMBEDDING_MODEL=embeddinggemma
 OLLAMA_TIMEOUT_SECONDS=180.0
+OLLAMA_MAX_TOKENS=400
 
 QDRANT_URL=http://localhost:6333
 QDRANT_COLLECTION=discord_messages
@@ -182,7 +191,8 @@ INDEXED_CHANNEL_IDS=123456789012345678
 
 # RAG Configuration
 RAG_TOP_K=5
-RAG_MIN_SCORE=0.30
+RAG_MIN_SCORE=0.50
+RAG_MAX_CONTEXT_RESULTS=3
 
 # Serper Search Configuration
 SERPER_API_KEY=your_serper_api_key_here
