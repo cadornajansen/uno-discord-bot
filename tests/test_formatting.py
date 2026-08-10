@@ -1,6 +1,7 @@
 import pytest
 from bot.utils.formatting import (
     MAX_DISCORD_CHUNK_CHARS,
+    PaginatedTextView,
     build_assignment_embeds,
     split_message,
     format_latency,
@@ -169,8 +170,8 @@ def test_send_deferred_response_single_chunk():
     asyncio.run(_test())
 
 
-def test_send_deferred_response_multi_chunk():
-    """Test send_deferred_response edits original response with chunk 0 and sends chunk 1 as followup."""
+def test_send_deferred_response_multi_chunk_uses_paginator():
+    """A long response stays in one message with Previous and Next buttons."""
     import asyncio
     from unittest.mock import AsyncMock, MagicMock
     from bot.utils.formatting import send_deferred_response
@@ -180,13 +181,86 @@ def test_send_deferred_response_multi_chunk():
         interaction.edit_original_response = AsyncMock()
         interaction.delete_original_response = AsyncMock()
         interaction.followup.send = AsyncMock()
+        interaction.user.id = 42
 
         text = "Line 1\nLine 2"
         await send_deferred_response(interaction, text, limit=10)
 
-        interaction.edit_original_response.assert_called_once_with(content="Line 1\n")
+        interaction.edit_original_response.assert_called_once()
+        call = interaction.edit_original_response.call_args
+        view = call.kwargs["view"]
+        assert isinstance(view, PaginatedTextView)
+        assert call.kwargs["content"] == "Line 1\n\n*Page 1 of 2*"
+        assert view.previous_button.disabled is True
+        assert view.next_button.disabled is False
+        assert view.next_button.label == "Next - Read More"
         interaction.delete_original_response.assert_not_called()
-        interaction.followup.send.assert_called_once_with(content="Line 2")
+        interaction.followup.send.assert_not_called()
+
+    asyncio.run(_test())
+
+
+def test_paginated_content_stays_below_discord_limit():
+    """The page indicator never pushes content beyond Discord's hard limit."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+    from bot.utils.formatting import send_deferred_response
+
+    async def _test():
+        interaction = MagicMock()
+        interaction.edit_original_response = AsyncMock()
+        interaction.user.id = 42
+
+        await send_deferred_response(interaction, "A" * 2001, limit=2000)
+
+        sent_content = interaction.edit_original_response.call_args.kwargs["content"]
+        assert len(sent_content) <= 2000
+
+    asyncio.run(_test())
+
+
+def test_paginated_text_view_next_button_edits_same_message():
+    """Next changes the page by editing the existing response message."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    async def _test():
+        view = PaginatedTextView(["Page one", "Page two"], owner_id=42)
+        interaction = MagicMock()
+        interaction.user.id = 42
+        interaction.response.edit_message = AsyncMock()
+
+        await view.next_button.callback(interaction)
+
+        interaction.response.edit_message.assert_awaited_once_with(
+            content="Page two\n\n*Page 2 of 2*",
+            view=view,
+        )
+        assert view.previous_button.disabled is False
+        assert view.next_button.disabled is True
+        assert view.next_button.label == "Next"
+
+    asyncio.run(_test())
+
+
+def test_paginated_text_view_rejects_other_users():
+    """Other users cannot change somebody else's paginated response."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+
+    async def _test():
+        view = PaginatedTextView(["Page one", "Page two"], owner_id=42)
+        interaction = MagicMock()
+        interaction.user.id = 99
+        interaction.response.send_message = AsyncMock()
+
+        allowed = await view.interaction_check(interaction)
+
+        assert allowed is False
+        interaction.response.send_message.assert_awaited_once_with(
+            "Only the person who requested this response can change its page.",
+            ephemeral=True,
+        )
 
     asyncio.run(_test())
 
@@ -206,14 +280,9 @@ def test_send_deferred_response_sources_appear_once():
 
         await send_deferred_response(interaction, content, limit=50)
 
-        sent_chunks = [
-            interaction.edit_original_response.call_args.kwargs["content"],
-            *[
-                call.kwargs["content"]
-                for call in interaction.followup.send.call_args_list
-            ],
-        ]
-        assert sum(chunk.count("Sources:") for chunk in sent_chunks) == 1
+        view = interaction.edit_original_response.call_args.kwargs["view"]
+        assert sum(page.count("Sources:") for page in view.pages) == 1
         interaction.delete_original_response.assert_not_called()
+        interaction.followup.send.assert_not_called()
 
     asyncio.run(_test())

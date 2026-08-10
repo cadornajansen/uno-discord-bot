@@ -19,12 +19,17 @@ from bot.services.ai import (
     AITimeoutError,
     AIError,
 )
-from bot.utils.formatting import split_message, send_deferred_response
+from bot.utils.formatting import (
+    send_deferred_pages,
+    send_deferred_response,
+    split_message,
+)
 
 logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = (".pdf", ".pptx")
 MAX_QUESTION_LENGTH = 500
+DOCUMENT_SUMMARY_PREVIEW_CHARS = 1100
 
 
 def format_document_response(analysis: DocumentAnalysis, summary: str) -> str:
@@ -37,19 +42,19 @@ def format_document_response(analysis: DocumentAnalysis, summary: str) -> str:
     Returns:
         Formatted Discord markdown string.
     """
-    sections = [f"**Document Analysis — {analysis.filename}**\n"]
+    sections = [f"**Document Analysis — {analysis.filename}**"]
 
-    # Summary section
-    sections.append(f"**Summary**\n{summary}")
-
-    # Metadata section
-    info_parts = [f"Type: {analysis.file_type}"]
+    # Show available metadata before the generated summary.
+    info_parts = []
     if analysis.slide_count is not None:
         info_parts.append(f"Slides: {analysis.slide_count}")
     if analysis.page_count is not None:
         info_parts.append(f"Pages: {analysis.page_count}")
+    if info_parts:
+        sections.append("**Details**\n• " + " | ".join(info_parts))
 
-    sections.append(f"**Document Info**\n• " + " | ".join(info_parts))
+    sections.append(f"**Summary**\n{summary}")
+    sections.append(f"**Document:** {analysis.file_type}")
 
     # Warnings section (if any)
     if analysis.warnings:
@@ -57,6 +62,28 @@ def format_document_response(analysis: DocumentAnalysis, summary: str) -> str:
         sections.append("**Notes**\n" + "\n".join(warn_lines))
 
     return "\n\n".join(sections)
+
+
+def build_document_response_pages(
+    analysis: DocumentAnalysis,
+    summary: str,
+    session_note: str | None = None,
+) -> list[str]:
+    """Keep the document card on page one and hide extra detail behind controls."""
+    summary_pages = split_message(
+        summary,
+        limit=DOCUMENT_SUMMARY_PREVIEW_CHARS,
+    ) or ["No summary was generated."]
+
+    first_page = format_document_response(analysis, summary_pages[0])
+    if session_note:
+        first_page += f"\n\n{session_note}"
+
+    continuation_pages = [
+        f"**Summary Continued**\n{page}"
+        for page in summary_pages[1:]
+    ]
+    return [first_page, *continuation_pages]
 
 
 class DocumentsCog(commands.Cog):
@@ -156,12 +183,19 @@ class DocumentsCog(commands.Cog):
                     filename=analysis.filename,
                 )
 
-            response_text = format_document_response(analysis, summary_text)
-
+            session_note = None
             if stored_session:
-                response_text += f"\n\nDocument ready for questions. Use `/docask` within the next {self.session_service.ttl_minutes} minutes."
+                session_note = (
+                    "Document ready for questions. Use `/docask` within the next "
+                    f"{self.session_service.ttl_minutes} minutes."
+                )
 
-            await send_deferred_response(interaction, response_text)
+            response_pages = build_document_response_pages(
+                analysis,
+                summary_text,
+                session_note,
+            )
+            await send_deferred_pages(interaction, response_pages)
 
         except UnsupportedFileError as e:
             await interaction.edit_original_response(content=str(e))

@@ -121,6 +121,88 @@ def split_message(
     return chunks
 
 
+class PaginatedTextView(discord.ui.View):
+    """Navigate a long response without creating multiple channel messages."""
+
+    def __init__(
+        self,
+        pages: list[str],
+        owner_id: int,
+        timeout: float = 300.0,
+    ) -> None:
+        if len(pages) < 2:
+            raise ValueError("PaginatedTextView requires at least two pages")
+
+        super().__init__(timeout=timeout)
+        self.pages = tuple(pages)
+        self.owner_id = owner_id
+        self.current_page = 0
+        self.message: discord.InteractionMessage | None = None
+        self._update_button_states()
+
+    @property
+    def content(self) -> str:
+        """Return the current page with a compact position indicator."""
+        return (
+            f"{self.pages[self.current_page].rstrip()}\n\n"
+            f"*Page {self.current_page + 1} of {len(self.pages)}*"
+        )
+
+    def _update_button_states(self) -> None:
+        self.previous_button.disabled = self.current_page == 0
+        self.next_button.disabled = self.current_page == len(self.pages) - 1
+        self.next_button.label = (
+            "Next - Read More" if self.current_page == 0 else "Next"
+        )
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Allow only the user who requested the response to change pages."""
+        if interaction.user.id == self.owner_id:
+            return True
+
+        await interaction.response.send_message(
+            "Only the person who requested this response can change its page.",
+            ephemeral=True,
+        )
+        return False
+
+    async def _show_page(self, interaction: discord.Interaction) -> None:
+        self._update_button_states()
+        await interaction.response.edit_message(content=self.content, view=self)
+
+    @discord.ui.button(label="Previous", style=discord.ButtonStyle.secondary)
+    async def previous_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        self.current_page = max(0, self.current_page - 1)
+        await self._show_page(interaction)
+
+    @discord.ui.button(label="Next", style=discord.ButtonStyle.primary)
+    async def next_button(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        self.current_page = min(len(self.pages) - 1, self.current_page + 1)
+        await self._show_page(interaction)
+
+    async def on_timeout(self) -> None:
+        """Disable expired controls so their inactive state is clear."""
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+
+        if self.message is None:
+            return
+
+        try:
+            await self.message.edit(view=self)
+        except discord.HTTPException:
+            pass
+
+
 async def send_deferred_response(
     interaction: "discord.Interaction",
     content: str,
@@ -128,23 +210,43 @@ async def send_deferred_response(
 ) -> None:
     """Send text content in response to a deferred slash command interaction.
 
-    Edits the original deferred response message with the first chunk to preserve
-    the 'user used /command' invocation header in Discord, and sends any remaining
-    chunks as followup messages.
+    Edits the original deferred response message to preserve the 'user used
+    /command' invocation header. Long responses stay in that single message and
+    receive Previous and Next controls instead of creating followup messages.
 
     Args:
         interaction: Discord interaction object.
         content: String content to send.
         limit: Maximum character length per chunk (default: 1900).
     """
-    chunks = split_message(content, limit=limit)
+    safe_limit = min(limit, MAX_DISCORD_CHUNK_CHARS)
+    chunks = split_message(content, limit=safe_limit)
     if not chunks:
         await interaction.edit_original_response(content="No response generated.")
         return
 
-    await interaction.edit_original_response(content=chunks[0])
-    for chunk in chunks[1:]:
-        await interaction.followup.send(content=chunk)
+    await send_deferred_pages(interaction, chunks)
+
+
+async def send_deferred_pages(
+    interaction: "discord.Interaction",
+    pages: list[str],
+) -> None:
+    """Display pre-built text pages in one deferred interaction response."""
+    non_empty_pages = [page for page in pages if page]
+    if not non_empty_pages:
+        await interaction.edit_original_response(content="No response generated.")
+        return
+
+    if len(non_empty_pages) == 1:
+        await interaction.edit_original_response(content=non_empty_pages[0])
+        return
+
+    view = PaginatedTextView(non_empty_pages, owner_id=interaction.user.id)
+    view.message = await interaction.edit_original_response(
+        content=view.content,
+        view=view,
+    )
 
 
 def build_assignment_embeds(
