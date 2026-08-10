@@ -32,10 +32,10 @@ def test_format_search_results_formatting():
     formatted = format_search_results("rag tutorial python", results)
 
     assert "Search results for: **rag tutorial python**" in formatted
-    assert "**1. [Code RAG](https://huggingface.co/blog/rag)**" in formatted
+    assert "**1. [Code RAG](<https://huggingface.co/blog/rag>)**" in formatted
     assert "*huggingface.co*" in formatted
     assert "Exploring RAG..." in formatted
-    assert "**2. [Deep Agents](https://docs.langchain.com/agents)**" in formatted
+    assert "**2. [Deep Agents](<https://docs.langchain.com/agents>)**" in formatted
     assert "*docs.langchain.com*" in formatted
 
 
@@ -75,7 +75,7 @@ def test_search_cog_command_execution():
 
         sent_text = interaction.edit_original_response.call_args[1]["content"]
         assert "Search results for: **python binary search**" in sent_text
-        assert "**1. [Python Tutorial](https://python.org/doc)**" in sent_text
+        assert "**1. [Python Tutorial](<https://python.org/doc>)**" in sent_text
         assert "*python.org*" in sent_text
 
     asyncio.run(_test())

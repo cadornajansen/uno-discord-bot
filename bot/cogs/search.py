@@ -57,7 +57,7 @@ def format_search_results(query: str, results: list[SearchResult]) -> str:
         domain = extract_domain(res.url)
         snippet_text = res.snippet if res.snippet else "No description available."
 
-        entry = f"**{idx}. [{res.title}]({res.url})** *{domain}*\n{snippet_text}"
+        entry = f"**{idx}. [{res.title}](<{res.url}>)** *{domain}*\n{snippet_text}"
         lines.append(entry)
 
     return "\n\n".join(lines)
