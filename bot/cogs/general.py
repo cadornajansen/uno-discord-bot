@@ -96,40 +96,79 @@ class GeneralCog(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="help", description="List available commands and descriptions.")
+    @app_commands.command(name="help", description="List all available commands and descriptions.")
     async def help_command(self, interaction: discord.Interaction) -> None:
-        """List Phase 1 slash commands and their usage."""
+        """List all slash commands grouped by feature area."""
         embed = discord.Embed(
-            title="UNO Discord Bot - Help",
-            description="Available commands:",
+            title="Uno AI - Command Reference",
+            description="Here's everything I can do. Use `/` to autocomplete any command.",
             color=discord.Color.blurple(),
         )
+
         embed.add_field(
-            name="/ping",
-            value="Check bot connection latency.",
-            inline=False,
-        )
-        embed.add_field(
-            name="/hello",
-            value="Receive a friendly greeting.",
-            inline=False,
-        )
-        embed.add_field(
-            name="/userinfo [member]",
-            value="View public account details for yourself or another member.",
-            inline=False,
-        )
-        embed.add_field(
-            name="/serverinfo",
-            value="View details about the current server.",
-            inline=False,
-        )
-        embed.add_field(
-            name="/help",
-            value="Show this list of commands.",
+            name="AI & Knowledge",
+            value=(
+                "`/ask question:<text>` - Ask a question. Grounded in class messages when relevant, "
+                "otherwise answered from AI knowledge.\n"
+                "`/search query:<text>` - Search Google and get the top results."
+            ),
             inline=False,
         )
 
+        embed.add_field(
+            name="Document Analysis",
+            value=(
+                "`/analyze file:<attachment>` - Upload a PDF or PPTX and get an AI summary.\n"
+                "`/docask question:<text>` - Ask a follow-up question about the last analyzed document."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="Academic Schedule",
+            value=(
+                "`/today` - Show today's class schedule.\n"
+                "`/schedule` - Show the full weekly schedule.\n"
+                "`/nextclass` - Show the next upcoming class.\n"
+                "`/prof subject:<name>` - Look up the professor for a subject."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="Weather",
+            value=(
+                "`/weather` - Current conditions, 6-hour forecast, official PAGASA warnings, "
+                "and class disruption risk (LOW / MODERATE / HIGH)."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="General & Utility",
+            value=(
+                "`/ping` - Check bot latency.\n"
+                "`/hello` - Say hi.\n"
+                "`/userinfo [member]` - View public account info for yourself or another member.\n"
+                "`/serverinfo` - View details about this server.\n"
+                "`/help` - Show this command list."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="Passive Features",
+            value=(
+                "**@Uno AI** - Mention the bot and it replies with something cool.\n"
+                "**Knowledge indexing** - Messages in approved channels are automatically "
+                "indexed so `/ask` can reference class discussions.\n"
+                "**Image OCR** - Homework screenshots in approved channels are scanned "
+                "and their text is indexed for `/ask` retrieval."
+            ),
+            inline=False,
+        )
+
+        embed.set_footer(text="Uno AI - Powered by Ollama (phi4-mini) + Qdrant")
         await interaction.response.send_message(embed=embed)
 
     async def cog_app_command_error(
