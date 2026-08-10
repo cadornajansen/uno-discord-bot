@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 import logging
 import random
 import re
@@ -43,7 +43,7 @@ class MentionsCog(commands.Cog):
         settings = getattr(bot, "settings", None)
         base_url = settings.ollama_base_url if settings else "http://localhost:11434"
         model = settings.ollama_model if settings else "phi4-mini"
-        timeout = settings.ollama_timeout_seconds if settings else 60.0
+        timeout = settings.ollama_timeout_seconds if settings else 180.0
 
         self.ai = AIService(base_url=base_url, model=model, default_timeout=timeout)
 
@@ -133,7 +133,6 @@ class MentionsCog(commands.Cog):
                 response = await self.ai.ask(
                     question=prompt,
                     system_prompt=CASUAL_CHAT_SYSTEM_PROMPT,
-                    timeout_seconds=45.0,
                 )
             await message.reply(response)
         except AIError as e:
