@@ -95,7 +95,7 @@ def test_direct_conversation_uses_only_reply_target_and_current_message():
         cog._fetch_recent_channel_history.assert_not_awaited()
         cog.embedding_service.embed.assert_not_awaited()
         prompt = cog.ai_service.ask.await_args.kwargs["question"]
-        assert "Directly replying to Uno AI" in prompt
+        assert "Replying to:" in prompt
         assert "thanks" in prompt
         assert cog.ai_service.ask.await_args.kwargs["system_prompt"] == CONVERSATION_SYSTEM_PROMPT
         assert cog.ai_service.ask.await_args.kwargs["max_tokens"] == 120

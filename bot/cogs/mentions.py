@@ -114,7 +114,14 @@ class MentionsCog(commands.Cog):
         self.bot = bot
 
         settings = getattr(bot, "settings", None)
-        base_url = settings.ollama_base_url if settings else "http://localhost:11434"
+        chat_base_url = (
+            settings.ollama_chat_base_url if settings else "http://localhost:11434"
+        )
+        embedding_base_url = (
+            settings.ollama_embedding_base_url
+            if settings
+            else "http://localhost:11434"
+        )
         model = settings.ollama_model if settings else "phi4-mini"
         embed_model = settings.ollama_embedding_model if settings else "embeddinggemma"
         qdrant_url = settings.qdrant_url if settings else "http://localhost:6333"
@@ -131,12 +138,15 @@ class MentionsCog(commands.Cog):
         max_tokens = getattr(settings, "ollama_max_tokens", 400) if settings else 400
 
         self.ai_service = AIService(
-            base_url=base_url,
+            base_url=chat_base_url,
             model=model,
             default_timeout=timeout,
             max_tokens=max_tokens,
         )
-        self.embedding_service = EmbeddingService(base_url=base_url, model=embed_model)
+        self.embedding_service = EmbeddingService(
+            base_url=embedding_base_url,
+            model=embed_model,
+        )
         self.vector_store = VectorStore(url=qdrant_url, collection_name=qdrant_coll)
 
         self.rag_service = RAGService(
@@ -295,14 +305,14 @@ class MentionsCog(commands.Cog):
                 f"Retrieved Class Knowledge & OCR Notes:\n{rag_context_text}"
             )
 
-        ref_snippet = (
-            f"Directly replying to Uno AI: \"{ref_msg.clean_content.strip()}\"\n"
-            if ref_msg and ref_msg.clean_content
-            else ""
-        )
-        prompt_parts.append(
-            f"{ref_snippet}Current User Message from {message.author.display_name}:\n{clean_text or '(Replied without text)'}"
-        )
+        user_input_text = clean_text or "(Replied without text)"
+        if ref_msg and ref_msg.clean_content:
+            prompt_parts.append(
+                f"Replying to: \"{ref_msg.clean_content.strip()}\"\n"
+                f"User message: {user_input_text}"
+            )
+        else:
+            prompt_parts.append(f"User message: {user_input_text}")
 
         full_prompt = "\n\n".join(prompt_parts)
 
