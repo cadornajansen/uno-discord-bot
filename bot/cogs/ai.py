@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -11,6 +12,7 @@ from bot.services.ai import (
     AIError,
 )
 from bot.services.embeddings import EmbeddingService
+from bot.services.academic_schedule import AcademicScheduleService
 from bot.services.vector_store import VectorStore
 from bot.services.rag import RAGService
 from bot.utils.formatting import split_message, send_deferred_response
@@ -34,12 +36,33 @@ class AICog(commands.Cog):
         qdrant_url = settings.qdrant_url if settings else "http://localhost:6333"
         qdrant_coll = settings.qdrant_collection if settings else "discord_messages"
         top_k = settings.rag_top_k if settings else 5
-        min_score = settings.rag_min_score if settings else 0.30
+        min_score = settings.rag_min_score if settings else 0.50
+        max_context_results = (
+            getattr(settings, "rag_max_context_results", 3) if settings else 3
+        )
+        homework_channel_ids = (
+            settings.ocr_channel_ids
+            if settings
+            and isinstance(getattr(settings, "ocr_channel_ids", None), (frozenset, set))
+            else frozenset()
+        )
 
         timeout = settings.ollama_timeout_seconds if settings else 180.0
-        ai_service = AIService(base_url=base_url, model=model, default_timeout=timeout)
+        max_tokens = getattr(settings, "ollama_max_tokens", 400) if settings else 400
+        ai_service = AIService(
+            base_url=base_url,
+            model=model,
+            default_timeout=timeout,
+            max_tokens=max_tokens,
+        )
         embedding_service = EmbeddingService(base_url=base_url, model=embed_model)
         vector_store = VectorStore(url=qdrant_url, collection_name=qdrant_coll)
+        academic_schedule_service = AcademicScheduleService(
+            data_dir=Path("data/academics"),
+            school_year=settings.academic_school_year if settings else "2026-2027",
+            semester=settings.academic_semester if settings else 1,
+            tz_name=settings.academic_timezone if settings else "Asia/Manila",
+        )
 
         self.rag_service = RAGService(
             ai_service=ai_service,
@@ -47,6 +70,9 @@ class AICog(commands.Cog):
             vector_store=vector_store,
             top_k=top_k,
             min_score=min_score,
+            max_context_results=max_context_results,
+            homework_channel_ids=frozenset(homework_channel_ids),
+            academic_schedule_service=academic_schedule_service,
         )
 
     @app_commands.command(name="ask", description="Ask the AI assistant a question grounded in class context.")

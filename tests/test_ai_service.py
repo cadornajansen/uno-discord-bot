@@ -35,7 +35,52 @@ def test_ask_success():
             payload = kwargs["json"]
             assert payload["model"] == "phi4-mini"
             assert payload["stream"] is False
+            assert payload["options"] == {"num_predict": 400}
             assert payload["messages"][-1]["content"] == "Explain pointers in C"
+
+    asyncio.run(_test())
+
+
+def test_ask_uses_configured_max_tokens():
+    """Test the configured generation ceiling is sent to Ollama."""
+    async def _test():
+        service = AIService(max_tokens=250)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "message": {"role": "assistant", "content": "Short answer."}
+        }
+
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_response
+            await service.ask("Question")
+
+        assert mock_post.call_args.kwargs["json"]["options"] == {
+            "num_predict": 250
+        }
+
+    asyncio.run(_test())
+
+
+def test_ask_allows_a_smaller_per_request_token_limit():
+    """Short conversational calls can override the service-wide generation ceiling."""
+    async def _test():
+        service = AIService(max_tokens=400)
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_response.json.return_value = {
+            "message": {"role": "assistant", "content": "Got it."}
+        }
+
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_response
+            await service.ask("Be concise", max_tokens=120)
+
+        assert mock_post.call_args.kwargs["json"]["options"] == {
+            "num_predict": 120
+        }
 
     asyncio.run(_test())
 

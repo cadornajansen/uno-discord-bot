@@ -22,11 +22,13 @@ class Settings:
         ollama_model: str,
         ollama_embedding_model: str,
         ollama_timeout_seconds: float,
+        ollama_max_tokens: int,
         qdrant_url: str,
         qdrant_collection: str,
         indexed_channel_ids: frozenset[int],
         rag_top_k: int,
         rag_min_score: float,
+        rag_max_context_results: int,
         serper_api_key: str,
         serper_base_url: str,
         search_result_limit: int,
@@ -52,11 +54,13 @@ class Settings:
         self.ollama_model = ollama_model
         self.ollama_embedding_model = ollama_embedding_model
         self.ollama_timeout_seconds = ollama_timeout_seconds
+        self.ollama_max_tokens = ollama_max_tokens
         self.qdrant_url = qdrant_url.rstrip("/")
         self.qdrant_collection = qdrant_collection
         self.indexed_channel_ids = indexed_channel_ids
         self.rag_top_k = rag_top_k
         self.rag_min_score = rag_min_score
+        self.rag_max_context_results = rag_max_context_results
         self.serper_api_key = serper_api_key
         self.serper_base_url = serper_base_url.rstrip("/")
         self.search_result_limit = search_result_limit
@@ -115,6 +119,11 @@ def load_settings() -> Settings:
     except ValueError:
         raise ConfigError("OLLAMA_TIMEOUT_SECONDS must be a positive float.")
 
+    ollama_max_tokens_raw = os.getenv("OLLAMA_MAX_TOKENS", "400").strip()
+    if not ollama_max_tokens_raw.isdigit() or int(ollama_max_tokens_raw) <= 0:
+        raise ConfigError("OLLAMA_MAX_TOKENS must be a positive integer.")
+    ollama_max_tokens = int(ollama_max_tokens_raw)
+
     qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333").strip()
     qdrant_collection = os.getenv("QDRANT_COLLECTION", "discord_messages").strip()
 
@@ -138,13 +147,21 @@ def load_settings() -> Settings:
         raise ConfigError("RAG_TOP_K must be a positive integer.")
     rag_top_k = int(rag_top_k_raw)
 
-    rag_min_score_raw = os.getenv("RAG_MIN_SCORE", "0.30").strip()
+    rag_min_score_raw = os.getenv("RAG_MIN_SCORE", "0.50").strip()
     try:
         rag_min_score = float(rag_min_score_raw)
         if not (0.0 <= rag_min_score <= 1.0):
             raise ValueError()
     except ValueError:
         raise ConfigError("RAG_MIN_SCORE must be a float between 0.0 and 1.0.")
+
+    rag_max_context_results_raw = os.getenv("RAG_MAX_CONTEXT_RESULTS", "3").strip()
+    if (
+        not rag_max_context_results_raw.isdigit()
+        or int(rag_max_context_results_raw) <= 0
+    ):
+        raise ConfigError("RAG_MAX_CONTEXT_RESULTS must be a positive integer.")
+    rag_max_context_results = int(rag_max_context_results_raw)
 
     serper_api_key = os.getenv("SERPER_API_KEY", "").strip()
     serper_base_url = os.getenv("SERPER_BASE_URL", "https://google.serper.dev").strip()
@@ -238,11 +255,13 @@ def load_settings() -> Settings:
         ollama_model=ollama_model,
         ollama_embedding_model=ollama_embedding_model,
         ollama_timeout_seconds=ollama_timeout_seconds,
+        ollama_max_tokens=ollama_max_tokens,
         qdrant_url=qdrant_url,
         qdrant_collection=qdrant_collection,
         indexed_channel_ids=frozenset(indexed_channel_ids),
         rag_top_k=rag_top_k,
         rag_min_score=rag_min_score,
+        rag_max_context_results=rag_max_context_results,
         serper_api_key=serper_api_key,
         serper_base_url=serper_base_url,
         search_result_limit=search_result_limit,

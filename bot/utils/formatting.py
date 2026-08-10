@@ -3,6 +3,9 @@ from typing import Optional
 import discord
 
 
+MAX_DISCORD_CHUNK_CHARS = 1900
+
+
 def format_latency(latency_seconds: float) -> str:
     """Format bot WebSocket latency in milliseconds.
 
@@ -32,15 +35,56 @@ def format_timestamp(dt: Optional[datetime], style: str = "F") -> str:
     return f"<t:{unix_timestamp}:{style}>"
 
 
-def split_message(text: str, limit: int = 2000) -> list[str]:
-    """Split a long text string into chunks not exceeding the limit length.
+def _find_split_position(text: str, limit: int) -> int:
+    """Find the best content-preserving split position within ``limit``."""
+    for separator in ("\n\n", "\n", ". "):
+        index = text.rfind(separator, 0, limit + 1)
+        if index >= 0:
+            return index + len(separator)
 
-    Prefers splitting along newline boundaries (\\n), then whitespace (space),
-    and falls back to hard character splitting if a single line/token exceeds limit.
+    for index in range(limit - 1, -1, -1):
+        if text[index].isspace():
+            return index + 1
+
+    return limit
+
+
+def _split_text_at_boundaries(text: str, limit: int) -> list[str]:
+    """Split text while retaining every original separator character."""
+    chunks: list[str] = []
+    remaining = text
+
+    while len(remaining) > limit:
+        split_position = _find_split_position(remaining, limit)
+        nearby_fence = remaining.find(
+            "```",
+            max(0, split_position - 2),
+            min(len(remaining), split_position + 2),
+        )
+        if nearby_fence >= 0 and nearby_fence < split_position < nearby_fence + 3:
+            split_position = nearby_fence if nearby_fence > 0 else 3
+        chunks.append(remaining[:split_position])
+        remaining = remaining[split_position:]
+
+    if remaining:
+        chunks.append(remaining)
+
+    return chunks
+
+
+def split_message(
+    text: str,
+    limit: int = MAX_DISCORD_CHUNK_CHARS,
+) -> list[str]:
+    """Split text into Discord-safe chunks at readable boundaries.
+
+    Split priority is paragraph, newline, sentence, whitespace, then a hard
+    character boundary. Markdown code blocks are closed and reopened across
+    chunk boundaries so each Discord message renders independently.
 
     Args:
         text: The string content to split.
-        limit: Maximum character length per chunk (default: 2000).
+        limit: Maximum character length per chunk (default: 1900).
 
     Returns:
         A list of non-empty string chunks.
@@ -48,62 +92,35 @@ def split_message(text: str, limit: int = 2000) -> list[str]:
     if not text:
         return []
 
+    if limit <= 0:
+        raise ValueError("limit must be a positive integer")
+
     if len(text) <= limit:
         return [text]
 
+    has_code_fence = "```" in text
+    fence_overhead = 8 if has_code_fence else 0
+    content_limit = max(1, limit - fence_overhead)
+    raw_chunks = _split_text_at_boundaries(text, content_limit)
+
+    if not has_code_fence:
+        return raw_chunks
+
     chunks: list[str] = []
-    current_chunk = ""
+    code_fence_open = False
+    for raw_chunk in raw_chunks:
+        prefix = "```\n" if code_fence_open else ""
+        code_fence_open = code_fence_open != (raw_chunk.count("```") % 2 == 1)
+        suffix = "\n```" if code_fence_open else ""
+        chunks.append(f"{prefix}{raw_chunk}{suffix}")
 
-    lines = text.split("\n")
-
-    for line in lines:
-        # If line itself is larger than limit, split it by words/chars
-        if len(line) > limit:
-            if current_chunk:
-                chunks.append(current_chunk)
-                current_chunk = ""
-
-            words = line.split(" ")
-            current_line_chunk = ""
-
-            for word in words:
-                if len(word) > limit:
-                    if current_line_chunk:
-                        chunks.append(current_line_chunk)
-                        current_line_chunk = ""
-                    for i in range(0, len(word), limit):
-                        chunks.append(word[i : i + limit])
-                elif (
-                    len(current_line_chunk) + (1 if current_line_chunk else 0) + len(word)
-                    <= limit
-                ):
-                    current_line_chunk = (
-                        f"{current_line_chunk} {word}" if current_line_chunk else word
-                    )
-                else:
-                    chunks.append(current_line_chunk)
-                    current_line_chunk = word
-
-            if current_line_chunk:
-                current_chunk = current_line_chunk
-        else:
-            needed_len = len(current_chunk) + (1 if current_chunk else 0) + len(line)
-            if needed_len <= limit:
-                current_chunk = f"{current_chunk}\n{line}" if current_chunk else line
-            else:
-                chunks.append(current_chunk)
-                current_chunk = line
-
-    if current_chunk:
-        chunks.append(current_chunk)
-
-    return [c for c in chunks if c]
+    return chunks
 
 
 async def send_deferred_response(
     interaction: "discord.Interaction",
     content: str,
-    limit: int = 2000,
+    limit: int = MAX_DISCORD_CHUNK_CHARS,
 ) -> None:
     """Send text content in response to a deferred slash command interaction.
 
@@ -114,7 +131,7 @@ async def send_deferred_response(
     Args:
         interaction: Discord interaction object.
         content: String content to send.
-        limit: Maximum character length per chunk (default: 2000).
+        limit: Maximum character length per chunk (default: 1900).
     """
     chunks = split_message(content, limit=limit)
     if not chunks:
@@ -124,4 +141,3 @@ async def send_deferred_response(
     await interaction.edit_original_response(content=chunks[0])
     for chunk in chunks[1:]:
         await interaction.followup.send(content=chunk)
-

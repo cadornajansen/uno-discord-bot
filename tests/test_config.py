@@ -14,6 +14,41 @@ def test_valid_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.indexed_channel_ids == frozenset()
 
 
+def test_rag_and_generation_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Test Phase 7A settings use conservative defaults."""
+    monkeypatch.setenv("DISCORD_TOKEN", "mock_token")
+    monkeypatch.delenv("RAG_MIN_SCORE", raising=False)
+    monkeypatch.delenv("RAG_MAX_CONTEXT_RESULTS", raising=False)
+    monkeypatch.delenv("OLLAMA_MAX_TOKENS", raising=False)
+
+    settings = load_settings()
+
+    assert settings.rag_min_score == 0.50
+    assert settings.rag_max_context_results == 3
+    assert settings.ollama_max_tokens == 400
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "message"),
+    [
+        ("RAG_MAX_CONTEXT_RESULTS", "0", "RAG_MAX_CONTEXT_RESULTS"),
+        ("OLLAMA_MAX_TOKENS", "none", "OLLAMA_MAX_TOKENS"),
+    ],
+)
+def test_invalid_positive_integer_settings(
+    monkeypatch: pytest.MonkeyPatch,
+    name: str,
+    value: str,
+    message: str,
+) -> None:
+    """Test new integer settings reject zero and non-numeric values."""
+    monkeypatch.setenv("DISCORD_TOKEN", "mock_token")
+    monkeypatch.setenv(name, value)
+
+    with pytest.raises(ConfigError, match=message):
+        load_settings()
+
+
 def test_optional_dev_guild_id(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test loading settings when DEV_GUILD_ID is omitted or empty."""
     monkeypatch.setenv("DISCORD_TOKEN", "mock_secret_token_123")
