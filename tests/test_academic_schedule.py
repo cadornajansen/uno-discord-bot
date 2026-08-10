@@ -29,7 +29,7 @@ def test_loads_valid_semester_json():
     assert term.school_year == "2026-2027"
     assert term.semester == 1
     assert term.timezone == "Asia/Manila"
-    assert len(term.subjects) == 12
+    assert len(term.subjects) == 11
 
 
 def test_parses_multiple_schedules():
@@ -268,3 +268,25 @@ def test_find_subjects_searches():
     assert len(res4) == 2
     codes = {s.code for s in res4}
     assert codes == {"CIST_102", "CIST102L"}
+
+
+def test_find_subjects_supports_class_abbreviations():
+    """Common Discord abbreviations resolve to official catalog subjects."""
+    service = AcademicScheduleService(data_dir=Path("data/academics"))
+
+    results = service.find_subjects("FOP")
+
+    assert {subject.code for subject in results} == {"CIST_102", "CIST102L"}
+
+
+def test_formats_only_subject_metadata_mentioned_in_homework_text():
+    """Homework enrichment includes matched aliases without unrelated subjects."""
+    service = AcademicScheduleService(data_dir=Path("data/academics"))
+
+    metadata = service.format_metadata_for_text("ITC\n- quiz next week\n\nDS1\n- activity")
+
+    assert "ITC: Introduction to Computing (Lab) / Introduction to Computing (Lecture)" in metadata
+    assert "Instructor: Jonathan Morano" in metadata
+    assert "DS1: Discrete Structures 1" in metadata
+    assert "Instructor: Jesse Emmanuel Cadacio" in metadata
+    assert "PCOM" not in metadata

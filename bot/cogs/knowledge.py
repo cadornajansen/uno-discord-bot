@@ -1,6 +1,6 @@
 import logging
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import httpx
 
 from bot.services.embeddings import EmbeddingService, EmbeddingError
@@ -47,7 +47,11 @@ def should_index_message(
     if getattr(message, "interaction_metadata", None) is not None:
         return False
 
-    # Rule 6: Evaluating message text content & attachments
+    # Rule 6: Prefix command invocations are control input, not class knowledge
+    if message.content and message.content.lstrip().startswith("!"):
+        return False
+
+    # Rule 7: Evaluating message text content & attachments
     has_text = bool(message.content and message.content.strip())
 
     is_ocr_channel = message.channel.id in ocr_channel_ids
@@ -127,6 +131,110 @@ class KnowledgeCog(commands.Cog):
         self.embedding_service = EmbeddingService(base_url=base_url, model=embed_model)
         self.vector_store = VectorStore(url=qdrant_url, collection_name=qdrant_coll)
         self.ocr_service = OCRService(min_text_chars=self.ocr_min_text_chars)
+
+    async def cog_load(self) -> None:
+        """Start one history synchronization after the bot becomes ready."""
+        if self.indexed_channel_ids:
+            self.startup_history_sync.start()
+        else:
+            logger.info("Startup history sync skipped: no indexed channels configured")
+
+    async def cog_unload(self) -> None:
+        """Stop the startup task if the cog is unloaded."""
+        self.startup_history_sync.cancel()
+
+    async def sync_channel_history(self, channel_id: int) -> tuple[int, int, int]:
+        """Index the complete available history for one allowlisted channel.
+
+        Returns:
+            A tuple of indexed, skipped, and failed message counts.
+        """
+        if channel_id not in self.indexed_channel_ids:
+            logger.warning(
+                f"Startup history sync ignored non-allowlisted channel ID {channel_id}"
+            )
+            return 0, 0, 0
+
+        try:
+            channel = self.bot.get_channel(channel_id)
+            if channel is None:
+                channel = await self.bot.fetch_channel(channel_id)
+        except (discord.Forbidden, discord.HTTPException) as error:
+            logger.error(
+                f"Startup history sync could not access channel ID {channel_id}: {error}"
+            )
+            return 0, 0, 1
+
+        if not isinstance(channel, (discord.TextChannel, discord.Thread)):
+            logger.warning(
+                f"Startup history sync skipped channel ID {channel_id}: "
+                "not a text channel or thread"
+            )
+            return 0, 0, 0
+
+        indexed = 0
+        skipped = 0
+        failed = 0
+
+        try:
+            async for message in channel.history(limit=None, oldest_first=True):
+                if not should_index_message(
+                    message,
+                    indexed_channel_ids=self.indexed_channel_ids,
+                    ocr_channel_ids=self.ocr_channel_ids,
+                    ocr_max_image_mb=self.ocr_max_image_mb,
+                ):
+                    skipped += 1
+                    continue
+
+                if await self.index_message(message):
+                    indexed += 1
+                else:
+                    failed += 1
+        except (discord.Forbidden, discord.HTTPException) as error:
+            logger.error(
+                f"Startup history sync failed while reading channel ID {channel_id}: "
+                f"{error}"
+            )
+            failed += 1
+
+        logger.info(
+            f"Startup history sync completed for #{channel.name} "
+            f"(ID: {channel_id}): {indexed} indexed, {skipped} skipped, "
+            f"{failed} failed"
+        )
+        return indexed, skipped, failed
+
+    async def run_startup_history_sync(self) -> None:
+        """Synchronize every configured channel once per bot process."""
+        logger.info(
+            f"Startup history sync started for {len(self.indexed_channel_ids)} "
+            "allowlisted channel(s)"
+        )
+        total_indexed = 0
+        total_skipped = 0
+        total_failed = 0
+
+        for channel_id in sorted(self.indexed_channel_ids):
+            indexed, skipped, failed = await self.sync_channel_history(channel_id)
+            total_indexed += indexed
+            total_skipped += skipped
+            total_failed += failed
+
+        logger.info(
+            f"Startup history sync finished: {total_indexed} indexed, "
+            f"{total_skipped} skipped, {total_failed} failed"
+        )
+
+    @tasks.loop(count=1)
+    async def startup_history_sync(self) -> None:
+        """Run one startup history synchronization without blocking login."""
+        await self.run_startup_history_sync()
+
+    @startup_history_sync.before_loop
+    async def wait_for_startup_history_sync(self) -> None:
+        """Wait until Discord channel state is available."""
+        await self.bot.wait_until_ready()
 
     async def index_message(self, message: discord.Message) -> bool:
         """Reusable method to validate, OCR, embed, and upsert a Discord message into Qdrant.
@@ -311,4 +419,3 @@ class KnowledgeCog(commands.Cog):
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(KnowledgeCog(bot))
-

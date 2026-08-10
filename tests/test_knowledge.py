@@ -1,9 +1,45 @@
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, call, patch
+import discord
 import pytest
 
 from bot.cogs.knowledge import KnowledgeCog, should_index_message
 from bot.services.vector_store import VectorStoreError
+
+
+class AsyncMessageHistory:
+    """Small async iterator used by startup history synchronization tests."""
+
+    def __init__(self, messages: list[MagicMock]):
+        self._messages = messages
+
+    def __aiter__(self):
+        self._iterator = iter(self._messages)
+        return self
+
+    async def __anext__(self):
+        try:
+            return next(self._iterator)
+        except StopIteration as error:
+            raise StopAsyncIteration from error
+
+
+class MockTextChannel(discord.TextChannel):
+    """TextChannel test double that bypasses discord.py internals."""
+
+    def __init__(self):
+        pass
+
+
+def make_knowledge_cog(channel_ids: frozenset[int]) -> KnowledgeCog:
+    """Build a KnowledgeCog with only the settings required by these tests."""
+    bot = MagicMock()
+    bot.settings = SimpleNamespace(
+        indexed_channel_ids=channel_ids,
+        ocr_channel_ids=frozenset(),
+    )
+    return KnowledgeCog(bot)
 
 
 def test_should_index_valid_message():
@@ -108,6 +144,19 @@ def test_should_index_ignore_interaction_slash_command_messages():
 
     allowlist = frozenset({123456789})
     assert should_index_message(msg_with_metadata, allowlist) is False
+
+
+def test_should_index_ignore_prefix_command_messages():
+    """Prefix command invocations are not stored as class knowledge."""
+    message = MagicMock()
+    message.guild = MagicMock()
+    message.channel.id = 123456789
+    message.author.bot = False
+    message.webhook_id = None
+    message.interaction_metadata = None
+    message.content = "  !ask What are the latest homeworks?"
+
+    assert should_index_message(message, frozenset({123456789})) is False
 
 
 def test_should_index_image_only_in_ocr_channel_eligible():
@@ -431,5 +480,91 @@ def test_on_raw_message_delete_qdrant_failure_handled_safely():
         await cog.on_raw_message_delete(payload)
 
         vector_mock.delete_message.assert_called_once_with(55555)
+
+    asyncio.run(_test())
+
+
+def test_sync_channel_history_indexes_eligible_messages():
+    """Startup synchronization reads oldest-first and reuses index_message."""
+    async def _test():
+        channel_id = 1531615193786876064
+        cog = make_knowledge_cog(frozenset({channel_id}))
+        channel = MockTextChannel()
+        channel.name = "announcements"
+
+        eligible = MagicMock()
+        eligible.guild = MagicMock()
+        eligible.channel.id = channel_id
+        eligible.author.bot = False
+        eligible.webhook_id = None
+        eligible.interaction_metadata = None
+        eligible.content = "Enrollment closes Friday."
+        eligible.attachments = []
+
+        skipped = MagicMock()
+        skipped.guild = MagicMock()
+        skipped.channel.id = channel_id
+        skipped.author.bot = True
+        skipped.webhook_id = None
+        skipped.interaction_metadata = None
+        skipped.content = "Bot message"
+        skipped.attachments = []
+
+        channel.history = MagicMock(
+            return_value=AsyncMessageHistory([eligible, skipped])
+        )
+        cog.bot.get_channel.return_value = channel
+        cog.index_message = AsyncMock(return_value=True)
+
+        counts = await cog.sync_channel_history(channel_id)
+
+        assert counts == (1, 1, 0)
+        channel.history.assert_called_once_with(limit=None, oldest_first=True)
+        cog.index_message.assert_awaited_once_with(eligible)
+
+    asyncio.run(_test())
+
+
+def test_cog_load_starts_one_startup_history_task():
+    """Loading the cog schedules startup synchronization for configured channels."""
+    async def _test():
+        cog = make_knowledge_cog(frozenset({1531615193786876064}))
+
+        with patch.object(cog.startup_history_sync, "start") as start_mock:
+            await cog.cog_load()
+
+        start_mock.assert_called_once_with()
+
+    asyncio.run(_test())
+
+
+def test_startup_history_sync_covers_every_allowlisted_channel():
+    """One startup run synchronizes all configured channels in stable order."""
+    async def _test():
+        homework_id = 1531615193786876063
+        announcement_id = 1531615193786876064
+        cog = make_knowledge_cog(frozenset({announcement_id, homework_id}))
+        cog.sync_channel_history = AsyncMock(return_value=(1, 0, 0))
+
+        await cog.run_startup_history_sync()
+
+        assert cog.sync_channel_history.await_args_list == [
+            call(homework_id),
+            call(announcement_id),
+        ]
+
+    asyncio.run(_test())
+
+
+def test_on_message_continues_indexing_new_messages():
+    """The live listener continues using the shared ingestion pipeline."""
+    async def _test():
+        cog = make_knowledge_cog(frozenset({1531615193786876063}))
+        message = MagicMock()
+        cog.index_message = AsyncMock(return_value=True)
+
+        await cog.on_message(message)
+
+        cog.index_message.assert_awaited_once_with(message)
 
     asyncio.run(_test())

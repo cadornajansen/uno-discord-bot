@@ -3,6 +3,7 @@ from datetime import datetime, time, timedelta
 import json
 import logging
 from pathlib import Path
+import re
 from typing import Any, Optional, Sequence
 import zoneinfo
 
@@ -61,6 +62,7 @@ class Subject:
     name: str
     professor: str
     class_type: Optional[str]
+    aliases: tuple[str, ...]
     schedules: tuple[ClassMeeting, ...]
 
 
@@ -71,6 +73,7 @@ class AcademicTerm:
     school_year: str
     semester: int
     timezone: str
+    source_url: Optional[str]
     subjects: tuple[Subject, ...]
 
     @property
@@ -167,6 +170,7 @@ class AcademicScheduleService:
         sem = data.get("semester")
         tz = data.get("timezone", self.tz_name)
         subjects_raw = data.get("subjects")
+        source_url = data.get("source_url")
 
         if not sy or not isinstance(sy, str):
             raise ScheduleValidationError("Missing or invalid 'school_year' string.")
@@ -174,6 +178,10 @@ class AcademicScheduleService:
             raise ScheduleValidationError("Missing or invalid positive integer 'semester'.")
         if not subjects_raw or not isinstance(subjects_raw, list):
             raise ScheduleValidationError("Missing or non-array 'subjects' list.")
+        if source_url is not None and (
+            not isinstance(source_url, str) or not source_url.strip()
+        ):
+            raise ScheduleValidationError("'source_url' must be a non-empty string when provided.")
 
         parsed_subjects = []
         seen_codes: set[str] = set()
@@ -186,6 +194,7 @@ class AcademicScheduleService:
             name = subj.get("name")
             professor = subj.get("professor")
             class_type = subj.get("class_type")
+            aliases_raw = subj.get("aliases", [])
             schedules_raw = subj.get("schedules")
 
             if not code or not isinstance(code, str) or not code.strip():
@@ -205,6 +214,13 @@ class AcademicScheduleService:
             if not schedules_raw or not isinstance(schedules_raw, list):
                 raise ScheduleValidationError(
                     f"Subject '{code_clean}' has missing or empty 'schedules' list."
+                )
+            if not isinstance(aliases_raw, list) or any(
+                not isinstance(alias, str) or not alias.strip()
+                for alias in aliases_raw
+            ):
+                raise ScheduleValidationError(
+                    f"Subject '{code_clean}' has invalid 'aliases'; expected non-empty strings."
                 )
 
             parsed_meetings = []
@@ -254,6 +270,7 @@ class AcademicScheduleService:
                     name=name.strip(),
                     professor=professor.strip(),
                     class_type=class_type.strip() if isinstance(class_type, str) else None,
+                    aliases=tuple(alias.strip() for alias in aliases_raw),
                     schedules=tuple(parsed_meetings),
                 )
             )
@@ -262,6 +279,7 @@ class AcademicScheduleService:
             school_year=sy,
             semester=sem,
             timezone=tz,
+            source_url=source_url.strip() if source_url else None,
             subjects=tuple(parsed_subjects),
         )
         logger.info(
@@ -408,7 +426,7 @@ class AcademicScheduleService:
         }
 
     def find_subjects(self, query: str) -> list[Subject]:
-        """Search subjects by code, name, or partial match."""
+        """Search subjects by code, alias, name, or partial match."""
         term = self.get_term()
         cleaned = query.strip()
         if not cleaned:
@@ -417,21 +435,25 @@ class AcademicScheduleService:
         lower_query = cleaned.lower()
 
         exact_code_matches = []
+        alias_matches = []
         code_sub_matches = []
         name_matches = []
 
         for subject in term.subjects:
             s_code_lower = subject.code.lower()
             s_name_lower = subject.name.lower()
+            aliases_lower = {alias.lower() for alias in subject.aliases}
 
             if s_code_lower == lower_query:
                 exact_code_matches.append(subject)
+            elif lower_query in aliases_lower:
+                alias_matches.append(subject)
             elif lower_query in s_code_lower:
                 code_sub_matches.append(subject)
             elif lower_query in s_name_lower:
                 name_matches.append(subject)
 
-        combined = exact_code_matches + code_sub_matches + name_matches
+        combined = exact_code_matches + alias_matches + code_sub_matches + name_matches
         # Deduplicate while preserving search rank order
         seen = set()
         result = []
@@ -441,3 +463,36 @@ class AcademicScheduleService:
                 result.append(subj)
 
         return result
+
+    def format_metadata_for_text(self, text: str) -> str:
+        """Return compact trusted metadata for subject aliases mentioned in text."""
+        term = self.get_term()
+        matched_aliases: dict[str, list[Subject]] = {}
+
+        for subject in term.subjects:
+            for alias in subject.aliases:
+                if re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", text, re.IGNORECASE):
+                    matched_aliases.setdefault(alias.upper(), []).append(subject)
+
+        lines = []
+        for alias, subjects in matched_aliases.items():
+            names = list(dict.fromkeys(subject.name for subject in subjects))
+            professors = list(dict.fromkeys(subject.professor for subject in subjects))
+            class_types = list(
+                dict.fromkeys(subject.class_type for subject in subjects if subject.class_type)
+            )
+            locations = list(
+                dict.fromkeys(
+                    meeting.location
+                    for subject in subjects
+                    for meeting in subject.schedules
+                )
+            )
+            lines.append(
+                f"- {alias}: {' / '.join(names)}; "
+                f"Instructor: {', '.join(professors)}; "
+                f"Class type: {', '.join(class_types)}; "
+                f"Location/mode: {', '.join(locations)}"
+            )
+
+        return "\n".join(lines)

@@ -73,11 +73,48 @@ class AcademicsCog(commands.Cog):
 
         return choices
 
+    @app_commands.command(name="countdown", description="View countdown to upcoming academic milestones.")
+    async def countdown(self, interaction: discord.Interaction) -> None:
+        """Display remaining time until upcoming milestones."""
+        from datetime import datetime, timezone
+
+        # Configurable section milestones (UTC or local datetimes)
+        MILESTONES = [
+            ("Midterm Examinations", datetime(2026, 10, 15, 8, 0, tzinfo=timezone.utc)),
+            ("Final Project Submission", datetime(2026, 11, 28, 23, 59, tzinfo=timezone.utc)),
+            ("Final Examinations", datetime(2026, 12, 10, 8, 0, tzinfo=timezone.utc)),
+        ]
+
+        now = datetime.now(timezone.utc)
+        embed = discord.Embed(
+            title="Academic Countdown & Milestones",
+            color=discord.Color.blue(),
+        )
+
+        for name, dt in MILESTONES:
+            diff = dt - now
+            if diff.total_seconds() > 0:
+                days = diff.days
+                hours, remainder = divmod(diff.seconds, 3600)
+                minutes, _ = divmod(remainder, 60)
+                time_str = f"**{days}d {hours}h {minutes}m** remaining"
+            else:
+                time_str = "Passed / Completed"
+
+            embed.add_field(
+                name=name,
+                value=f"Target: `<t:{int(dt.timestamp())}:F>`\nStatus: {time_str}",
+                inline=False,
+            )
+
+        await interaction.response.send_message(embed=embed)
+
     @app_commands.command(name="today", description="Show today's class schedule.")
     async def today(self, interaction: discord.Interaction) -> None:
         """Slash command /today"""
         try:
-            term = self.schedule_service.get_term()
+            get_term = self.schedule_service.get_term()
+            term = get_term
             today_classes = self.schedule_service.get_today()
             current_dt = self.schedule_service._get_now_in_tz()
             day_name = VALID_DAYS[current_dt.weekday()]
@@ -243,6 +280,7 @@ class AcademicsCog(commands.Cog):
         except Exception as e:
             logger.error(f"Unexpected error in /prof: {e}", exc_info=True)
             await interaction.response.send_message("Something went wrong while looking up the professor.")
+
 
 
 async def setup(bot: commands.Bot) -> None:

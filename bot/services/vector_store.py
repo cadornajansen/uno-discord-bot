@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Collection
 from typing import Any, Optional
 from qdrant_client import AsyncQdrantClient, models
 
@@ -142,6 +143,7 @@ class VectorStore:
         limit: int = 5,
         guild_id: Optional[int] = None,
         channel_id: Optional[int] = None,
+        channel_ids: Optional[Collection[int]] = None,
     ) -> list[dict[str, Any]]:
         """Search nearest points in Qdrant by cosine similarity with optional guild/channel filtering.
 
@@ -150,6 +152,7 @@ class VectorStore:
             limit: Maximum number of points to return (default: 5).
             guild_id: Optional guild ID to filter by.
             channel_id: Optional channel ID to filter by.
+            channel_ids: Optional collection of channel IDs to filter by.
 
         Returns:
             List of dictionaries containing score and payload metadata.
@@ -169,6 +172,15 @@ class VectorStore:
                 models.FieldCondition(
                     key="channel_id",
                     match=models.MatchValue(value=str(channel_id)),
+                )
+            )
+        elif channel_ids:
+            must_filters.append(
+                models.FieldCondition(
+                    key="channel_id",
+                    match=models.MatchAny(
+                        any=[str(candidate_id) for candidate_id in channel_ids]
+                    ),
                 )
             )
 
@@ -201,6 +213,108 @@ class VectorStore:
         except Exception as e:
             logger.error(f"Failed to search Qdrant collection '{self.collection_name}': {e}")
             raise VectorStoreConnectionError(f"Qdrant search failed: {e}") from e
+
+    async def list_recent_messages(
+        self,
+        *,
+        guild_id: int,
+        channel_ids: Collection[int],
+        limit: int = 20,
+        scan_limit: int = 1000,
+    ) -> list[dict[str, Any]]:
+        """Return recent stored messages from selected channels by creation time."""
+        if limit <= 0 or scan_limit <= 0 or not channel_ids:
+            return []
+
+        try:
+            if not await self.client.collection_exists(self.collection_name):
+                return []
+
+            message_filter = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="guild_id",
+                        match=models.MatchValue(value=str(guild_id)),
+                    ),
+                    models.FieldCondition(
+                        key="channel_id",
+                        match=models.MatchAny(
+                            any=[str(channel_id) for channel_id in channel_ids]
+                        ),
+                    ),
+                ]
+            )
+            records = []
+            offset = None
+
+            while len(records) < scan_limit:
+                page_limit = min(100, scan_limit - len(records))
+                page, offset = await self.client.scroll(
+                    collection_name=self.collection_name,
+                    scroll_filter=message_filter,
+                    limit=page_limit,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                records.extend(page)
+                if offset is None:
+                    break
+
+            records.sort(
+                key=lambda record: str(
+                    (getattr(record, "payload", {}) or {}).get("created_at", "")
+                ),
+                reverse=True,
+            )
+            return [
+                {
+                    "score": 1.0,
+                    "payload": getattr(record, "payload", {}) or {},
+                }
+                for record in records[:limit]
+            ]
+        except Exception as e:
+            logger.error(
+                f"Failed to list recent messages from Qdrant collection "
+                f"'{self.collection_name}': {e}"
+            )
+            raise VectorStoreConnectionError(
+                f"Qdrant recent-message lookup failed: {e}"
+            ) from e
+
+    async def delete_channel_messages(self, channel_id: int) -> None:
+        """Delete every stored message whose payload matches one channel ID."""
+        try:
+            if not await self.client.collection_exists(self.collection_name):
+                return
+
+            await self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=models.FilterSelector(
+                    filter=models.Filter(
+                        must=[
+                            models.FieldCondition(
+                                key="channel_id",
+                                match=models.MatchValue(value=str(channel_id)),
+                            )
+                        ]
+                    )
+                ),
+                wait=True,
+            )
+            logger.info(
+                f"Deleted stored messages for channel ID {channel_id} from "
+                f"Qdrant collection '{self.collection_name}'"
+            )
+        except Exception as e:
+            logger.error(
+                f"Failed to delete channel ID {channel_id} from Qdrant collection "
+                f"'{self.collection_name}': {e}"
+            )
+            raise VectorStoreConnectionError(
+                f"Qdrant channel deletion failed: {e}"
+            ) from e
 
     async def delete_message(self, message_id: int) -> None:
         """Delete a point from Qdrant by its integer Discord message ID.

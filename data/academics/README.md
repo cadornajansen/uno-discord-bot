@@ -92,6 +92,7 @@ Here is a complete, valid schedule JSON file:
 - `school_year` (string): The academic school year string (e.g. `"2026-2027"`).
 - `semester` (integer): The semester number (e.g. `1` or `2`).
 - `timezone` (string): Valid IANA timezone name (e.g. `"Asia/Manila"`, `"America/New_York"`).
+- `source_url` (string, optional): Page where the catalog metadata was verified.
 - `subjects` (array): Array of subject objects.
 
 ### Subject Fields
@@ -100,6 +101,7 @@ Here is a complete, valid schedule JSON file:
 - `name` (string, required): Display title of the subject.
 - `professor` (string, required): Name of the instructor/professor.
 - `class_type` (string, optional): Descriptive metadata (e.g. `"Lecture"`, `"Lab"`, `"General Education"`, `"PE"`, `"NSTP"`).
+- `aliases` (array of strings, optional): Abbreviations used in class messages (e.g. `"FOP"`, `"DS1"`).
 - `schedules` (array, required): Array of class meeting times. Must contain at least 1 meeting.
 
 ### Schedule Fields

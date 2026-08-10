@@ -2,12 +2,14 @@
   "school_year": "2026-2027",
   "semester": 1,
   "timezone": "Asia/Manila",
+  "source_url": "https://app.notion.com/p/28b0fe92413047dbba8d18ec339552db",
   "subjects": [
     {
       "code": "CIST101L",
       "name": "Introduction to Computing (Lab)",
       "professor": "Jonathan Morano",
       "class_type": "Lab",
+      "aliases": ["ITC"],
       "schedules": [
         {
           "day": "Monday",
@@ -22,6 +24,7 @@
       "name": "Introduction to Computing (Lecture)",
       "professor": "Jonathan Morano",
       "class_type": "Lecture",
+      "aliases": ["ITC"],
       "schedules": [
         {
           "day": "Monday",
@@ -36,6 +39,7 @@
       "name": "Science, Technology and Society",
       "professor": "Roberto Vitancol",
       "class_type": "General Education",
+      "aliases": ["STS"],
       "schedules": [
         {
           "day": "Tuesday",
@@ -56,6 +60,7 @@
       "name": "Mathematics in the Modern World",
       "professor": "Chedy Lamprea",
       "class_type": "General Education",
+      "aliases": ["MMW"],
       "schedules": [
         {
           "day": "Tuesday",
@@ -76,6 +81,7 @@
       "name": "Purposive Communication",
       "professor": "Risa Asuncion",
       "class_type": "General Education",
+      "aliases": ["PCOM"],
       "schedules": [
         {
           "day": "Tuesday",
@@ -96,6 +102,7 @@
       "name": "Fundamentals of Programming (Lecture)",
       "professor": "Richard Regala",
       "class_type": "Lecture",
+      "aliases": ["FOP"],
       "schedules": [
         {
           "day": "Wednesday",
@@ -110,6 +117,7 @@
       "name": "Interdisiplinaryong Pagbasa at Pagsulat Tungo sa Mabisang Pagpapahayag",
       "professor": "Lucita Dela Cruz",
       "class_type": "General Education",
+      "aliases": ["IPP"],
       "schedules": [
         {
           "day": "Tuesday",
@@ -130,6 +138,7 @@
       "name": "Fundamentals of Programming (Lab)",
       "professor": "Richard Regala",
       "class_type": "Lab",
+      "aliases": ["FOP"],
       "schedules": [
         {
           "day": "Wednesday",
@@ -140,24 +149,11 @@
       ]
     },
     {
-      "code": "NSTP 1-2",
-      "name": "National Service Training Program 1 (CWTS 1-2)",
-      "professor": "Edwhin C. Agustin",
+      "code": "NSTP3",
+      "name": "National Service Training Program 1 (CWTS 1)",
+      "professor": "Mark John Bonifacio",
       "class_type": "NSTP",
-      "schedules": [
-        {
-          "day": "Saturday",
-          "start": "13:00",
-          "end": "16:00",
-          "location": "Field"
-        }
-      ]
-    },
-    {
-      "code": "NSTP 1-1",
-      "name": "National Service Training Program 1 (CWTS 1-1)",
-      "professor": "Unknown",
-      "class_type": "NSTP",
+      "aliases": ["NSTP"],
       "schedules": [
         {
           "day": "Saturday",
@@ -172,6 +168,7 @@
       "name": "Physical Activities Towards Health and Fitness 1",
       "professor": "Karen Grace Ordillano",
       "class_type": "PE",
+      "aliases": ["PATHFIT"],
       "schedules": [
         {
           "day": "Monday",
@@ -186,6 +183,7 @@
       "name": "Discrete Structures 1",
       "professor": "Jesse Emmanuel Cadacio",
       "class_type": "Lecture",
+      "aliases": ["DS1", "DISCRETE"],
       "schedules": [
         {
           "day": "Wednesday",
