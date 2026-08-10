@@ -2,11 +2,11 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 from bot.cogs.mentions import (
-    CONVERSATION_SYSTEM_PROMPT,
     MentionsCog,
     choose_context_mode,
     style_feedback_acknowledgement,
 )
+from bot.services.chat_orchestrator import ChatResponse
 
 
 class _TypingContext:
@@ -19,13 +19,10 @@ class _TypingContext:
 
 def _make_cog() -> MentionsCog:
     cog = MentionsCog.__new__(MentionsCog)
-    cog.ai_service = MagicMock()
-    cog.ai_service.ask = AsyncMock(return_value="Got it. Keeping it chill.")
-    cog.embedding_service = MagicMock()
-    cog.embedding_service.embed = AsyncMock(return_value=[0.1])
-    cog.vector_store = MagicMock()
-    cog.vector_store.search_similar = AsyncMock(return_value=[])
-    cog.rag_service = MagicMock(min_score=0.5, max_context_results=3)
+    cog.chat_orchestrator = MagicMock()
+    cog.chat_orchestrator.chat = AsyncMock(
+        return_value=ChatResponse(content="Got it. Keeping it chill.")
+    )
     cog._fetch_recent_channel_history = AsyncMock(return_value="[User]: Earlier message")
     return cog
 
@@ -34,6 +31,9 @@ def _make_message() -> MagicMock:
     message = MagicMock()
     message.guild.id = 777
     message.author.display_name = "Jasnen"
+    message.author.id = 123
+    message.channel.id = 456
+    message.channel.name = "bot-channel"
     message.channel.typing.return_value = _TypingContext()
     message.reply = AsyncMock()
     return message
@@ -76,9 +76,7 @@ def test_style_feedback_skips_history_vector_search_and_ai():
         )
 
         cog._fetch_recent_channel_history.assert_not_awaited()
-        cog.embedding_service.embed.assert_not_awaited()
-        cog.vector_store.search_similar.assert_not_awaited()
-        cog.ai_service.ask.assert_not_awaited()
+        cog.chat_orchestrator.chat.assert_not_awaited()
         message.reply.assert_awaited_once_with("Got it. Keeping it chill.")
 
     asyncio.run(_test())
@@ -93,17 +91,15 @@ def test_direct_conversation_uses_only_reply_target_and_current_message():
         await cog._respond_with_adaptive_context(message, "thanks", reference)
 
         cog._fetch_recent_channel_history.assert_not_awaited()
-        cog.embedding_service.embed.assert_not_awaited()
-        prompt = cog.ai_service.ask.await_args.kwargs["question"]
-        assert "Replying to:" in prompt
-        assert "thanks" in prompt
-        assert cog.ai_service.ask.await_args.kwargs["system_prompt"] == CONVERSATION_SYSTEM_PROMPT
-        assert cog.ai_service.ask.await_args.kwargs["max_tokens"] == 120
+        kwargs = cog.chat_orchestrator.chat.await_args.kwargs
+        assert kwargs["reply_context"] == "I can help with that."
+        assert kwargs["nearby_context"] is None
+        assert cog.chat_orchestrator.chat.await_args.args == ("thanks",)
 
     asyncio.run(_test())
 
 
-def test_class_followup_uses_three_messages_and_rag():
+def test_class_followup_delegates_retrieval_without_channel_history_dump():
     async def _test():
         cog = _make_cog()
         message = _make_message()
@@ -115,14 +111,10 @@ def test_class_followup_uses_three_messages_and_rag():
             reference,
         )
 
-        cog._fetch_recent_channel_history.assert_awaited_once_with(
-            message,
-            limit=3,
-            before=reference,
-        )
-        cog.embedding_service.embed.assert_awaited_once()
-        cog.vector_store.search_similar.assert_awaited_once()
-        assert cog.ai_service.ask.await_args.kwargs["max_tokens"] == 220
+        cog._fetch_recent_channel_history.assert_not_awaited()
+        kwargs = cog.chat_orchestrator.chat.await_args.kwargs
+        assert kwargs["reply_context"] == "The assignment is due Friday."
+        assert kwargs["nearby_context"] is None
 
     asyncio.run(_test())
 
@@ -145,8 +137,51 @@ def test_referential_followup_uses_nearby_messages_without_rag():
             limit=3,
             before=reference,
         )
-        cog.embedding_service.embed.assert_not_awaited()
-        cog.vector_store.search_similar.assert_not_awaited()
-        assert cog.ai_service.ask.await_args.kwargs["max_tokens"] == 120
+        assert cog.chat_orchestrator.chat.await_args.kwargs["nearby_context"] == "[User]: Earlier message"
+
+    asyncio.run(_test())
+
+
+def test_latest_assignments_mention_replies_with_embed() -> None:
+    async def _test() -> None:
+        cog = _make_cog()
+        message = _make_message()
+        content = (
+            "**Latest Homework & Requirements**\n\n"
+            "**ITC — Introduction to Computing**\n"
+            "- Finish Activity 1"
+        )
+        cog.chat_orchestrator.chat.return_value = ChatResponse(
+            content=content,
+            assignment_items=({"content": content},),
+        )
+
+        await cog._respond_with_adaptive_context(message, "latest assignments", None)
+
+        call = message.reply.await_args
+        assert call.kwargs["embed"].title == "Latest Assignments"
+
+    asyncio.run(_test())
+
+
+def test_mention_reply_does_not_add_a_reaction() -> None:
+    async def _test() -> None:
+        cog = _make_cog()
+        bot_user = MagicMock()
+        bot_user.id = 999
+        bot_user.name = "Uno AI"
+        cog.bot = MagicMock(user=bot_user)
+        cog._get_referenced_message = AsyncMock(return_value=None)
+        cog._respond_with_adaptive_context = AsyncMock()
+        message = _make_message()
+        message.author.bot = False
+        message.mentions = [bot_user]
+        message.clean_content = "@Uno AI hello"
+        message.add_reaction = AsyncMock()
+
+        await cog.on_message(message)
+
+        message.add_reaction.assert_not_awaited()
+        cog._respond_with_adaptive_context.assert_awaited_once()
 
     asyncio.run(_test())

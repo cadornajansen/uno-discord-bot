@@ -4,6 +4,7 @@ import discord
 from discord.ext import commands
 
 from config.settings import Settings, load_settings, ConfigError
+from bot.services.chat_orchestrator import build_chat_orchestrator
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +14,7 @@ class UnoDiscordBot(commands.Bot):
 
     def __init__(self, settings: Settings):
         self.settings = settings
+        self.chat_orchestrator = build_chat_orchestrator(settings)
 
         # Request required default intents + message_content intent for Phase 2B message ingestion
         intents = discord.Intents.default()

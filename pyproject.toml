@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "uno-discord-bot"
 version = "0.1.0"
-description = "Discord bot foundation for Computer Science block section"
+description = "Class-aware Discord AI with assignment retrieval, schedules, OCR, Qdrant RAG, and bounded per-user memory"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }

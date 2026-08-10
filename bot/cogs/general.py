@@ -103,7 +103,7 @@ class GeneralCog(commands.Cog):
             title="Uno AI - Command Reference",
             description=(
                 "Use `/` slash commands or their `!` prefix equivalents. "
-                "Document commands remain slash-only."
+                "You can also mention Uno naturally. Document commands remain slash-only."
             ),
             color=discord.Color.blurple(),
         )
@@ -111,8 +111,9 @@ class GeneralCog(commands.Cog):
         embed.add_field(
             name="AI & Knowledge",
             value=(
-                "`/ask question:<text>` or `!ask <text>` - Ask a question. Grounded in class messages when relevant, "
-                "otherwise answered from AI knowledge.\n"
+                "`/ask question:<text>` or `!ask <text>` - Chat with Uno. Class questions can use "
+                "assignments, announcements, schedules, subjects, and professor data.\n"
+                "`/reset-chat` or `!reset-chat` - Clear only your chat memory in this channel.\n"
                 "`/search query:<text>` or `!search <text>` - Search Google and get the top results."
             ),
             inline=False,
@@ -164,21 +165,23 @@ class GeneralCog(commands.Cog):
         embed.add_field(
             name="Passive Features",
             value=(
-                "**@Uno AI** - Mention the bot and it replies with something cool.\n"
-                "**Knowledge indexing** - Messages in approved channels are automatically "
-                "indexed so `/ask` can reference class discussions.\n"
-                "**Image OCR** - Homework screenshots in approved channels are scanned "
-                "and their text is indexed for `/ask` retrieval."
+                "**Mention Uno with a question** - `@Uno AI what's due Friday?` works anywhere "
+                "in the message. A mention by itself gets a quick static reply.\n"
+                "**Reply to Uno** - Continue the conversation without repeating the original question.\n"
+                "**Private short-term memory** - History is separated by user and channel, bounded, "
+                "and expires automatically.\n"
+                "**Approved-channel indexing** - New homework and announcement posts become searchable.\n"
+                "**Image OCR** - Homework screenshots in approved channels can also be indexed."
             ),
             inline=False,
         )
 
-        embed.set_footer(text="Uno AI - Powered by Ollama (phi4-mini) + Qdrant")
+        embed.set_footer(text="Uno AI - AssemblyAI LLM Gateway + Gemini Embeddings + Qdrant")
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="about", description="Learn how Uno AI works in simple terms.")
     async def about_command(self, interaction: discord.Interaction) -> None:
-        """Brief friendly explanation of how Uno AI works and why it runs locally."""
+        """Brief explanation of Uno AI's retrieval and generation flow."""
         embed = discord.Embed(
             title="How does Uno AI work?",
             color=discord.Color.og_blurple(),
@@ -187,48 +190,56 @@ class GeneralCog(commands.Cog):
         embed.add_field(
             name="The short version",
             value=(
-                "Uno AI is a bot that runs an actual AI model directly on our own computer -- "
-                "no sending your messages to OpenAI, Google, or any cloud service. "
-                "Everything stays local."
+                "Uno is a class assistant with short-term per-user memory and a small set of "
+                "read-only class tools. Gemini 3.5 Flash generates replies through AssemblyAI's "
+                "LLM Gateway."
             ),
             inline=False,
         )
 
         embed.add_field(
-            name="What happens when you use /ask",
+            name="How a chat request works",
             value=(
-                "1. Your question gets converted into numbers (an embedding) on the local machine.\n"
-                "2. Those numbers are compared against indexed class messages stored in a local database (Qdrant).\n"
-                "3. If something relevant is found, it's passed to the AI as context.\n"
-                "4. The AI model (phi4-mini, running locally via Ollama) generates a response.\n"
-                "5. The answer comes back to Discord -- all without leaving the computer."
+                "1. Uno loads your small conversation history for this server channel.\n"
+                "2. Clear class questions are routed to a trusted read-only tool.\n"
+                "3. Assignment searches prefer newer, structured homework and announcement posts.\n"
+                "4. Relative dates such as today, tomorrow, and Friday use Asia/Manila.\n"
+                "5. Gemini produces the final Discord reply using only the relevant results."
             ),
             inline=False,
         )
 
         embed.add_field(
-            name="Why does this matter?",
+            name="What Uno can check",
             value=(
-                "Large cloud AI services (ChatGPT, Gemini, etc.) run in massive data centers "
-                "that consume enormous amounts of electricity and water to stay cool.\n\n"
-                "Uno AI runs on a regular computer in the room. "
-                "No data center. No water cooling towers. No cloud bill. "
-                "Your class messages never leave the machine."
+                "Uno can check approved homework and announcement posts, the class schedule, "
+                "subject abbreviations, and professor information. General conversation does "
+                "not automatically search the class index."
             ),
             inline=False,
         )
 
         embed.add_field(
-            name="What gets stored?",
+            name="Memory, storage, and privacy",
             value=(
-                "Messages from approved channels are saved locally as vector embeddings -- "
-                "mathematical representations of meaning, not raw copies of every message. "
-                "This is what lets /ask understand context from past class discussions."
+                "Only approved-channel messages and metadata are indexed in Qdrant. Chat memory "
+                "keeps at most four completed turns per user and channel, expires after 30 minutes, "
+                "and resets when the bot restarts. `/reset-chat` clears it early. Operational logs "
+                "record request timing and token counts, never message content or API keys."
             ),
             inline=False,
         )
 
-        embed.set_footer(text="Locally hosted. Privately run. No cloud. No water.")
+        embed.add_field(
+            name="If retrieval is unavailable",
+            value=(
+                "A Qdrant or Gemini embedding outage only affects searchable class messages. "
+                "Schedule, subject, and professor lookups continue using trusted local academic data."
+            ),
+            inline=False,
+        )
+
+        embed.set_footer(text="Bounded memory, controlled indexing, and read-only class tools")
         await interaction.response.send_message(embed=embed)
 
     async def cog_app_command_error(

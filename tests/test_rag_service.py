@@ -6,103 +6,19 @@ from bot.services.ai import (
     DEFAULT_SYSTEM_PROMPT,
     HOMEWORK_RAG_SYSTEM_PROMPT,
     RAG_SYSTEM_PROMPT,
-    OllamaConnectionError,
+    AIConnectionError,
 )
 from bot.services.embeddings import EmbeddingError
 from bot.services.vector_store import VectorStoreError
 from bot.services.rag import (
     RAGService,
     format_context_block,
-    format_sources_section,
     format_structured_homework_message,
     is_homework_query,
     is_recent_homework_query,
 )
 from bot.services.academic_schedule import AcademicScheduleService
 from pathlib import Path
-
-
-def test_format_sources_section_single_source():
-    """Test format_sources_section formatting for a single source."""
-    results = [
-        {
-            "score": 0.85,
-            "payload": {
-                "guild_id": "777",
-                "channel_id": "123",
-                "message_id": "456",
-                "content": "DSA quiz is Friday.",
-            },
-        }
-    ]
-
-    sources = format_sources_section(results)
-    assert sources == "Sources: [Message 1](https://discord.com/channels/777/123/456)"
-
-
-def test_format_sources_section_multiple_sources_and_url_construction():
-    """Test format_sources_section with multiple sources and correct URL format."""
-    results = [
-        {
-            "score": 0.85,
-            "payload": {"guild_id": "777", "channel_id": "100", "message_id": "200"},
-        },
-        {
-            "score": 0.75,
-            "payload": {"guild_id": "777", "channel_id": "100", "message_id": "201"},
-        },
-    ]
-
-    sources = format_sources_section(results)
-    expected = (
-        "Sources: [Message 1](https://discord.com/channels/777/100/200), "
-        "[Message 2](https://discord.com/channels/777/100/201)"
-    )
-    assert sources == expected
-
-
-def test_format_sources_section_deduplication():
-    """Test format_sources_section deduplicates identical message link keys."""
-    results = [
-        {
-            "score": 0.85,
-            "payload": {"guild_id": "777", "channel_id": "100", "message_id": "200"},
-        },
-        {
-            "score": 0.82,
-            "payload": {"guild_id": "777", "channel_id": "100", "message_id": "200"},
-        },
-    ]
-
-    sources = format_sources_section(results)
-    assert sources == "Sources: [Message 1](https://discord.com/channels/777/100/200)"
-
-
-def test_format_sources_section_no_valid_sources():
-    """Test format_sources_section returns empty string when no payload metadata exists."""
-    assert format_sources_section([]) == ""
-    assert format_sources_section([{"score": 0.5, "payload": {}}]) == ""
-    assert format_sources_section([{"score": 0.5, "payload": {"channel_id": "123"}}]) == ""
-
-
-def test_format_sources_section_caps_at_three_sources():
-    """Test source formatting has an independent three-link safety cap."""
-    results = [
-        {
-            "payload": {
-                "guild_id": "777",
-                "channel_id": "100",
-                "message_id": str(message_id),
-            }
-        }
-        for message_id in range(200, 205)
-    ]
-
-    sources = format_sources_section(results)
-
-    assert sources.count("[Message ") == 3
-    assert "/202)" in sources
-    assert "/203)" not in sources
 
 
 def test_rag_answer_with_relevant_context():
@@ -148,9 +64,7 @@ def test_rag_answer_with_relevant_context():
         _, kwargs = ai_mock.ask.call_args
         assert "Our DSA quiz was moved to Friday." in kwargs["context"]
 
-        # Assert compact clickable sources appended
-        assert "The DSA quiz is on Friday." in result
-        assert "Sources: [Message 1](https://discord.com/channels/777/100/200)" in result
+        assert result == "The DSA quiz is on Friday."
 
     asyncio.run(_test())
 
@@ -196,7 +110,7 @@ def test_rag_answer_min_score_filtering():
 
 
 def test_rag_results_are_sorted_and_capped():
-    """Only the three strongest passing results become context and sources."""
+    """Only the three strongest passing results become hidden model context."""
     async def _test():
         ai_mock = AsyncMock()
         ai_mock.ask.return_value = "Grounded answer."
@@ -233,8 +147,7 @@ def test_rag_results_are_sorted_and_capped():
         context = ai_mock.ask.call_args.kwargs["context"]
         assert context.index("first") < context.index("second") < context.index("third")
         assert "excluded" not in context
-        assert "/201)" in result and "/202)" in result and "/203)" in result
-        assert "/204)" not in result
+        assert result == "Grounded answer."
 
     asyncio.run(_test())
 
@@ -268,7 +181,7 @@ def test_rag_ocr_derived_score_remains_eligible():
         result = await rag.answer("When is it due?", guild_id=777)
 
         assert ai_mock.ask.call_args.kwargs["context"] is not None
-        assert "Sources:" in result
+        assert result == "The assignment is due August 5."
 
     asyncio.run(_test())
 
@@ -342,8 +255,7 @@ def test_latest_homework_query_uses_recent_homework_channel_records():
         assert "ITC quiz next week" in context
         assert "Math practice exercise" in context
         assert "Thanks po!" not in context
-        assert "/203)" in result and "/201)" in result
-        assert "/202)" not in result
+        assert result == "ITC quiz is next week."
         assert (
             ai_mock.ask.call_args.kwargs["system_prompt"]
             == HOMEWORK_RAG_SYSTEM_PROMPT
@@ -353,7 +265,7 @@ def test_latest_homework_query_uses_recent_homework_channel_records():
 
 
 def test_homework_answer_adds_matching_trusted_subject_metadata():
-    """Homework context gets catalog metadata without changing Discord sources."""
+    """Homework context gets catalog metadata without exposing retrieval links."""
     async def _test():
         ai_mock = AsyncMock()
         ai_mock.ask.return_value = "**DS1 — Discrete Structures 1**\n- Review for quiz"
@@ -390,7 +302,7 @@ def test_homework_answer_adds_matching_trusted_subject_metadata():
         assert "Trusted subject catalog" in context
         assert "Jesse Emmanuel Cadacio" in context
         assert "Retrieved homework messages" in context
-        assert "discord.com/channels/777/100/203" in result
+        assert result == ai_mock.ask.return_value
 
     asyncio.run(_test())
 
@@ -419,7 +331,7 @@ def test_structured_homework_post_is_formatted_without_mixing_subjects():
 
 
 def test_recent_structured_homework_bypasses_llm_regrouping():
-    """The latest structured summary is returned directly with its own source."""
+    """The latest structured summary is returned without retrieval metadata."""
     async def _test():
         ai_mock = AsyncMock()
         vector_mock = AsyncMock()
@@ -448,7 +360,7 @@ def test_recent_structured_homework_bypasses_llm_regrouping():
         ai_mock.ask.assert_not_awaited()
         assert "**ITC — Introduction to Computing**" in result
         assert "**DS1 — Discrete Structures 1**" in result
-        assert "discord.com/channels/777/100/203" in result
+        assert "Sources:" not in result
 
     asyncio.run(_test())
 
@@ -538,7 +450,7 @@ def test_rag_fallback_on_embedding_failure():
         ai_mock.ask.return_value = "Fallback answer."
 
         embed_mock = AsyncMock()
-        embed_mock.embed.side_effect = EmbeddingError("Ollama embed offline")
+        embed_mock.embed.side_effect = EmbeddingError("Gemini embeddings unavailable")
 
         vector_mock = AsyncMock()
 

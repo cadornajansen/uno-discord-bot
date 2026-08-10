@@ -1,4 +1,7 @@
 .env
+.env.*
+!.env.example
+!deploy/azure/.env.azure-vm.example
 .venv/
 venv/
 __pycache__/

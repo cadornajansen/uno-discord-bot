@@ -99,6 +99,11 @@ class PrefixCommandsCog(commands.Cog):
         """Prefix alias for /ask."""
         await self._invoke_app_command(context, "AICog", "ask", question)
 
+    @commands.command(name="reset-chat")
+    async def reset_chat_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /reset-chat."""
+        await self._invoke_app_command(context, "AICog", "reset_chat")
+
     @commands.command(name="search")
     async def search_prefix(self, context: commands.Context, *, query: str) -> None:
         """Prefix alias for /search."""

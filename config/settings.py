@@ -18,14 +18,20 @@ class Settings:
         self,
         discord_token: str,
         dev_guild_id: int | None,
-        ollama_base_url: str,
-        ollama_model: str,
-        ollama_embedding_model: str,
-        ollama_timeout_seconds: float,
-        ollama_max_tokens: int,
+        assemblyai_api_key: str,
+        assemblyai_llm_base_url: str,
+        assemblyai_llm_model: str,
+        assemblyai_llm_timeout_seconds: float,
+        assemblyai_llm_max_tokens: int,
+        gemini_api_key: str,
+        gemini_embedding_base_url: str,
+        gemini_embedding_model: str,
+        gemini_embedding_dimensions: int,
+        gemini_embedding_timeout_seconds: float,
         qdrant_url: str,
         qdrant_collection: str,
         indexed_channel_ids: frozenset[int],
+        assignment_channel_ids: frozenset[int],
         rag_top_k: int,
         rag_min_score: float,
         rag_max_context_results: int,
@@ -47,17 +53,27 @@ class Settings:
         ocr_max_image_mb: int,
         ocr_min_text_chars: int,
         ocr_max_images_per_message: int,
+        chat_memory_max_turns: int,
+        chat_memory_ttl_minutes: int,
+        chat_memory_max_tokens: int,
+        chat_max_tool_rounds: int,
     ):
         self.discord_token = discord_token
         self.dev_guild_id = dev_guild_id
-        self.ollama_base_url = ollama_base_url.rstrip("/")
-        self.ollama_model = ollama_model
-        self.ollama_embedding_model = ollama_embedding_model
-        self.ollama_timeout_seconds = ollama_timeout_seconds
-        self.ollama_max_tokens = ollama_max_tokens
+        self.assemblyai_api_key = assemblyai_api_key
+        self.assemblyai_llm_base_url = assemblyai_llm_base_url.rstrip("/")
+        self.assemblyai_llm_model = assemblyai_llm_model
+        self.assemblyai_llm_timeout_seconds = assemblyai_llm_timeout_seconds
+        self.assemblyai_llm_max_tokens = assemblyai_llm_max_tokens
+        self.gemini_api_key = gemini_api_key
+        self.gemini_embedding_base_url = gemini_embedding_base_url.rstrip("/")
+        self.gemini_embedding_model = gemini_embedding_model
+        self.gemini_embedding_dimensions = gemini_embedding_dimensions
+        self.gemini_embedding_timeout_seconds = gemini_embedding_timeout_seconds
         self.qdrant_url = qdrant_url.rstrip("/")
         self.qdrant_collection = qdrant_collection
         self.indexed_channel_ids = indexed_channel_ids
+        self.assignment_channel_ids = assignment_channel_ids
         self.rag_top_k = rag_top_k
         self.rag_min_score = rag_min_score
         self.rag_max_context_results = rag_max_context_results
@@ -79,6 +95,10 @@ class Settings:
         self.ocr_max_image_mb = ocr_max_image_mb
         self.ocr_min_text_chars = ocr_min_text_chars
         self.ocr_max_images_per_message = ocr_max_images_per_message
+        self.chat_memory_max_turns = chat_memory_max_turns
+        self.chat_memory_ttl_minutes = chat_memory_ttl_minutes
+        self.chat_memory_max_tokens = chat_memory_max_tokens
+        self.chat_max_tool_rounds = chat_max_tool_rounds
 
 
 def load_settings() -> Settings:
@@ -105,27 +125,62 @@ def load_settings() -> Settings:
             )
         dev_guild_id = int(guild_id_raw)
 
-    ollama_base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").strip()
-    ollama_model = os.getenv("OLLAMA_MODEL", "phi4-mini").strip()
-    ollama_embedding_model = os.getenv(
-        "OLLAMA_EMBEDDING_MODEL", "embeddinggemma"
+    assemblyai_api_key = os.getenv("ASSEMBLYAI_API_KEY", "").strip()
+    assemblyai_llm_base_url = os.getenv(
+        "ASSEMBLYAI_LLM_BASE_URL", "https://llm-gateway.assemblyai.com/v1"
+    ).strip()
+    assemblyai_llm_model = os.getenv(
+        "ASSEMBLYAI_LLM_MODEL", "gemini-3.5-flash"
     ).strip()
 
-    timeout_raw = os.getenv("OLLAMA_TIMEOUT_SECONDS", "180.0").strip()
+    timeout_raw = os.getenv("ASSEMBLYAI_LLM_TIMEOUT_SECONDS", "60.0").strip()
     try:
-        ollama_timeout_seconds = float(timeout_raw)
-        if ollama_timeout_seconds <= 0:
+        assemblyai_llm_timeout_seconds = float(timeout_raw)
+        if assemblyai_llm_timeout_seconds <= 0:
             raise ValueError()
     except ValueError:
-        raise ConfigError("OLLAMA_TIMEOUT_SECONDS must be a positive float.")
+        raise ConfigError("ASSEMBLYAI_LLM_TIMEOUT_SECONDS must be a positive float.")
 
-    ollama_max_tokens_raw = os.getenv("OLLAMA_MAX_TOKENS", "400").strip()
-    if not ollama_max_tokens_raw.isdigit() or int(ollama_max_tokens_raw) <= 0:
-        raise ConfigError("OLLAMA_MAX_TOKENS must be a positive integer.")
-    ollama_max_tokens = int(ollama_max_tokens_raw)
+    assemblyai_llm_max_tokens_raw = os.getenv(
+        "ASSEMBLYAI_LLM_MAX_TOKENS", "400"
+    ).strip()
+    if (
+        not assemblyai_llm_max_tokens_raw.isdigit()
+        or int(assemblyai_llm_max_tokens_raw) <= 0
+    ):
+        raise ConfigError("ASSEMBLYAI_LLM_MAX_TOKENS must be a positive integer.")
+    assemblyai_llm_max_tokens = int(assemblyai_llm_max_tokens_raw)
+
+    gemini_api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    gemini_embedding_base_url = os.getenv(
+        "GEMINI_EMBEDDING_BASE_URL",
+        "https://generativelanguage.googleapis.com/v1beta",
+    ).strip()
+    gemini_embedding_model = os.getenv(
+        "GEMINI_EMBEDDING_MODEL", "gemini-embedding-2"
+    ).strip()
+
+    dimensions_raw = os.getenv("GEMINI_EMBEDDING_DIMENSIONS", "768").strip()
+    if not dimensions_raw.isdigit() or not (128 <= int(dimensions_raw) <= 3072):
+        raise ConfigError(
+            "GEMINI_EMBEDDING_DIMENSIONS must be an integer between 128 and 3072."
+        )
+    gemini_embedding_dimensions = int(dimensions_raw)
+
+    embedding_timeout_raw = os.getenv(
+        "GEMINI_EMBEDDING_TIMEOUT_SECONDS", "30.0"
+    ).strip()
+    try:
+        gemini_embedding_timeout_seconds = float(embedding_timeout_raw)
+        if gemini_embedding_timeout_seconds <= 0:
+            raise ValueError()
+    except ValueError:
+        raise ConfigError("GEMINI_EMBEDDING_TIMEOUT_SECONDS must be a positive float.")
 
     qdrant_url = os.getenv("QDRANT_URL", "http://localhost:6333").strip()
-    qdrant_collection = os.getenv("QDRANT_COLLECTION", "discord_messages").strip()
+    qdrant_collection = os.getenv(
+        "QDRANT_COLLECTION", "discord_messages_gemini_v1"
+    ).strip()
 
     channels_raw = os.getenv("INDEXED_CHANNEL_IDS", "").strip()
     indexed_channel_ids: set[int] = set()
@@ -141,6 +196,18 @@ def load_settings() -> Settings:
                     "All channel IDs must be numeric integers."
                 )
             indexed_channel_ids.add(int(cleaned))
+
+    assignment_channels_raw = os.getenv(
+        "ASSIGNMENT_CHANNEL_IDS",
+        "1531615193786876064,1531615193786876063",
+    ).strip()
+    assignment_channel_ids: set[int] = set()
+    if assignment_channels_raw:
+        for part in assignment_channels_raw.split(","):
+            cleaned = part.strip()
+            if not cleaned or not cleaned.isdigit():
+                raise ConfigError("ASSIGNMENT_CHANNEL_IDS must contain only numeric channel IDs.")
+            assignment_channel_ids.add(int(cleaned))
 
     rag_top_k_raw = os.getenv("RAG_TOP_K", "5").strip()
     if not rag_top_k_raw.isdigit() or int(rag_top_k_raw) <= 0:
@@ -248,17 +315,28 @@ def load_settings() -> Settings:
         raise ConfigError("OCR_MAX_IMAGES_PER_MESSAGE must be a positive integer.")
     ocr_max_images_per_message = int(ocr_max_images_per_message_raw)
 
+    chat_memory_max_turns = _positive_int_env("CHAT_MEMORY_MAX_TURNS", "4")
+    chat_memory_ttl_minutes = _positive_int_env("CHAT_MEMORY_TTL_MINUTES", "30")
+    chat_memory_max_tokens = _positive_int_env("CHAT_MEMORY_MAX_TOKENS", "1200")
+    chat_max_tool_rounds = _positive_int_env("CHAT_MAX_TOOL_ROUNDS", "2")
+
     return Settings(
         discord_token=token,
         dev_guild_id=dev_guild_id,
-        ollama_base_url=ollama_base_url,
-        ollama_model=ollama_model,
-        ollama_embedding_model=ollama_embedding_model,
-        ollama_timeout_seconds=ollama_timeout_seconds,
-        ollama_max_tokens=ollama_max_tokens,
+        assemblyai_api_key=assemblyai_api_key,
+        assemblyai_llm_base_url=assemblyai_llm_base_url,
+        assemblyai_llm_model=assemblyai_llm_model,
+        assemblyai_llm_timeout_seconds=assemblyai_llm_timeout_seconds,
+        assemblyai_llm_max_tokens=assemblyai_llm_max_tokens,
+        gemini_api_key=gemini_api_key,
+        gemini_embedding_base_url=gemini_embedding_base_url,
+        gemini_embedding_model=gemini_embedding_model,
+        gemini_embedding_dimensions=gemini_embedding_dimensions,
+        gemini_embedding_timeout_seconds=gemini_embedding_timeout_seconds,
         qdrant_url=qdrant_url,
         qdrant_collection=qdrant_collection,
         indexed_channel_ids=frozenset(indexed_channel_ids),
+        assignment_channel_ids=frozenset(assignment_channel_ids),
         rag_top_k=rag_top_k,
         rag_min_score=rag_min_score,
         rag_max_context_results=rag_max_context_results,
@@ -280,4 +358,15 @@ def load_settings() -> Settings:
         ocr_max_image_mb=ocr_max_image_mb,
         ocr_min_text_chars=ocr_min_text_chars,
         ocr_max_images_per_message=ocr_max_images_per_message,
+        chat_memory_max_turns=chat_memory_max_turns,
+        chat_memory_ttl_minutes=chat_memory_ttl_minutes,
+        chat_memory_max_tokens=chat_memory_max_tokens,
+        chat_max_tool_rounds=chat_max_tool_rounds,
     )
+
+
+def _positive_int_env(name: str, default: str) -> int:
+    raw = os.getenv(name, default).strip()
+    if not raw.isdigit() or int(raw) <= 0:
+        raise ConfigError(f"{name} must be a positive integer.")
+    return int(raw)

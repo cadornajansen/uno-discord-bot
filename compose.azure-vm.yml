@@ -1,0 +1,38 @@
+name: uno-azure-vm
+
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    init: true
+    restart: unless-stopped
+    env_file:
+      - ${UNO_ENV_FILE:-.env.azure-vm}
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      LOG_FILE: /app/logs/uno.log
+    depends_on:
+      qdrant:
+        condition: service_healthy
+        restart: true
+    volumes:
+      - uno_bot_logs:/app/logs
+
+  qdrant:
+    image: qdrant/qdrant:v1.19.0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333'"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - uno_qdrant_storage:/qdrant/storage
+    ports:
+      - "127.0.0.1:6333:6333"
+
+volumes:
+  uno_bot_logs:
+  uno_qdrant_storage:

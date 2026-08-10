@@ -85,14 +85,15 @@ class KnowledgeCog(commands.Cog):
         settings = getattr(bot, "settings", None)
 
         base_url = (
-            settings.ollama_base_url
-            if settings and isinstance(getattr(settings, "ollama_base_url", None), str)
-            else "http://localhost:11434"
+            settings.gemini_embedding_base_url
+            if settings
+            and isinstance(getattr(settings, "gemini_embedding_base_url", None), str)
+            else "https://generativelanguage.googleapis.com/v1beta"
         )
         embed_model = (
-            settings.ollama_embedding_model
-            if settings and isinstance(getattr(settings, "ollama_embedding_model", None), str)
-            else "embeddinggemma"
+            settings.gemini_embedding_model
+            if settings and isinstance(getattr(settings, "gemini_embedding_model", None), str)
+            else "gemini-embedding-2"
         )
         qdrant_url = (
             settings.qdrant_url
@@ -128,7 +129,21 @@ class KnowledgeCog(commands.Cog):
         if settings and isinstance(getattr(settings, "ocr_max_images_per_message", None), int):
             self.ocr_max_images_per_message = settings.ocr_max_images_per_message
 
-        self.embedding_service = EmbeddingService(base_url=base_url, model=embed_model)
+        self.embedding_service = EmbeddingService(
+            api_key=getattr(settings, "gemini_api_key", "") if settings else "",
+            base_url=base_url,
+            model=embed_model,
+            output_dimensionality=(
+                getattr(settings, "gemini_embedding_dimensions", 768)
+                if settings
+                else 768
+            ),
+            timeout_seconds=(
+                getattr(settings, "gemini_embedding_timeout_seconds", 30.0)
+                if settings
+                else 30.0
+            ),
+        )
         self.vector_store = VectorStore(url=qdrant_url, collection_name=qdrant_coll)
         self.ocr_service = OCRService(min_text_chars=self.ocr_min_text_chars)
 
@@ -317,7 +332,11 @@ class KnowledgeCog(commands.Cog):
                 return False
 
             # 3. Generate dense vector embedding
-            vector = await self.embedding_service.embed(combined_content)
+            vector = await self.embedding_service.embed(
+                combined_content,
+                task_type="document",
+                title=getattr(message.channel, "name", None),
+            )
 
             # 4. Build metadata payload
             payload = {
