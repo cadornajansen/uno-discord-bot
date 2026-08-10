@@ -101,16 +101,19 @@ class GeneralCog(commands.Cog):
         """List all slash commands grouped by feature area."""
         embed = discord.Embed(
             title="Uno AI - Command Reference",
-            description="Here's everything I can do. Use `/` to autocomplete any command.",
+            description=(
+                "Use `/` slash commands or their `!` prefix equivalents. "
+                "Document commands remain slash-only."
+            ),
             color=discord.Color.blurple(),
         )
 
         embed.add_field(
             name="AI & Knowledge",
             value=(
-                "`/ask question:<text>` - Ask a question. Grounded in class messages when relevant, "
+                "`/ask question:<text>` or `!ask <text>` - Ask a question. Grounded in class messages when relevant, "
                 "otherwise answered from AI knowledge.\n"
-                "`/search query:<text>` - Search Google and get the top results."
+                "`/search query:<text>` or `!search <text>` - Search Google and get the top results."
             ),
             inline=False,
         )
@@ -119,7 +122,8 @@ class GeneralCog(commands.Cog):
             name="Document Analysis",
             value=(
                 "`/analyze file:<attachment>` - Upload a PDF or PPTX and get an AI summary.\n"
-                "`/docask question:<text>` - Ask a follow-up question about the last analyzed document."
+                "`/docask question:<text>` - Ask a follow-up question about the last analyzed document.\n"
+                "These two commands require `/`; `!analyze` and `!docask` provide guidance only."
             ),
             inline=False,
         )
@@ -127,10 +131,10 @@ class GeneralCog(commands.Cog):
         embed.add_field(
             name="Academic Schedule",
             value=(
-                "`/today` - Show today's class schedule.\n"
-                "`/schedule` - Show the full weekly schedule.\n"
-                "`/nextclass` - Show the next upcoming class.\n"
-                "`/prof subject:<name>` - Look up the professor for a subject."
+                "`/today` or `!today` - Show today's class schedule.\n"
+                "`/schedule` or `!schedule` - Show the full weekly schedule.\n"
+                "`/nextclass` or `!nextclass` - Show the next upcoming class.\n"
+                "`/prof subject:<name>` or `!prof <name>` - Look up the professor for a subject."
             ),
             inline=False,
         )
@@ -138,7 +142,7 @@ class GeneralCog(commands.Cog):
         embed.add_field(
             name="Weather",
             value=(
-                "`/weather` - Current conditions, 6-hour forecast, official PAGASA warnings, "
+                "`/weather` or `!weather` - Current conditions, 6-hour forecast, official PAGASA warnings, "
                 "and class disruption risk (LOW / MODERATE / HIGH)."
             ),
             inline=False,
@@ -147,12 +151,12 @@ class GeneralCog(commands.Cog):
         embed.add_field(
             name="General & Utility",
             value=(
-                "`/ping` - Check bot latency.\n"
-                "`/hello` - Say hi.\n"
-                "`/userinfo [member]` - View public account info for yourself or another member.\n"
-                "`/serverinfo` - View details about this server.\n"
-                "`/about` - Learn how Uno AI works and why it doesn't need a data center.\n"
-                "`/help` - Show this command list."
+                "`/ping` or `!ping` - Check bot latency.\n"
+                "`/hello` or `!hello` - Say hi.\n"
+                "`/userinfo [member]` or `!userinfo [member]` - View public account info.\n"
+                "`/serverinfo` or `!serverinfo` - View details about this server.\n"
+                "`/about` or `!about` - Learn how Uno AI works.\n"
+                "`/help` or `!help` - Show this command list."
             ),
             inline=False,
         )
