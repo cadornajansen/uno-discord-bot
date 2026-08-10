@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Optional
+from typing import Literal
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -15,36 +15,52 @@ class EmbeddingError(Exception):
     pass
 
 
-class OllamaEmbeddingConnectionError(EmbeddingError):
-    """Raised when unable to connect to Ollama for embedding generation."""
+class EmbeddingConfigurationError(EmbeddingError):
+    """Raised when required Gemini embedding configuration is missing."""
 
     pass
 
 
-class OllamaEmbeddingModelNotFoundError(EmbeddingError):
-    """Raised when the specified embedding model is missing from Ollama."""
+class EmbeddingConnectionError(EmbeddingError):
+    """Raised when unable to connect to the Gemini API."""
 
     pass
 
 
-class OllamaEmbeddingTimeoutError(EmbeddingError):
+class EmbeddingModelNotFoundError(EmbeddingError):
+    """Raised when the configured Gemini embedding model is unavailable."""
+
+
+class EmbeddingTimeoutError(EmbeddingError):
     """Raised when embedding generation times out."""
 
     pass
 
 
 class EmbeddingService:
-    """Service to generate dense vector embeddings using Ollama's /api/embed endpoint."""
+    """Generate retrieval embeddings with Google's Gemini Embedding API."""
 
     def __init__(
         self,
-        base_url: str = "http://localhost:11434",
-        model: str = "embeddinggemma",
+        api_key: str = "",
+        base_url: str = "https://generativelanguage.googleapis.com/v1beta",
+        model: str = "gemini-embedding-2",
+        output_dimensionality: int = 768,
+        timeout_seconds: float = EMBEDDING_TIMEOUT_SECONDS,
     ):
+        self.api_key = api_key.strip()
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.output_dimensionality = output_dimensionality
+        self.timeout_seconds = timeout_seconds
 
-    async def embed(self, text: str) -> list[float]:
+    async def embed(
+        self,
+        text: str,
+        *,
+        task_type: Literal["query", "document"] = "query",
+        title: str | None = None,
+    ) -> list[float]:
         """Generate a dense embedding vector for the provided text.
 
         Args:
@@ -54,35 +70,42 @@ class EmbeddingService:
             A list of float values representing the embedding vector.
 
         Raises:
-            EmbeddingError: If Ollama returns invalid payload or error.
-            OllamaEmbeddingConnectionError: If network connection fails.
-            OllamaEmbeddingModelNotFoundError: If model is not pulled in Ollama.
-            OllamaEmbeddingTimeoutError: If request times out.
+            EmbeddingError: If Gemini returns an invalid payload or error.
         """
         if not text or not text.strip():
             raise EmbeddingError("Cannot generate embedding for empty text.")
+        if not self.api_key:
+            raise EmbeddingConfigurationError("GEMINI_API_KEY is missing or empty.")
 
-        endpoint = f"{self.base_url}/api/embed"
+        cleaned_text = text.strip()
+        if task_type == "document":
+            prepared_text = f"title: {title or 'none'} | text: {cleaned_text}"
+        else:
+            prepared_text = f"task: question answering | query: {cleaned_text}"
+
+        endpoint = f"{self.base_url}/models/{self.model}:embedContent"
         payload = {
-            "model": self.model,
-            "input": text.strip(),
-            "truncate": True,
+            "content": {"parts": [{"text": prepared_text}]},
+            "output_dimensionality": self.output_dimensionality,
         }
 
         start_time = time.perf_counter()
-        timeout = httpx.Timeout(EMBEDDING_TIMEOUT_SECONDS)
+        timeout = httpx.Timeout(self.timeout_seconds)
 
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(endpoint, json=payload)
+                response = await client.post(
+                    endpoint,
+                    headers={"x-goog-api-key": self.api_key},
+                    json=payload,
+                )
                 duration = time.perf_counter() - start_time
 
                 if response.status_code == 404:
                     logger.error(
-                        f"Embedding model '{self.model}' not found (HTTP 404). "
-                        f"Run 'ollama pull {self.model}'."
+                        f"Gemini embedding model '{self.model}' was not found."
                     )
-                    raise OllamaEmbeddingModelNotFoundError(
+                    raise EmbeddingModelNotFoundError(
                         f"The configured embedding model '{self.model}' is not available."
                     )
 
@@ -90,15 +113,27 @@ class EmbeddingService:
 
                 data = response.json()
 
-                # Ollama /api/embed returns "embeddings": [[float, ...]]
+                # Gemini Embedding 2 returns embeddings with a nested values array.
                 embeddings = data.get("embeddings")
-                if isinstance(embeddings, list) and len(embeddings) > 0 and isinstance(embeddings[0], list):
-                    vector = embeddings[0]
-                elif isinstance(data.get("embedding"), list):
-                    vector = data["embedding"]
+                embedding = data.get("embedding")
+                if (
+                    isinstance(embeddings, list)
+                    and embeddings
+                    and isinstance(embeddings[0], dict)
+                    and isinstance(embeddings[0].get("values"), list)
+                ):
+                    vector = embeddings[0]["values"]
+                elif isinstance(embedding, dict) and isinstance(embedding.get("values"), list):
+                    vector = embedding["values"]
                 else:
-                    logger.error(f"Unexpected response structure from /api/embed: {data}")
-                    raise EmbeddingError("Received invalid embedding payload structure from Ollama.")
+                    logger.error("Gemini returned an invalid embedding response structure.")
+                    raise EmbeddingError("Received invalid embedding payload structure from Gemini.")
+
+                if len(vector) != self.output_dimensionality:
+                    raise EmbeddingError(
+                        "Gemini returned an embedding with an unexpected dimension: "
+                        f"expected {self.output_dimensionality}, got {len(vector)}."
+                    )
 
                 logger.debug(
                     f"Generated {len(vector)}-dim embedding with model '{self.model}' in {duration:.3f}s"
@@ -106,24 +141,24 @@ class EmbeddingService:
                 return vector
 
         except httpx.ConnectError as e:
-            logger.error(f"Ollama connection error during embedding generation at '{self.base_url}': {e}")
-            raise OllamaEmbeddingConnectionError(
-                f"Cannot connect to Ollama service at {self.base_url}."
+            logger.error(f"Gemini connection error during embedding generation at '{self.base_url}': {e}")
+            raise EmbeddingConnectionError(
+                f"Cannot connect to the Gemini API at {self.base_url}."
             ) from e
 
         except httpx.TimeoutException as e:
             duration = time.perf_counter() - start_time
             logger.error(f"Embedding request timed out after {duration:.2f}s")
-            raise OllamaEmbeddingTimeoutError(
-                f"Embedding generation timed out after {EMBEDDING_TIMEOUT_SECONDS}s."
+            raise EmbeddingTimeoutError(
+                f"Embedding generation timed out after {self.timeout_seconds}s."
             ) from e
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"Ollama embedding API returned HTTP error status {e.response.status_code}")
+            logger.error(f"Gemini embedding API returned HTTP error status {e.response.status_code}")
             raise EmbeddingError(
-                f"Ollama embedding API error (HTTP status {e.response.status_code})."
+                f"Gemini embedding API error (HTTP status {e.response.status_code})."
             ) from e
 
         except (KeyError, ValueError, TypeError) as e:
             logger.error(f"Failed to parse embedding response JSON: {e}")
-            raise EmbeddingError("Failed to parse embedding response from Ollama.") from e
+            raise EmbeddingError("Failed to parse embedding response from Gemini.") from e

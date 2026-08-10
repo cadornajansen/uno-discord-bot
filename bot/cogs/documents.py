@@ -14,9 +14,9 @@ from bot.services.documents import (
 from bot.services.document_sessions import DocumentSessionService
 from bot.services.ai import (
     AIService,
-    OllamaConnectionError,
-    OllamaModelNotFoundError,
-    OllamaTimeoutError,
+    AIConnectionError,
+    AIModelNotFoundError,
+    AITimeoutError,
     AIError,
 )
 from bot.utils.formatting import split_message, send_deferred_response
@@ -66,17 +66,27 @@ class DocumentsCog(commands.Cog):
         self.bot = bot
         settings = getattr(bot, "settings", None)
 
-        base_url = settings.ollama_base_url if settings else "http://localhost:11434"
-        model = settings.ollama_model if settings else "phi4-mini"
+        base_url = (
+            settings.assemblyai_llm_base_url
+            if settings
+            else "https://llm-gateway.assemblyai.com/v1"
+        )
+        model = settings.assemblyai_llm_model if settings else "gemini-3.5-flash"
         max_chars = settings.document_max_chars if settings else 20000
         ttl_minutes = settings.document_session_ttl_minutes if settings else 30
         self.max_size_mb = settings.document_max_size_mb if settings else 15
         self.max_size_bytes = self.max_size_mb * 1024 * 1024
 
-        timeout = settings.ollama_timeout_seconds if settings else 180.0
+        timeout = settings.assemblyai_llm_timeout_seconds if settings else 60.0
         self.document_service = DocumentService(max_chars=max_chars)
         self.session_service = DocumentSessionService(ttl_minutes=ttl_minutes)
-        self.ai_service = AIService(base_url=base_url, model=model, default_timeout=timeout)
+        self.ai_service = AIService(
+            api_key=settings.assemblyai_api_key if settings else "",
+            base_url=base_url,
+            model=model,
+            default_timeout=timeout,
+            max_tokens=settings.assemblyai_llm_max_tokens if settings else 400,
+        )
 
     @app_commands.command(
         name="analyze",
@@ -162,13 +172,13 @@ class DocumentsCog(commands.Cog):
                 content=f"I couldn't read this file ({filename}). It may be corrupted, encrypted, or image-only."
             )
 
-        except OllamaConnectionError:
-            logger.warning(f"User {interaction.user.id} '/analyze' failed: Ollama service offline.")
+        except AIConnectionError:
+            logger.warning(f"User {interaction.user.id} '/analyze' failed: AI gateway unavailable.")
             await interaction.edit_original_response(
-                content="The local AI service is unavailable right now."
+                content="The AI service is unavailable right now."
             )
 
-        except OllamaModelNotFoundError:
+        except AIModelNotFoundError:
             logger.warning(
                 f"User {interaction.user.id} '/analyze' failed: Model '{self.ai_service.model}' not found."
             )
@@ -176,7 +186,7 @@ class DocumentsCog(commands.Cog):
                 content="The configured AI model is not available."
             )
 
-        except OllamaTimeoutError:
+        except AITimeoutError:
             logger.warning(f"User {interaction.user.id} '/analyze' failed: Inference timeout.")
             await interaction.edit_original_response(
                 content="The AI service took too long to generate a document summary. Please try again later."
@@ -256,13 +266,13 @@ class DocumentsCog(commands.Cog):
 
             await send_deferred_response(interaction, answer_text)
 
-        except OllamaConnectionError:
-            logger.warning(f"User {interaction.user.id} '/docask' failed: Ollama service offline.")
+        except AIConnectionError:
+            logger.warning(f"User {interaction.user.id} '/docask' failed: AI gateway unavailable.")
             await interaction.edit_original_response(
-                content="The local AI service is unavailable right now."
+                content="The AI service is unavailable right now."
             )
 
-        except OllamaModelNotFoundError:
+        except AIModelNotFoundError:
             logger.warning(
                 f"User {interaction.user.id} '/docask' failed: Model '{self.ai_service.model}' not found."
             )
@@ -270,7 +280,7 @@ class DocumentsCog(commands.Cog):
                 content="The configured AI model is not available."
             )
 
-        except OllamaTimeoutError:
+        except AITimeoutError:
             logger.warning(f"User {interaction.user.id} '/docask' failed: Inference timeout.")
             await interaction.edit_original_response(
                 content="The AI service took too long to respond. Please try again later."

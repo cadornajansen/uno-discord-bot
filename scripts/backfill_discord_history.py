@@ -20,6 +20,9 @@ from bot.cogs.knowledge import should_index_message
 from bot.services.embeddings import EmbeddingService, EmbeddingError
 from bot.services.vector_store import VectorStore, VectorStoreError
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -61,8 +64,11 @@ async def run_backfill(channel_id_filter: int | None, limit: int | None) -> int:
         target_channel_ids = list(allowlist)
 
     embedding_service = EmbeddingService(
-        base_url=settings.ollama_base_url,
-        model=settings.ollama_embedding_model,
+        api_key=settings.gemini_api_key,
+        base_url=settings.gemini_embedding_base_url,
+        model=settings.gemini_embedding_model,
+        output_dimensionality=settings.gemini_embedding_dimensions,
+        timeout_seconds=settings.gemini_embedding_timeout_seconds,
     )
     vector_store = VectorStore(
         url=settings.qdrant_url,

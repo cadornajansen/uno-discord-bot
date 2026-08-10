@@ -31,8 +31,11 @@ async def run_search(query_text: str) -> int:
         return 1
 
     embedding_service = EmbeddingService(
-        base_url=settings.ollama_base_url,
-        model=settings.ollama_embedding_model,
+        api_key=settings.gemini_api_key,
+        base_url=settings.gemini_embedding_base_url,
+        model=settings.gemini_embedding_model,
+        output_dimensionality=settings.gemini_embedding_dimensions,
+        timeout_seconds=settings.gemini_embedding_timeout_seconds,
     )
     vector_store = VectorStore(
         url=settings.qdrant_url,
@@ -42,7 +45,7 @@ async def run_search(query_text: str) -> int:
     try:
         print(f"\nQuery: {query_text}\n")
 
-        # 1. Generate query embedding using configured Ollama embedding model
+        # 1. Generate a question-answering query embedding with Gemini.
         query_vector = await embedding_service.embed(query_text)
 
         # 2. Search nearest points in Qdrant collection

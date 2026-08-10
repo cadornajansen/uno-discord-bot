@@ -1,12 +1,13 @@
 import logging
 import time
-from typing import Optional
+from dataclasses import dataclass
+from typing import Any, Optional
 import httpx
 
 logger = logging.getLogger(__name__)
 
-# Default fallback timeout in seconds for local inference if unconfigured.
-DEFAULT_OLLAMA_TIMEOUT_SECONDS = 180.0
+# Default fallback timeout for the remote LLM gateway.
+DEFAULT_AI_TIMEOUT_SECONDS = 60.0
 
 DEFAULT_SYSTEM_PROMPT = (
     "You are Uno AI, a concise Discord class assistant.\n\n"
@@ -94,40 +95,65 @@ class AIError(Exception):
     pass
 
 
-class OllamaConnectionError(AIError):
-    """Raised when unable to connect to the local Ollama service."""
+class AIConfigurationError(AIError):
+    """Raised when required AI gateway configuration is missing."""
 
     pass
 
 
-class OllamaModelNotFoundError(AIError):
-    """Raised when the configured model is not found or not pulled in Ollama."""
+class AIConnectionError(AIError):
+    """Raised when unable to connect to the configured AI gateway."""
 
     pass
 
 
-class OllamaTimeoutError(AIError):
-    """Raised when local AI generation exceeds the configured timeout."""
+class AIModelNotFoundError(AIError):
+    """Raised when the configured gateway model is unavailable."""
 
     pass
 
 
-class OllamaAPIError(AIError):
-    """Raised when Ollama returns an unexpected HTTP error status or payload."""
+class AITimeoutError(AIError):
+    """Raised when AI generation exceeds the configured timeout."""
+
+
+class AIAPIError(AIError):
+    """Raised when the gateway returns an unexpected status or payload."""
 
     pass
+
+
+@dataclass(frozen=True)
+class AIUsage:
+    """Token counts returned by the gateway, when available."""
+
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
+
+
+@dataclass(frozen=True)
+class AIResponse:
+    """A gateway response that may contain text, tool calls, or both."""
+
+    content: str | None
+    tool_calls: tuple[dict[str, Any], ...]
+    request_id: str
+    usage: AIUsage
 
 
 class AIService:
-    """Service handling direct HTTP communication with local Ollama instance."""
+    """Generate chat responses through AssemblyAI's OpenAI-compatible gateway."""
 
     def __init__(
         self,
-        base_url: str = "http://localhost:11434",
-        model: str = "phi4-mini",
-        default_timeout: float = DEFAULT_OLLAMA_TIMEOUT_SECONDS,
+        api_key: str = "",
+        base_url: str = "https://llm-gateway.assemblyai.com/v1",
+        model: str = "gemini-3.5-flash",
+        default_timeout: float = DEFAULT_AI_TIMEOUT_SECONDS,
         max_tokens: int = 400,
     ):
+        self.api_key = api_key.strip()
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.default_timeout = default_timeout
@@ -141,9 +167,7 @@ class AIService:
         timeout_seconds: Optional[float] = None,
         max_tokens: Optional[int] = None,
     ) -> str:
-        """Send a prompt to the local Ollama chat API and return the response."""
-        endpoint = f"{self.base_url}/api/chat"
-
+        """Send a chat completion request through the AssemblyAI LLM Gateway."""
         if system_prompt:
             sys_prompt = system_prompt
         elif context:
@@ -155,74 +179,142 @@ class AIService:
         if context:
             user_content = f"Reference Context:\n{context}\n\nUser Question:\n{question}"
 
-        payload = {
-            "model": self.model,
-            "messages": [
+        response = await self.complete(
+            messages=[
                 {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": user_content},
             ],
-            "stream": False,
-            "options": {
-                "num_predict": max_tokens if max_tokens is not None else self.max_tokens
-            },
+            timeout_seconds=timeout_seconds,
+            max_tokens=max_tokens,
+        )
+        if response.content is None:
+            raise AIAPIError("The AI gateway returned no text response.")
+        return response.content
+
+    async def complete(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+        timeout_seconds: float | None = None,
+        max_tokens: int | None = None,
+    ) -> AIResponse:
+        """Request a completion and preserve tool calls plus safe telemetry."""
+        if not self.api_key:
+            raise AIConfigurationError("ASSEMBLYAI_API_KEY is missing or empty.")
+
+        endpoint = f"{self.base_url}/chat/completions"
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
         }
+        if tools:
+            payload["tools"] = tools
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
 
         effective_timeout = timeout_seconds if timeout_seconds is not None else self.default_timeout
-        logger.info(
-            f"AI request started with model '{self.model}' (RAG context: {bool(context)}, timeout: {effective_timeout}s)"
-        )
+        logger.info("AI request started (model=%s, timeout=%.1fs)", self.model, effective_timeout)
         start_time = time.perf_counter()
 
         timeout = httpx.Timeout(effective_timeout)
 
         try:
             async with httpx.AsyncClient(timeout=timeout) as client:
-                response = await client.post(endpoint, json=payload)
+                response = await client.post(
+                    endpoint,
+                    headers={"authorization": self.api_key},
+                    json=payload,
+                )
 
                 duration = time.perf_counter() - start_time
 
                 if response.status_code == 404:
                     logger.error(
-                        f"Ollama model '{self.model}' not found (HTTP 404). Run 'ollama pull {self.model}'."
+                        f"AssemblyAI gateway model '{self.model}' was not found."
                     )
-                    raise OllamaModelNotFoundError(
+                    raise AIModelNotFoundError(
                         f"The configured AI model '{self.model}' is not available."
                     )
 
                 response.raise_for_status()
 
                 data = response.json()
-                content = data.get("message", {}).get("content")
+                choices = data.get("choices")
+                message = choices[0].get("message", {}) if isinstance(choices, list) and choices else {}
+                content = message.get("content")
+                tool_calls_raw = message.get("tool_calls", [])
+                if content is not None and not isinstance(content, str):
+                    logger.error("AssemblyAI gateway returned an invalid response structure.")
+                    raise AIAPIError("Received an invalid response structure from the AI gateway.")
+                if not isinstance(tool_calls_raw, list):
+                    raise AIAPIError("Received invalid tool calls from the AI gateway.")
+                tool_calls = tuple(call for call in tool_calls_raw if isinstance(call, dict))
+                if content is None and not tool_calls:
+                    raise AIAPIError("Received an invalid response structure from the AI gateway.")
 
-                if not isinstance(content, str):
-                    logger.error(f"Unexpected response payload structure from Ollama: {data}")
-                    raise OllamaAPIError("Received an invalid response structure from Ollama.")
+                usage_raw = data.get("usage", {})
+                usage = AIUsage(
+                    prompt_tokens=_optional_int(usage_raw.get("prompt_tokens", usage_raw.get("input_tokens"))),
+                    completion_tokens=_optional_int(usage_raw.get("completion_tokens", usage_raw.get("output_tokens"))),
+                    total_tokens=_optional_int(usage_raw.get("total_tokens")),
+                )
+                request_id = str(
+                    data.get("request_id")
+                    or data.get("id")
+                    or response.headers.get("x-request-id", "unknown")
+                )
+                tool_names = [
+                    str(call.get("function", {}).get("name", "unknown"))
+                    for call in tool_calls
+                ]
 
-                logger.info(f"AI request completed in {duration:.2f}s")
-                return content.strip()
+                logger.info(
+                    "AI request completed (request_id=%s, model=%s, latency_ms=%d, tools=%s, prompt_tokens=%s, completion_tokens=%s, total_tokens=%s)",
+                    request_id,
+                    self.model,
+                    round(duration * 1000),
+                    tool_names,
+                    usage.prompt_tokens,
+                    usage.completion_tokens,
+                    usage.total_tokens,
+                )
+                return AIResponse(
+                    content=content.strip() if isinstance(content, str) else None,
+                    tool_calls=tool_calls,
+                    request_id=request_id,
+                    usage=usage,
+                )
 
         except httpx.ConnectError as e:
-            logger.error(f"Ollama connection failure at '{self.base_url}': {e}")
-            raise OllamaConnectionError(
-                f"Cannot connect to Ollama service at {self.base_url}."
+            logger.error(f"AI gateway connection failure at '{self.base_url}': {e}")
+            raise AIConnectionError(
+                f"Cannot connect to the AI gateway at {self.base_url}."
             ) from e
 
         except httpx.TimeoutException as e:
             duration = time.perf_counter() - start_time
-            logger.error(f"Ollama request timed out after {duration:.2f}s (configured limit: {effective_timeout}s)")
-            raise OllamaTimeoutError(
+            logger.error(f"AI request timed out after {duration:.2f}s (configured limit: {effective_timeout}s)")
+            raise AITimeoutError(
                 f"AI request timed out after {effective_timeout} seconds."
             ) from e
 
         except httpx.HTTPStatusError as e:
-            logger.error(f"Ollama returned HTTP error status {e.response.status_code}")
-            raise OllamaAPIError(
-                f"Ollama API error (HTTP status {e.response.status_code})."
+            request_id, validation_errors = _safe_gateway_error_details(e.response)
+            logger.error(
+                "AI gateway returned HTTP error (status=%s, request_id=%s, validation_errors=%s)",
+                e.response.status_code,
+                request_id,
+                validation_errors,
+            )
+            raise AIAPIError(
+                f"AI gateway error (HTTP status {e.response.status_code})."
             ) from e
 
-        except (KeyError, ValueError) as e:
-            logger.error(f"Failed to parse Ollama JSON response: {e}")
-            raise OllamaAPIError("Failed to parse response payload from Ollama.") from e
+        except (KeyError, ValueError, TypeError) as e:
+            logger.error(f"Failed to parse AI gateway response: {e}")
+            raise AIAPIError("Failed to parse the AI gateway response.") from e
 
     async def summarize_document(
         self,
@@ -230,7 +322,7 @@ class AIService:
         filename: str,
         timeout_seconds: Optional[float] = None,
     ) -> str:
-        """Summarize extracted document content using local Ollama model."""
+        """Summarize extracted document content using the configured gateway model."""
         user_prompt = (
             f"Please analyze and summarize the following document.\n\n"
             f"Document Filename: {filename}\n\n"
@@ -241,7 +333,6 @@ class AIService:
             system_prompt=DOCUMENT_SUMMARY_SYSTEM_PROMPT,
             timeout_seconds=timeout_seconds,
         )
-
     async def answer_document_question(
         self,
         document: str,
@@ -270,3 +361,29 @@ class AIService:
             system_prompt=DOCUMENT_QNA_SYSTEM_PROMPT,
             timeout_seconds=timeout_seconds,
         )
+
+
+def _optional_int(value: Any) -> int | None:
+    """Return an integer telemetry value without failing the user request."""
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _safe_gateway_error_details(response: httpx.Response) -> tuple[str, list[str]]:
+    """Extract request identifiers and validation errors without logging prompts."""
+    try:
+        data = response.json()
+    except (ValueError, TypeError):
+        return response.headers.get("x-request-id", "unknown"), []
+    if not isinstance(data, dict):
+        return response.headers.get("x-request-id", "unknown"), []
+
+    request_id = str(
+        data.get("request_id")
+        or response.headers.get("x-request-id", "unknown")
+    )
+    metadata = data.get("metadata")
+    errors = metadata.get("errors", []) if isinstance(metadata, dict) else []
+    safe_errors = [str(error)[:300] for error in errors if isinstance(error, str)]
+    if not safe_errors and isinstance(data.get("message"), str):
+        safe_errors = [str(data["message"])[:300]]
+    return request_id, safe_errors

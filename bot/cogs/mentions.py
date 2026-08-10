@@ -6,10 +6,8 @@ from typing import Literal
 import discord
 from discord.ext import commands
 
-from bot.services.ai import AIService, AIError
-from bot.services.embeddings import EmbeddingService
-from bot.services.vector_store import VectorStore
-from bot.services.rag import RAGService, format_context_block
+from bot.services.ai import AIError
+from bot.utils.formatting import build_assignment_embeds
 
 logger = logging.getLogger(__name__)
 
@@ -104,50 +102,12 @@ BARE_MENTION_REPLIES = [
     "Listening.",
 ]
 
-REACTION_POOL = ["👀", "✅", "🤖", "👋", "💡", "🫡"]
-
-
 class MentionsCog(commands.Cog):
     """Handles mentions and replies using only the context each message needs."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-
-        settings = getattr(bot, "settings", None)
-        base_url = settings.ollama_base_url if settings else "http://localhost:11434"
-        model = settings.ollama_model if settings else "phi4-mini"
-        embed_model = settings.ollama_embedding_model if settings else "embeddinggemma"
-        qdrant_url = settings.qdrant_url if settings else "http://localhost:6333"
-        qdrant_coll = settings.qdrant_collection if settings else "discord_messages"
-        top_k = settings.rag_top_k if settings else 5
-        min_score = settings.rag_min_score if settings else 0.50
-        max_context_results = getattr(settings, "rag_max_context_results", 3) if settings else 3
-        homework_channel_ids = (
-            settings.ocr_channel_ids
-            if settings and isinstance(getattr(settings, "ocr_channel_ids", None), (frozenset, set))
-            else frozenset()
-        )
-        timeout = settings.ollama_timeout_seconds if settings else 180.0
-        max_tokens = getattr(settings, "ollama_max_tokens", 400) if settings else 400
-
-        self.ai_service = AIService(
-            base_url=base_url,
-            model=model,
-            default_timeout=timeout,
-            max_tokens=max_tokens,
-        )
-        self.embedding_service = EmbeddingService(base_url=base_url, model=embed_model)
-        self.vector_store = VectorStore(url=qdrant_url, collection_name=qdrant_coll)
-
-        self.rag_service = RAGService(
-            ai_service=self.ai_service,
-            embedding_service=self.embedding_service,
-            vector_store=self.vector_store,
-            top_k=top_k,
-            min_score=min_score,
-            max_context_results=max_context_results,
-            homework_channel_ids=homework_channel_ids,
-        )
+        self.chat_orchestrator = bot.chat_orchestrator
 
     async def _get_referenced_message(self, message: discord.Message) -> discord.Message | None:
         """Fetch and return the referenced message if this is a reply."""
@@ -201,12 +161,6 @@ class MentionsCog(commands.Cog):
         if not is_mention and not is_reply_to_uno:
             return
 
-        # Add a friendly reaction
-        try:
-            await message.add_reaction(random.choice(REACTION_POOL))
-        except (discord.Forbidden, discord.HTTPException):
-            pass
-
         # Clean the user text (strip the bot mention string like @Uno AI)
         clean_text = message.clean_content
         if self.bot.user:
@@ -232,7 +186,7 @@ class MentionsCog(commands.Cog):
         clean_text: str,
         ref_msg: discord.Message | None,
     ) -> None:
-        """Generate a reply with direct, nearby, or class-knowledge context."""
+        """Generate a reply through the shared per-user chat workflow."""
         style_acknowledgement = style_feedback_acknowledgement(clean_text)
         if style_acknowledgement:
             try:
@@ -246,88 +200,53 @@ class MentionsCog(commands.Cog):
 
         context_mode = choose_context_mode(clean_text)
         channel_history_text = ""
-        if context_mode in {"nearby", "rag"}:
+        if context_mode == "nearby":
             channel_history_text = await self._fetch_recent_channel_history(
                 message,
                 limit=3,
                 before=ref_msg,
             )
-
-        # Search Qdrant only for explicit class-information questions.
-        search_query = clean_text
-        if ref_msg and ref_msg.clean_content:
-            search_query = f"{clean_text} {ref_msg.clean_content}"
-
-        rag_context_text = ""
-        if context_mode == "rag":
-            try:
-                query_vector = await self.embedding_service.embed(search_query)
-                raw_results = await self.vector_store.search_similar(
-                    query_vector,
-                    limit=5,
-                    guild_id=message.guild.id,
-                )
-                valid_results = [
-                    result
-                    for result in raw_results
-                    if result.get("score", 0.0) >= self.rag_service.min_score
-                ]
-                valid_results.sort(
-                    key=lambda result: result.get("score", 0.0),
-                    reverse=True,
-                )
-                if valid_results:
-                    rag_context_text = format_context_block(
-                        valid_results[: self.rag_service.max_context_results]
-                    )
-            except Exception as e:
-                logger.warning("[mentions] Qdrant search failed during reply: %s", e)
-
-        # 3. Assemble prompt parts
-        prompt_parts = []
-        if channel_history_text:
-            prompt_parts.append(
-                f"Nearby Conversation (up to 3 messages before the reply target):\n"
-                f"{channel_history_text}"
-            )
-        if rag_context_text:
-            prompt_parts.append(
-                f"Retrieved Class Knowledge & OCR Notes:\n{rag_context_text}"
-            )
-
-        ref_snippet = (
-            f"Directly replying to Uno AI: \"{ref_msg.clean_content.strip()}\"\n"
-            if ref_msg and ref_msg.clean_content
-            else ""
-        )
-        prompt_parts.append(
-            f"{ref_snippet}Current User Message from {message.author.display_name}:\n{clean_text or '(Replied without text)'}"
-        )
-
-        full_prompt = "\n\n".join(prompt_parts)
+        user_input_text = clean_text or "(Replied without text)"
 
         logger.info(
             "[mentions] Adaptive reply for %s in #%s "
-            "(mode=%s, history_len=%d, rag_items=%d)",
+            "(mode=%s, nearby_history_len=%d)",
             message.author,
             message.channel,
             context_mode,
             len(channel_history_text.splitlines()),
-            1 if rag_context_text else 0,
         )
 
         try:
             async with message.channel.typing():
-                response = await self.ai_service.ask(
-                    question=full_prompt,
-                    system_prompt=CONVERSATION_SYSTEM_PROMPT,
-                    max_tokens=220 if context_mode == "rag" else 120,
+                response = await self.chat_orchestrator.chat(
+                    user_input_text,
+                    guild_id=message.guild.id,
+                    channel_id=message.channel.id,
+                    user_id=message.author.id,
+                    user_display_name=message.author.display_name,
+                    channel_name=getattr(message.channel, "name", "unknown"),
+                    reply_context=(
+                        ref_msg.clean_content.strip()
+                        if ref_msg and ref_msg.clean_content
+                        else None
+                    ),
+                    nearby_context=channel_history_text or None,
                 )
-            await message.reply(response)
+            embeds = build_assignment_embeds(
+                response.assignment_items,
+                response.current_datetime,
+            )
+            if embeds:
+                await message.reply(embed=embeds[0])
+                for embed in embeds[1:]:
+                    await message.channel.send(embed=embed)
+            else:
+                await message.reply(response.content)
         except AIError as e:
             logger.warning("[mentions] AI conversational reply error: %s", e)
             fallback = random.choice([
-                "My local AI brain encountered an error processing context. Try asking again!",
+                "My AI connection hit an error processing that. Try asking again.",
                 "Hmm, I had trouble reading the channel context. Mind trying again?",
             ])
             try:

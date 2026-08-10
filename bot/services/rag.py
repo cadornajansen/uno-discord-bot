@@ -63,6 +63,7 @@ HOMEWORK_DETAIL_TERMS = (
     "collect",
 )
 DATE_TERMS = (
+    "due",
     "today",
     "tomorrow",
     "next week",
@@ -85,6 +86,18 @@ DATE_TERMS = (
     "october",
     "november",
     "december",
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "sept",
+    "oct",
+    "nov",
+    "dec",
 )
 
 
@@ -148,43 +161,6 @@ def format_context_block(results: list[dict[str, Any]]) -> str:
             )
 
     return "\n\n".join(entries)
-
-
-def format_sources_section(results: list[dict[str, Any]]) -> str:
-    """Format lightweight, compact clickable Discord message links from retrieved results.
-
-    Args:
-        results: List of result dicts containing 'payload'.
-
-    Returns:
-        Formatted source citation string like:
-        "Sources: [Message 1](https://discord.com/channels/100/200/300), [Message 2](...)"
-        or empty string if no valid sources exist.
-    """
-    links = []
-    seen = set()
-    counter = 1
-
-    for item in results:
-        payload = item.get("payload", {})
-        guild_id = payload.get("guild_id")
-        channel_id = payload.get("channel_id")
-        message_id = payload.get("message_id")
-
-        if guild_id and channel_id and message_id:
-            key = (str(guild_id), str(channel_id), str(message_id))
-            if key not in seen:
-                seen.add(key)
-                url = f"https://discord.com/channels/{key[0]}/{key[1]}/{key[2]}"
-                links.append(f"[Message {counter}]({url})")
-                counter += 1
-                if len(links) == 3:
-                    break
-
-    if not links:
-        return ""
-
-    return f"Sources: {', '.join(links)}"
 
 
 def format_structured_homework_message(
@@ -303,7 +279,7 @@ class RAGService:
             guild_id: Current Discord guild ID for strict server-scoped vector filtering.
 
         Returns:
-            Grounded LLM response string, with optional lightweight sources if context was used.
+            Grounded LLM response string without retrieval metadata.
 
         Raises:
             AIError: If LLM chat generation fails.
@@ -410,7 +386,6 @@ class RAGService:
         # 5. Generate response with RAG context or plain AI fallback.
         if valid_results:
             context_block = format_context_block(valid_results)
-            sources_section = format_sources_section(valid_results)
 
             if (
                 recent_homework_lookup_used
@@ -429,13 +404,12 @@ class RAGService:
                         )
                         break
                     if structured_answer:
-                        source = format_sources_section([result])
                         duration = time.perf_counter() - start_time
                         logger.info(
                             f"RAG answer completed with deterministic homework formatting "
                             f"in {duration:.2f}s"
                         )
-                        return f"{structured_answer}\n\n{source}" if source else structured_answer
+                        return structured_answer
 
             if homework_query and self.academic_schedule_service is not None:
                 try:
@@ -469,9 +443,6 @@ class RAGService:
                     question,
                     context=context_block,
                 )
-
-            if sources_section:
-                answer_text = f"{answer_text}\n\n{sources_section}"
 
         else:
             logger.info("No valid context passed minimum score threshold. Proceeding with plain AI fallback.")

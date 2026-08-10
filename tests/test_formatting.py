@@ -1,10 +1,67 @@
 import pytest
 from bot.utils.formatting import (
     MAX_DISCORD_CHUNK_CHARS,
+    build_assignment_embeds,
     split_message,
     format_latency,
     format_timestamp,
 )
+
+
+def test_build_assignment_embeds_groups_tasks_by_subject():
+    content = (
+        "**Latest Homework & Requirements**\n\n"
+        "**ITC — Introduction to Computing**\n"
+        "*Professor · Lecture · Room 1*\n"
+        "- Finish Activity 1 — No due date stated\n\n"
+        "**DS1 — Discrete Structures 1**\n"
+        "*Professor · Lecture · Room 2*\n"
+        "- Review for Wednesday"
+    )
+
+    embeds = build_assignment_embeds(
+        [{"content": content}],
+        "2026-08-10T20:00+08:00",
+    )
+
+    assert len(embeds) == 1
+    assert embeds[0].title == "Latest Assignments"
+    assert [field.name for field in embeds[0].fields] == [
+        "ITC — Introduction to Computing",
+        "DS1 — Discrete Structures 1",
+    ]
+    assert "• Finish Activity 1" in embeds[0].fields[0].value
+    assert embeds[0].footer.text == "Checked Aug 10, 2026 at 08:00 PM · Asia/Manila"
+
+
+def test_send_deferred_chat_response_uses_embed_for_assignments():
+    """Structured assignment data replaces the deferred text with an embed."""
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+    from bot.utils.formatting import send_deferred_chat_response
+
+    async def _test():
+        interaction = MagicMock()
+        interaction.edit_original_response = AsyncMock()
+        interaction.followup.send = AsyncMock()
+        content = (
+            "**Latest Homework & Requirements**\n\n"
+            "**ITC — Introduction to Computing**\n"
+            "- Finish Activity 1"
+        )
+
+        await send_deferred_chat_response(
+            interaction,
+            content,
+            ({"content": content},),
+        )
+
+        call = interaction.edit_original_response.await_args
+        assert call.kwargs["content"] is None
+        assert call.kwargs["embed"].title == "Latest Assignments"
+        interaction.followup.send.assert_not_awaited()
+
+    asyncio.run(_test())
 
 
 def test_split_message_empty():

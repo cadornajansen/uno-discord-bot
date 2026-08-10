@@ -19,20 +19,41 @@ def test_rag_and_generation_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DISCORD_TOKEN", "mock_token")
     monkeypatch.delenv("RAG_MIN_SCORE", raising=False)
     monkeypatch.delenv("RAG_MAX_CONTEXT_RESULTS", raising=False)
-    monkeypatch.delenv("OLLAMA_MAX_TOKENS", raising=False)
+    monkeypatch.delenv("ASSEMBLYAI_LLM_MAX_TOKENS", raising=False)
+    monkeypatch.delenv("GEMINI_EMBEDDING_DIMENSIONS", raising=False)
 
     settings = load_settings()
 
     assert settings.rag_min_score == 0.50
     assert settings.rag_max_context_results == 3
-    assert settings.ollama_max_tokens == 400
+    assert settings.assemblyai_llm_max_tokens == 400
+    assert settings.assemblyai_llm_model == "gemini-3.5-flash"
+    assert settings.gemini_embedding_model == "gemini-embedding-2"
+    assert settings.gemini_embedding_dimensions == 768
+    assert settings.chat_memory_max_turns == 4
+    assert settings.chat_memory_ttl_minutes == 30
+    assert settings.chat_memory_max_tokens == 1200
+    assert settings.chat_max_tool_rounds == 2
+
+
+def test_ai_provider_urls_can_be_configured(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Generation and embedding providers are independently configurable."""
+    monkeypatch.setenv("DISCORD_TOKEN", "mock_token")
+    monkeypatch.setenv("ASSEMBLYAI_LLM_BASE_URL", "https://gateway.example.com/v1/")
+    monkeypatch.setenv("GEMINI_EMBEDDING_BASE_URL", "https://gemini.example.com/v1beta/")
+
+    settings = load_settings()
+
+    assert settings.assemblyai_llm_base_url == "https://gateway.example.com/v1"
+    assert settings.gemini_embedding_base_url == "https://gemini.example.com/v1beta"
 
 
 @pytest.mark.parametrize(
     ("name", "value", "message"),
     [
         ("RAG_MAX_CONTEXT_RESULTS", "0", "RAG_MAX_CONTEXT_RESULTS"),
-        ("OLLAMA_MAX_TOKENS", "none", "OLLAMA_MAX_TOKENS"),
+        ("ASSEMBLYAI_LLM_MAX_TOKENS", "none", "ASSEMBLYAI_LLM_MAX_TOKENS"),
+        ("GEMINI_EMBEDDING_DIMENSIONS", "0", "GEMINI_EMBEDDING_DIMENSIONS"),
     ],
 )
 def test_invalid_positive_integer_settings(

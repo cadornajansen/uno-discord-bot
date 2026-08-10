@@ -1,9 +1,13 @@
 from datetime import datetime
+import re
 from typing import Optional
 import discord
 
 
 MAX_DISCORD_CHUNK_CHARS = 1900
+ASSIGNMENT_HEADING = re.compile(r"^\*\*(.+?)\s+—\s+(.+?)\*\*$")
+MAX_EMBED_FIELD_CHARS = 1024
+MAX_FIELDS_PER_ASSIGNMENT_EMBED = 8
 
 
 def format_latency(latency_seconds: float) -> str:
@@ -141,3 +145,99 @@ async def send_deferred_response(
     await interaction.edit_original_response(content=chunks[0])
     for chunk in chunks[1:]:
         await interaction.followup.send(content=chunk)
+
+
+def build_assignment_embeds(
+    items: tuple[dict[str, object], ...] | list[dict[str, object]],
+    current_datetime: str | None = None,
+) -> list[discord.Embed]:
+    """Turn a trusted structured homework summary into scan-friendly embeds."""
+    sections: list[tuple[str, str]] = []
+    for item in items:
+        sections.extend(_parse_assignment_sections(str(item.get("content", ""))))
+
+    if not sections:
+        return []
+
+    pages = [
+        sections[index : index + MAX_FIELDS_PER_ASSIGNMENT_EMBED]
+        for index in range(0, len(sections), MAX_FIELDS_PER_ASSIGNMENT_EMBED)
+    ]
+    embeds: list[discord.Embed] = []
+    for page_number, page in enumerate(pages, start=1):
+        title = "Latest Assignments"
+        if len(pages) > 1:
+            title += f" · {page_number}/{len(pages)}"
+        embed = discord.Embed(
+            title=title,
+            description="Organized by subject from the latest approved homework post.",
+            color=discord.Color.blurple(),
+        )
+        for heading, details in page:
+            embed.add_field(
+                name=heading[:256],
+                value=_truncate_embed_field(details),
+                inline=False,
+            )
+        embed.set_footer(text=_assignment_footer(current_datetime))
+        embeds.append(embed)
+    return embeds
+
+
+async def send_deferred_chat_response(
+    interaction: "discord.Interaction",
+    content: str,
+    assignment_items: tuple[dict[str, object], ...] = (),
+    current_datetime: str | None = None,
+) -> None:
+    """Send either assignment embeds or the normal chunked text response."""
+    embeds = build_assignment_embeds(assignment_items, current_datetime)
+    if not embeds:
+        await send_deferred_response(interaction, content)
+        return
+
+    await interaction.edit_original_response(content=None, embed=embeds[0])
+    for embed in embeds[1:]:
+        await interaction.followup.send(embed=embed)
+
+
+def _parse_assignment_sections(content: str) -> list[tuple[str, str]]:
+    """Parse the normalized homework Markdown emitted by the RAG formatter."""
+    sections: list[tuple[str, str]] = []
+    heading: str | None = None
+    details: list[str] = []
+
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        match = ASSIGNMENT_HEADING.match(line)
+        if match and line != "**Latest Homework & Requirements**":
+            if heading and details:
+                sections.append((heading, "\n".join(details)))
+            heading = f"{match.group(1)} — {match.group(2)}"
+            details = []
+        elif heading and line:
+            details.append(f"• {line[2:]}" if line.startswith("- ") else line)
+
+    if heading and details:
+        sections.append((heading, "\n".join(details)))
+    return sections
+
+
+def _truncate_embed_field(value: str) -> str:
+    """Keep a field within Discord's limit without cutting a word abruptly."""
+    if len(value) <= MAX_EMBED_FIELD_CHARS:
+        return value
+    cutoff = value.rfind("\n", 0, MAX_EMBED_FIELD_CHARS - 1)
+    if cutoff < 1:
+        cutoff = MAX_EMBED_FIELD_CHARS - 1
+    return value[:cutoff].rstrip() + "…"
+
+
+def _assignment_footer(current_datetime: str | None) -> str:
+    if current_datetime:
+        try:
+            checked_at = datetime.fromisoformat(current_datetime)
+            return f"Checked {checked_at.strftime('%b %d, %Y at %I:%M %p')} · Asia/Manila"
+        except ValueError:
+            pass
+    return "Latest approved homework post · Asia/Manila"

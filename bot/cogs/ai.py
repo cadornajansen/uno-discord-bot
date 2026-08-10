@@ -1,21 +1,15 @@
 import logging
-from pathlib import Path
 import discord
 from discord import app_commands
 from discord.ext import commands
 
 from bot.services.ai import (
-    AIService,
-    OllamaConnectionError,
-    OllamaModelNotFoundError,
-    OllamaTimeoutError,
+    AIConnectionError,
+    AIModelNotFoundError,
+    AITimeoutError,
     AIError,
 )
-from bot.services.embeddings import EmbeddingService
-from bot.services.academic_schedule import AcademicScheduleService
-from bot.services.vector_store import VectorStore
-from bot.services.rag import RAGService
-from bot.utils.formatting import split_message, send_deferred_response
+from bot.utils.formatting import send_deferred_chat_response
 
 logger = logging.getLogger(__name__)
 
@@ -28,52 +22,7 @@ class AICog(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-
-        settings = getattr(bot, "settings", None)
-        base_url = settings.ollama_base_url if settings else "http://localhost:11434"
-        model = settings.ollama_model if settings else "phi4-mini"
-        embed_model = settings.ollama_embedding_model if settings else "embeddinggemma"
-        qdrant_url = settings.qdrant_url if settings else "http://localhost:6333"
-        qdrant_coll = settings.qdrant_collection if settings else "discord_messages"
-        top_k = settings.rag_top_k if settings else 5
-        min_score = settings.rag_min_score if settings else 0.50
-        max_context_results = (
-            getattr(settings, "rag_max_context_results", 3) if settings else 3
-        )
-        homework_channel_ids = (
-            settings.ocr_channel_ids
-            if settings
-            and isinstance(getattr(settings, "ocr_channel_ids", None), (frozenset, set))
-            else frozenset()
-        )
-
-        timeout = settings.ollama_timeout_seconds if settings else 180.0
-        max_tokens = getattr(settings, "ollama_max_tokens", 400) if settings else 400
-        ai_service = AIService(
-            base_url=base_url,
-            model=model,
-            default_timeout=timeout,
-            max_tokens=max_tokens,
-        )
-        embedding_service = EmbeddingService(base_url=base_url, model=embed_model)
-        vector_store = VectorStore(url=qdrant_url, collection_name=qdrant_coll)
-        academic_schedule_service = AcademicScheduleService(
-            data_dir=Path("data/academics"),
-            school_year=settings.academic_school_year if settings else "2026-2027",
-            semester=settings.academic_semester if settings else 1,
-            tz_name=settings.academic_timezone if settings else "Asia/Manila",
-        )
-
-        self.rag_service = RAGService(
-            ai_service=ai_service,
-            embedding_service=embedding_service,
-            vector_store=vector_store,
-            top_k=top_k,
-            min_score=min_score,
-            max_context_results=max_context_results,
-            homework_channel_ids=frozenset(homework_channel_ids),
-            academic_schedule_service=academic_schedule_service,
-        )
+        self.chat_orchestrator = bot.chat_orchestrator
 
     @app_commands.command(name="ask", description="Ask the AI assistant a question grounded in class context.")
     @app_commands.describe(question="The question or prompt to ask the AI assistant.")
@@ -108,32 +57,41 @@ class AICog(commands.Cog):
         await interaction.response.defer()
 
         try:
-            response_text = await self.rag_service.answer(
+            response = await self.chat_orchestrator.chat(
                 cleaned_question,
                 guild_id=interaction.guild.id,
+                channel_id=interaction.channel.id,
+                user_id=interaction.user.id,
+                user_display_name=interaction.user.display_name,
+                channel_name=getattr(interaction.channel, "name", "unknown"),
             )
 
-            await send_deferred_response(interaction, response_text)
+            await send_deferred_chat_response(
+                interaction,
+                response.content,
+                response.assignment_items,
+                response.current_datetime,
+            )
 
-        except OllamaConnectionError:
+        except AIConnectionError:
             logger.warning(
-                f"User {interaction.user.id} '/ask' failed: Ollama service offline."
+                f"User {interaction.user.id} '/ask' failed: AI gateway unavailable."
             )
             await interaction.edit_original_response(
-                content="The local AI service is unavailable right now."
+                content="The AI service is unavailable right now."
             )
 
-        except OllamaModelNotFoundError:
+        except AIModelNotFoundError:
             logger.warning(
-                f"User {interaction.user.id} '/ask' failed: Model '{self.rag_service.ai_service.model}' not found."
+                f"User {interaction.user.id} '/ask' failed: Model '{self.chat_orchestrator.ai_service.model}' not found."
             )
             await interaction.edit_original_response(
                 content="The configured AI model is not available."
             )
 
-        except OllamaTimeoutError:
+        except AITimeoutError:
             logger.warning(
-                f"User {interaction.user.id} '/ask' failed: Local inference timed out."
+                f"User {interaction.user.id} '/ask' failed: AI gateway timed out."
             )
             await interaction.edit_original_response(
                 content="The AI service took too long to respond. Please try again later."
@@ -155,6 +113,19 @@ class AICog(commands.Cog):
             await interaction.edit_original_response(
                 content="Something went wrong while running this command."
             )
+
+    @app_commands.command(name="reset-chat", description="Clear your Uno AI conversation memory in this channel.")
+    async def reset_chat(self, interaction: discord.Interaction) -> None:
+        if interaction.guild is None or interaction.channel is None:
+            await interaction.response.send_message("This command works inside a server.", ephemeral=True)
+            return
+        cleared = self.chat_orchestrator.clear_memory(
+            interaction.guild.id,
+            interaction.channel.id,
+            interaction.user.id,
+        )
+        message = "Your chat memory for this channel was cleared." if cleared else "You have no saved chat memory in this channel."
+        await interaction.response.send_message(message, ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:
