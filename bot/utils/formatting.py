@@ -9,6 +9,41 @@ ASSIGNMENT_HEADING = re.compile(r"^\*\*(.+?)\s+—\s+(.+?)\*\*$")
 MAX_EMBED_FIELD_CHARS = 1024
 MAX_FIELDS_PER_ASSIGNMENT_EMBED = 8
 
+LATEX_SYMBOLS = {
+    r"\alpha": "α",
+    r"\beta": "β",
+    r"\gamma": "γ",
+    r"\delta": "δ",
+    r"\epsilon": "ε",
+    r"\theta": "θ",
+    r"\lambda": "λ",
+    r"\mu": "μ",
+    r"\pi": "π",
+    r"\rho": "ρ",
+    r"\sigma": "σ",
+    r"\phi": "φ",
+    r"\omega": "ω",
+    r"\Delta": "Δ",
+    r"\Sigma": "Σ",
+    r"\sum": "Σ",
+    r"\nabla": "∇",
+    r"\ell": "ℓ",
+    r"\infty": "∞",
+    r"\times": "×",
+    r"\cdot": "·",
+    r"\leq": "≤",
+    r"\geq": "≥",
+    r"\neq": "≠",
+    r"\approx": "≈",
+    r"\in": "∈",
+    r"\to": "→",
+    r"\sim": "~",
+}
+
+MARKDOWN_TABLE_DIVIDER = re.compile(
+    r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$"
+)
+
 
 def format_latency(latency_seconds: float) -> str:
     """Format bot WebSocket latency in milliseconds.
@@ -37,6 +72,135 @@ def format_timestamp(dt: Optional[datetime], style: str = "F") -> str:
         return "Unknown"
     unix_timestamp = int(dt.timestamp())
     return f"<t:{unix_timestamp}:{style}>"
+
+
+def _plain_text_math(expression: str) -> str:
+    """Convert common LaTeX notation into readable Discord-safe text."""
+    value = expression.strip()
+    value = value.replace(r"\left", "").replace(r"\right", "")
+
+    simple_group = r"([^{}]+)"
+    for _ in range(3):
+        value = re.sub(
+            rf"\\frac\{{{simple_group}\}}\{{{simple_group}\}}",
+            lambda match: f"({match.group(1)})/({match.group(2)})",
+            value,
+        )
+
+    value = re.sub(
+        rf"\\sqrt\{{{simple_group}\}}",
+        lambda match: f"sqrt({match.group(1)})",
+        value,
+    )
+    value = re.sub(
+        r"\\(?:mathbf|mathrm|mathit|mathbb|text|operatorname)\{([^{}]+)\}",
+        r"\1",
+        value,
+    )
+
+    for command, symbol in sorted(
+        LATEX_SYMBOLS.items(),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    ):
+        value = value.replace(command, symbol)
+
+    value = re.sub(
+        r"\^\{([^{}]+)\}",
+        lambda match: (
+            f"^{match.group(1)}"
+            if match.group(1).startswith("(") and match.group(1).endswith(")")
+            else f"^({match.group(1)})"
+        ),
+        value,
+    )
+    value = re.sub(
+        r"_\{([^{}]+)\}",
+        lambda match: (
+            f"_{match.group(1)}"
+            if match.group(1).startswith("(") and match.group(1).endswith(")")
+            else f"_({match.group(1)})"
+        ),
+        value,
+    )
+    value = value.replace(r"\{", "{").replace(r"\}", "}")
+    value = value.replace(r"\,", " ").replace(r"\;", " ")
+    value = re.sub(r"\\([A-Za-z]+)", r"\1", value)
+    return re.sub(r"[ \t]+", " ", value).strip()
+
+
+def _table_cells(line: str) -> list[str]:
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def _convert_markdown_tables(text: str) -> str:
+    """Convert unsupported Markdown tables into compact labeled bullets."""
+    lines = text.splitlines()
+    converted: list[str] = []
+    index = 0
+
+    while index < len(lines):
+        if (
+            index + 1 < len(lines)
+            and "|" in lines[index]
+            and MARKDOWN_TABLE_DIVIDER.match(lines[index + 1])
+        ):
+            headers = _table_cells(lines[index])
+            index += 2
+            rows: list[str] = []
+            while index < len(lines) and "|" in lines[index] and lines[index].strip():
+                cells = _table_cells(lines[index])
+                labeled_cells = [
+                    f"**{header}:** {cell}"
+                    for header, cell in zip(headers, cells)
+                    if header and cell
+                ]
+                if labeled_cells:
+                    rows.append("- " + " · ".join(labeled_cells))
+                index += 1
+            converted.extend(rows)
+            continue
+
+        converted.append(lines[index])
+        index += 1
+
+    return "\n".join(converted)
+
+
+def discord_safe_markdown(text: str) -> str:
+    """Normalize model output to formatting that Discord reliably renders."""
+    fenced_parts = re.split(r"(```.*?```)", text, flags=re.DOTALL)
+    normalized_parts: list[str] = []
+
+    for index, part in enumerate(fenced_parts):
+        if index % 2 == 1:
+            normalized_parts.append(part)
+            continue
+
+        part = re.sub(
+            r"\*\*\$([^$\n]+)\$:\*\*",
+            lambda match: f"`{_plain_text_math(match.group(1))}`:",
+            part,
+        )
+        part = re.sub(
+            r"\*\*\$([^$\n]+)\$\*\*",
+            lambda match: f"`{_plain_text_math(match.group(1))}`",
+            part,
+        )
+        part = re.sub(
+            r"\$\$(.+?)\$\$",
+            lambda match: f"```text\n{_plain_text_math(match.group(1))}\n```",
+            part,
+            flags=re.DOTALL,
+        )
+        part = re.sub(
+            r"\$([^$\n]+)\$",
+            lambda match: f"`{_plain_text_math(match.group(1))}`",
+            part,
+        )
+        normalized_parts.append(_convert_markdown_tables(part))
+
+    return "".join(normalized_parts)
 
 
 def _find_split_position(text: str, limit: int) -> int:
@@ -220,7 +384,7 @@ async def send_deferred_response(
         limit: Maximum character length per chunk (default: 1900).
     """
     safe_limit = min(limit, MAX_DISCORD_CHUNK_CHARS)
-    chunks = split_message(content, limit=safe_limit)
+    chunks = split_message(discord_safe_markdown(content), limit=safe_limit)
     if not chunks:
         await interaction.edit_original_response(content="No response generated.")
         return
@@ -233,7 +397,7 @@ async def send_deferred_pages(
     pages: list[str],
 ) -> None:
     """Display pre-built text pages in one deferred interaction response."""
-    non_empty_pages = [page for page in pages if page]
+    non_empty_pages = [discord_safe_markdown(page) for page in pages if page]
     if not non_empty_pages:
         await interaction.edit_original_response(content="No response generated.")
         return

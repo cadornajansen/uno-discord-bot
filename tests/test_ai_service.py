@@ -145,6 +145,37 @@ def test_ask_invalid_json_structure():
     asyncio.run(_test())
 
 
+def test_ask_accepts_structured_text_parts() -> None:
+    """Provider-normalized text parts are combined into one assistant message."""
+    async def _test() -> None:
+        service = AIService(api_key="test-key")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "request_id": "request-parts",
+            "choices": [{
+                "finish_reason": "stop",
+                "message": {
+                    "role": "assistant",
+                    "content": [
+                        {"type": "text", "text": "First paragraph."},
+                        {"type": "text", "text": "Second paragraph."},
+                    ],
+                },
+            }],
+        }
+
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_response
+            result = await service.ask("Explain this")
+
+        assert result == "First paragraph.\nSecond paragraph."
+
+    asyncio.run(_test())
+
+
 def test_complete_returns_tool_calls_and_usage() -> None:
     async def _test() -> None:
         service = AIService(api_key="test-key")
@@ -173,5 +204,41 @@ def test_complete_returns_tool_calls_and_usage() -> None:
         assert result.usage.total_tokens == 14
         payload = mock_post.call_args.kwargs["json"]
         assert payload["tool_choice"] == "auto"
+
+    asyncio.run(_test())
+
+
+def test_complete_accepts_choice_level_tool_calls() -> None:
+    """Tool calls remain usable if the gateway places them on the choice."""
+    async def _test() -> None:
+        service = AIService(api_key="test-key")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "request_id": "request-choice-tool",
+            "choices": [{
+                "finish_reason": "tool_use",
+                "message": {"role": "assistant", "content": None},
+                "tool_calls": [{
+                    "id": "call-2",
+                    "type": "function",
+                    "function": {
+                        "name": "get_latest_assignments",
+                        "arguments": "{}",
+                    },
+                }],
+            }],
+        }
+
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_response
+            result = await service.complete(
+                [{"role": "user", "content": "latest assignments?"}]
+            )
+
+        assert result.content is None
+        assert result.tool_calls[0]["function"]["name"] == "get_latest_assignments"
 
     asyncio.run(_test())

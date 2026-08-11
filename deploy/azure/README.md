@@ -108,8 +108,14 @@ Update Uno:
 
 ```bash
 git pull --ff-only
-docker compose -f compose.azure-vm.yml up -d --build
+docker compose -f compose.azure-vm.yml build bot
+docker compose -f compose.azure-vm.yml up -d --no-deps bot
 ```
+
+The Dockerfile keeps Python and OCR dependencies in a layer that changes only
+when `pyproject.toml` changes. Normal Python source updates therefore reuse that
+layer instead of reinstalling the full OCR stack. Do not add `--no-cache` during
+routine deployments.
 
 Stop Uno without deleting data:
 

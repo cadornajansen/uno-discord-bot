@@ -20,6 +20,7 @@ from bot.services.ai import (
     AIError,
 )
 from bot.utils.formatting import (
+    discord_safe_markdown,
     send_deferred_pages,
     send_deferred_response,
     split_message,
@@ -71,7 +72,7 @@ def build_document_response_pages(
 ) -> list[str]:
     """Keep the document card on page one and hide extra detail behind controls."""
     summary_pages = split_message(
-        summary,
+        discord_safe_markdown(summary),
         limit=DOCUMENT_SUMMARY_PREVIEW_CHARS,
     ) or ["No summary was generated."]
 
