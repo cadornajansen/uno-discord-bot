@@ -3,10 +3,40 @@ from bot.utils.formatting import (
     MAX_DISCORD_CHUNK_CHARS,
     PaginatedTextView,
     build_assignment_embeds,
+    discord_safe_markdown,
     split_message,
     format_latency,
     format_timestamp,
 )
+
+
+def test_discord_safe_markdown_converts_inline_latex():
+    text = r"**$x^{(i)}$:** Input paired with $y^{(i)}$ and $\theta$."
+
+    formatted = discord_safe_markdown(text)
+
+    assert formatted == "`x^(i)`: Input paired with `y^(i)` and `θ`."
+
+
+def test_discord_safe_markdown_converts_display_latex_to_code():
+    text = r"Result:\n$$\ell(\theta) = \frac{1}{2\sigma^2} \sum_{i=1}^n x_i$$"
+
+    formatted = discord_safe_markdown(text)
+
+    assert "```text" in formatted
+    assert "ℓ(θ)" in formatted
+    assert "(1)/(2σ^2)" in formatted
+    assert "$" not in formatted
+
+
+def test_discord_safe_markdown_converts_tables_to_bullets():
+    text = "Topic | Meaning\n--- | ---\nX | Input\nY | Output"
+
+    formatted = discord_safe_markdown(text)
+
+    assert "- **Topic:** X · **Meaning:** Input" in formatted
+    assert "- **Topic:** Y · **Meaning:** Output" in formatted
+    assert "--- | ---" not in formatted
 
 
 def test_build_assignment_embeds_groups_tasks_by_subject():

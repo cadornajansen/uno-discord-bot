@@ -241,17 +241,46 @@ class AIService:
                 response.raise_for_status()
 
                 data = response.json()
+                if not isinstance(data, dict):
+                    raise AIAPIError("Received an invalid response structure from the AI gateway.")
+
+                request_id = str(
+                    data.get("request_id")
+                    or data.get("id")
+                    or response.headers.get("x-request-id", "unknown")
+                )
                 choices = data.get("choices")
-                message = choices[0].get("message", {}) if isinstance(choices, list) and choices else {}
-                content = message.get("content")
-                tool_calls_raw = message.get("tool_calls", [])
-                if content is not None and not isinstance(content, str):
-                    logger.error("AssemblyAI gateway returned an invalid response structure.")
+                choice = choices[0] if isinstance(choices, list) and choices else {}
+                message = choice.get("message", {}) if isinstance(choice, dict) else {}
+                if not isinstance(message, dict):
+                    message = {}
+
+                raw_content = message.get("content")
+                content = _normalize_response_content(raw_content)
+                tool_calls_raw = message.get("tool_calls")
+                if tool_calls_raw is None and isinstance(choice, dict):
+                    tool_calls_raw = choice.get("tool_calls", [])
+                if tool_calls_raw is None:
+                    tool_calls_raw = []
+
+                if raw_content is not None and content is None:
+                    _log_invalid_response_shape(
+                        request_id=request_id,
+                        choice=choice,
+                        message=message,
+                        content=raw_content,
+                    )
                     raise AIAPIError("Received an invalid response structure from the AI gateway.")
                 if not isinstance(tool_calls_raw, list):
                     raise AIAPIError("Received invalid tool calls from the AI gateway.")
                 tool_calls = tuple(call for call in tool_calls_raw if isinstance(call, dict))
                 if content is None and not tool_calls:
+                    _log_invalid_response_shape(
+                        request_id=request_id,
+                        choice=choice,
+                        message=message,
+                        content=raw_content,
+                    )
                     raise AIAPIError("Received an invalid response structure from the AI gateway.")
 
                 usage_raw = data.get("usage", {})
@@ -259,11 +288,6 @@ class AIService:
                     prompt_tokens=_optional_int(usage_raw.get("prompt_tokens", usage_raw.get("input_tokens"))),
                     completion_tokens=_optional_int(usage_raw.get("completion_tokens", usage_raw.get("output_tokens"))),
                     total_tokens=_optional_int(usage_raw.get("total_tokens")),
-                )
-                request_id = str(
-                    data.get("request_id")
-                    or data.get("id")
-                    or response.headers.get("x-request-id", "unknown")
                 )
                 tool_names = [
                     str(call.get("function", {}).get("name", "unknown"))
@@ -281,7 +305,7 @@ class AIService:
                     usage.total_tokens,
                 )
                 return AIResponse(
-                    content=content.strip() if isinstance(content, str) else None,
+                    content=content,
                     tool_calls=tool_calls,
                     request_id=request_id,
                     usage=usage,
@@ -366,6 +390,54 @@ class AIService:
 def _optional_int(value: Any) -> int | None:
     """Return an integer telemetry value without failing the user request."""
     return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def _normalize_response_content(content: Any) -> str | None:
+    """Normalize gateway text variants without exposing or stringifying payloads."""
+    if isinstance(content, str):
+        normalized = content.strip()
+        return normalized or None
+
+    if isinstance(content, dict):
+        text = content.get("text")
+        if isinstance(text, str):
+            normalized = text.strip()
+            return normalized or None
+        return None
+
+    if isinstance(content, list):
+        parts: list[str] = []
+        for part in content:
+            if isinstance(part, str):
+                text = part.strip()
+            elif isinstance(part, dict) and isinstance(part.get("text"), str):
+                text = part["text"].strip()
+            else:
+                continue
+            if text:
+                parts.append(text)
+        return "\n".join(parts) or None
+
+    return None
+
+
+def _log_invalid_response_shape(
+    request_id: str,
+    choice: Any,
+    message: dict[str, Any],
+    content: Any,
+) -> None:
+    """Log only structural metadata needed to diagnose gateway schema changes."""
+    choice_keys = sorted(choice.keys()) if isinstance(choice, dict) else []
+    logger.error(
+        "AI gateway response contained no usable text or tool calls "
+        "(request_id=%s, finish_reason=%s, content_type=%s, choice_keys=%s, message_keys=%s)",
+        request_id,
+        choice.get("finish_reason") if isinstance(choice, dict) else None,
+        type(content).__name__,
+        choice_keys,
+        sorted(message.keys()),
+    )
 
 
 def _safe_gateway_error_details(response: httpx.Response) -> tuple[str, list[str]]:
