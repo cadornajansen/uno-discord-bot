@@ -142,7 +142,7 @@ def load_settings() -> Settings:
         raise ConfigError("ASSEMBLYAI_LLM_TIMEOUT_SECONDS must be a positive float.")
 
     assemblyai_llm_max_tokens_raw = os.getenv(
-        "ASSEMBLYAI_LLM_MAX_TOKENS", "400"
+        "ASSEMBLYAI_LLM_MAX_TOKENS", "1000"
     ).strip()
     if (
         not assemblyai_llm_max_tokens_raw.isdigit()

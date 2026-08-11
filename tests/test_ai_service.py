@@ -36,7 +36,7 @@ def test_ask_success():
             _, kwargs = mock_post.call_args
             payload = kwargs["json"]
             assert payload["model"] == "gemini-3.5-flash"
-            assert payload["max_tokens"] == 400
+            assert payload["max_tokens"] == 1000
             assert payload["messages"][-1]["content"] == "Explain pointers in C"
             assert kwargs["headers"] == {"authorization": "test-key"}
 

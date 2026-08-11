@@ -26,7 +26,7 @@ def test_rag_and_generation_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert settings.rag_min_score == 0.50
     assert settings.rag_max_context_results == 3
-    assert settings.assemblyai_llm_max_tokens == 400
+    assert settings.assemblyai_llm_max_tokens == 1000
     assert settings.assemblyai_llm_model == "gemini-3.5-flash"
     assert settings.gemini_embedding_model == "gemini-embedding-2"
     assert settings.gemini_embedding_dimensions == 768
