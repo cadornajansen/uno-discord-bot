@@ -151,7 +151,7 @@ class AIService:
         base_url: str = "https://llm-gateway.assemblyai.com/v1",
         model: str = "gemini-3.5-flash",
         default_timeout: float = DEFAULT_AI_TIMEOUT_SECONDS,
-        max_tokens: int = 400,
+        max_tokens: int = 1000,
     ):
         self.api_key = api_key.strip()
         self.base_url = base_url.rstrip("/")

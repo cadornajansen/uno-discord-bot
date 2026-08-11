@@ -185,7 +185,7 @@ DEV_GUILD_ID=your_test_server_id_here
 
 ASSEMBLYAI_API_KEY=your_assemblyai_api_key_here
 ASSEMBLYAI_LLM_MODEL=gemini-3.5-flash
-ASSEMBLYAI_LLM_MAX_TOKENS=400
+ASSEMBLYAI_LLM_MAX_TOKENS=1000
 
 GEMINI_API_KEY=your_gemini_api_key_here
 GEMINI_EMBEDDING_MODEL=gemini-embedding-2
