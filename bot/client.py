@@ -5,6 +5,7 @@ from discord.ext import commands
 
 from config.settings import Settings, load_settings, ConfigError
 from bot.services.chat_orchestrator import build_chat_orchestrator
+from bot.services.rewards_db import RewardsDBService
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ class UnoDiscordBot(commands.Bot):
     def __init__(self, settings: Settings):
         self.settings = settings
         self.chat_orchestrator = build_chat_orchestrator(settings)
+        self.rewards_service = RewardsDBService(settings.rewards_db_path)
 
         # Request required default intents + message_content intent for Phase 2B message ingestion
         intents = discord.Intents.default()
@@ -39,6 +41,7 @@ class UnoDiscordBot(commands.Bot):
             "bot.cogs.weather",
             "bot.cogs.mentions",
             "bot.cogs.forum",
+            "bot.cogs.rewards",
             "bot.cogs.prefix",
         ]
         for extension in cogs_to_load:
