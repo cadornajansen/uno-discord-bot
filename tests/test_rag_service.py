@@ -3,11 +3,13 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from bot.services.ai import (
+    CASUAL_CHAT_SYSTEM_PROMPT,
     DEFAULT_SYSTEM_PROMPT,
     HOMEWORK_RAG_SYSTEM_PROMPT,
     RAG_SYSTEM_PROMPT,
     AIConnectionError,
 )
+from bot.services.chat_orchestrator import CHAT_SYSTEM_PROMPT
 from bot.services.embeddings import EmbeddingError
 from bot.services.vector_store import VectorStoreError
 from bot.services.rag import (
@@ -481,3 +483,18 @@ def test_system_prompts_enforce_concise_relevant_answers():
     assert "Do not summarize every retrieved message" in RAG_SYSTEM_PROMPT
     assert "never invent or expand an acronym" in HOMEWORK_RAG_SYSTEM_PROMPT
     assert "No due date stated" in HOMEWORK_RAG_SYSTEM_PROMPT
+
+
+def test_system_prompts_include_developer_attribution_and_tech_stack():
+    """Verify that system prompts attribute development to Jansen and include tech stack context."""
+    for prompt in (DEFAULT_SYSTEM_PROMPT, CASUAL_CHAT_SYSTEM_PROMPT, RAG_SYSTEM_PROMPT, CHAT_SYSTEM_PROMPT):
+        assert "developed by Jansen" in prompt
+        assert "BSCS 1-4" in prompt
+        assert "AssemblyAI" in prompt
+        assert "gemini-3.5-flash" in prompt
+
+
+def test_system_prompts_enforce_anti_jailbreak_guardrails():
+    """Verify that system prompts explicitly reject jailbreak and bypass attempts."""
+    for prompt in (DEFAULT_SYSTEM_PROMPT, CASUAL_CHAT_SYSTEM_PROMPT, RAG_SYSTEM_PROMPT, CHAT_SYSTEM_PROMPT):
+        assert "jailbreak" in prompt.lower()
