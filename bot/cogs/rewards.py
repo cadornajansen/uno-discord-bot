@@ -21,6 +21,7 @@ from bot.services.rewards_db import (
     TriviaResult,
     ITEM_DEFINITIONS,
     SHOP_CATALOG,
+    PHT,
 )
 
 logger = logging.getLogger(__name__)
@@ -826,7 +827,7 @@ class RewardsCog(commands.Cog):
         """Play a trivia quiz question."""
         user_id = interaction.user.id
         user = self.rewards_service.get_or_create_user(user_id)
-        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today_str = datetime.now(PHT).strftime("%Y-%m-%d")
 
         if user.last_trivia_date == today_str and user.daily_trivia_count >= 3:
             await interaction.response.send_message(

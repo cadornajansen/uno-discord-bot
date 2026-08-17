@@ -9,6 +9,8 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+PHT = timezone(timedelta(hours=8))
+
 
 class RewardsError(Exception):
     """Base exception for rewards and economy operations."""
@@ -636,18 +638,25 @@ class RewardsDBService:
 
     def claim_daily(self, user_id: int, now: Optional[datetime] = None) -> DailyClaimResult:
         """Process daily point claim with streak multipliers and 3k milestone detection."""
-        current_time = now or datetime.now(timezone.utc)
+        current_time = now or datetime.now(PHT)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=PHT)
+        else:
+            current_time = current_time.astimezone(PHT)
+
         today_str = current_time.strftime("%Y-%m-%d")
         yesterday_str = (current_time - timedelta(days=1)).strftime("%Y-%m-%d")
 
         user = self.get_or_create_user(user_id)
 
         if user.last_daily_claim == today_str:
-            # Calculate next midnight claim time
-            tomorrow = (current_time + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            # Calculate next midnight Manila time (PHT)
+            tomorrow_midnight = (current_time + timedelta(days=1)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
             raise DailyAlreadyClaimedError(
-                "You have already claimed your daily reward today! Come back tomorrow.",
-                next_claim_time=tomorrow,
+                "You have already claimed your daily reward today! Next claim available tomorrow at midnight (PHT).",
+                next_claim_time=tomorrow_midnight,
             )
 
         # Streak calculation
@@ -744,7 +753,12 @@ class RewardsDBService:
 
     def has_active_shield(self, user_id: int, now: Optional[datetime] = None) -> bool:
         """Check if user has an active Immunity Shield."""
-        current_time = now or datetime.now(timezone.utc)
+        current_time = now or datetime.now(PHT)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=PHT)
+        else:
+            current_time = current_time.astimezone(PHT)
+
         user = self.get_or_create_user(user_id)
         if not user.shield_until:
             return False
@@ -752,14 +766,19 @@ class RewardsDBService:
         try:
             shield_dt = datetime.fromisoformat(user.shield_until)
             if shield_dt.tzinfo is None:
-                shield_dt = shield_dt.replace(tzinfo=timezone.utc)
+                shield_dt = shield_dt.replace(tzinfo=PHT)
             return shield_dt > current_time
         except ValueError:
             return False
 
     def activate_shield(self, user_id: int, duration_days: int = 7, now: Optional[datetime] = None) -> datetime:
         """Activate Immunity Shield for specified duration (default 7 days)."""
-        current_time = now or datetime.now(timezone.utc)
+        current_time = now or datetime.now(PHT)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=PHT)
+        else:
+            current_time = current_time.astimezone(PHT)
+
         shield_until = current_time + timedelta(days=duration_days)
         iso_str = shield_until.isoformat()
 
@@ -993,7 +1012,11 @@ class RewardsDBService:
         """Place a 50 pt bet (max 3/day). Outcomes: Double (25%), Skill Drop (25%), Refund (15%), Bust (35%)."""
         BET_COST = 50
         MAX_BETS = 3
-        current_time = now or datetime.now(timezone.utc)
+        current_time = now or datetime.now(PHT)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=PHT)
+        else:
+            current_time = current_time.astimezone(PHT)
         today_str = current_time.strftime("%Y-%m-%d")
 
         user = self.get_or_create_user(user_id)
@@ -1249,7 +1272,11 @@ class RewardsDBService:
         """Process a trivia answer. If correct, awards +50 pts (max 3 quizzes/day with no cooldown)."""
         TRIVIA_REWARD = 50
         MAX_TRIVIA = 3
-        current_time = now or datetime.now(timezone.utc)
+        current_time = now or datetime.now(PHT)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=PHT)
+        else:
+            current_time = current_time.astimezone(PHT)
         today_str = current_time.strftime("%Y-%m-%d")
 
         user = self.get_or_create_user(user_id)

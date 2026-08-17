@@ -69,6 +69,30 @@ def test_claim_daily_missed_day_resets_streak(rewards_service: RewardsDBService)
     assert res.points_awarded == 30
 
 
+def test_claim_daily_resets_at_midnight_pht(rewards_service: RewardsDBService):
+    """Test that claiming at 11:50 PM PHT and claiming again at 12:05 AM PHT (new calendar day) succeeds."""
+    from bot.services.rewards_db import PHT
+
+    # 1. Claim at 11:50 PM Manila Time (Aug 17)
+    night_time = datetime(2026, 8, 17, 23, 50, tzinfo=PHT)
+    res1 = rewards_service.claim_daily(1001, now=night_time)
+    assert res1.streak == 1
+    assert res1.points_awarded == 30
+
+    # 2. Claim at 11:55 PM (same day) -> raises DailyAlreadyClaimedError pointing to 12:00 AM midnight
+    with pytest.raises(DailyAlreadyClaimedError) as exc_info:
+        rewards_service.claim_daily(1001, now=night_time + timedelta(minutes=5))
+    expected_midnight = datetime(2026, 8, 18, 0, 0, tzinfo=PHT)
+    assert exc_info.value.next_claim_time == expected_midnight
+
+    # 3. Claim at 12:05 AM Manila Time (Aug 18, just 15 minutes later!) -> SUCCEEDS immediately!
+    next_day_early = datetime(2026, 8, 18, 0, 5, tzinfo=PHT)
+    res2 = rewards_service.claim_daily(1001, now=next_day_early)
+    assert res2.streak == 2
+    assert res2.points_awarded == 35
+    assert res2.new_balance == 65
+
+
 def test_3000_milestone_detection(rewards_service: RewardsDBService):
     """Test 3000 lifetime points milestone unlock detection."""
     rewards_service.add_points(1001, 2980, "TEST")
