@@ -26,6 +26,81 @@ def format_meeting_time_range(meeting: ClassMeeting) -> str:
     return f"{format_12h_time(meeting.start)}–{format_12h_time(meeting.end)}"
 
 
+def format_schedule_content(schedule_service: AcademicScheduleService, selected_day: str = "all") -> str:
+    """Format full weekly or day-specific schedule text."""
+    term = schedule_service.get_term()
+    weekly_map = schedule_service.get_week()
+
+    if selected_day != "all" and selected_day in VALID_DAYS:
+        meetings = weekly_map.get(selected_day, [])
+        header = f"**Class Schedule — {selected_day}**\n{term.semester_name} · SY {term.school_year}\n"
+        if not meetings:
+            return header + "\nNo classes scheduled for this day."
+        m_lines = []
+        for subject, meeting in meetings:
+            type_str = f" ({subject.class_type})" if subject.class_type else ""
+            line = (
+                f"**{format_meeting_time_range(meeting)}**\n"
+                f"{subject.code} — {subject.name}{type_str}\n"
+                f"Location: {meeting.location}"
+            )
+            m_lines.append(line)
+        return header + "\n" + "\n\n".join(m_lines)
+
+    header = f"**Weekly Class Schedule**\n{term.semester_name} · SY {term.school_year}\n"
+    day_sections = []
+    for day in VALID_DAYS:
+        meetings = weekly_map.get(day, [])
+        if not meetings:
+            continue
+        m_lines = []
+        for subject, meeting in meetings:
+            type_str = f" ({subject.class_type})" if subject.class_type else ""
+            line = (
+                f"{format_meeting_time_range(meeting)}\n"
+                f"{subject.code} — {subject.name}{type_str}\n"
+                f"Location: {meeting.location}"
+            )
+            m_lines.append(line)
+        day_sections.append(f"**{day}**\n\n" + "\n\n".join(m_lines))
+
+    if not day_sections:
+        return "No weekly classes scheduled."
+    return header + "\n" + "\n\n".join(day_sections)
+
+
+class ScheduleDaySelect(discord.ui.Select):
+    """Dropdown selector to view schedule for specific days or full week."""
+
+    def __init__(self, schedule_service: AcademicScheduleService):
+        self.schedule_service = schedule_service
+        options = [
+            discord.SelectOption(label="Full Week", value="all", description="View all scheduled classes for the week", default=True),
+            discord.SelectOption(label="Monday", value="Monday", description="View Monday classes"),
+            discord.SelectOption(label="Tuesday", value="Tuesday", description="View Tuesday classes"),
+            discord.SelectOption(label="Wednesday", value="Wednesday", description="View Wednesday classes"),
+            discord.SelectOption(label="Thursday", value="Thursday", description="View Thursday classes"),
+            discord.SelectOption(label="Friday", value="Friday", description="View Friday classes"),
+        ]
+        super().__init__(placeholder="Select a day to view schedule...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        selected = self.values[0]
+        for opt in self.options:
+            opt.default = (opt.value == selected)
+
+        formatted_text = format_schedule_content(self.schedule_service, selected_day=selected)
+        await interaction.response.edit_message(content=formatted_text, view=self.view)
+
+
+class ScheduleView(discord.ui.View):
+    """View containing the ScheduleDaySelect dropdown."""
+
+    def __init__(self, schedule_service: AcademicScheduleService):
+        super().__init__(timeout=180.0)
+        self.add_item(ScheduleDaySelect(schedule_service))
+
+
 class AcademicsCog(commands.Cog):
     """Cog handling academic schedule, daily classes, next class, and professor lookup commands."""
 
@@ -154,37 +229,11 @@ class AcademicsCog(commands.Cog):
     async def schedule(self, interaction: discord.Interaction) -> None:
         """Slash command /schedule"""
         try:
-            term = self.schedule_service.get_term()
-            weekly_map = self.schedule_service.get_week()
-
-            header = f"**Weekly Class Schedule**\n{term.semester_name} · SY {term.school_year}\n"
-            day_sections = []
-
-            for day in VALID_DAYS:
-                meetings = weekly_map[day]
-                if not meetings:
-                    continue
-
-                m_lines = []
-                for subject, meeting in meetings:
-                    type_str = f" ({subject.class_type})" if subject.class_type else ""
-                    line = (
-                        f"{format_meeting_time_range(meeting)}\n"
-                        f"{subject.code} — {subject.name}{type_str}\n"
-                        f"Location: {meeting.location}"
-                    )
-                    m_lines.append(line)
-
-                day_sections.append(f"**{day}**\n\n" + "\n\n".join(m_lines))
-
-            if not day_sections:
-                await interaction.response.send_message("No weekly classes scheduled.")
-                return
-
-            full_text = header + "\n" + "\n\n".join(day_sections)
+            full_text = format_schedule_content(self.schedule_service, selected_day="all")
+            view = ScheduleView(self.schedule_service)
             chunks = split_message(full_text, limit=2000)
 
-            await interaction.response.send_message(chunks[0])
+            await interaction.response.send_message(chunks[0], view=view)
             for chunk in chunks[1:]:
                 await interaction.followup.send(chunk)
 

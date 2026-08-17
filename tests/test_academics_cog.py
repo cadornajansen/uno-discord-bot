@@ -195,3 +195,30 @@ def test_countdown_command_timestamps():
         assert "`<t:" not in field_value  # Verify no backticks
 
     asyncio.run(_test())
+
+
+def test_schedule_view_dropdown_interaction():
+    """Test ScheduleDaySelect dropdown callback filters classes by day and edits message."""
+    from bot.cogs.academics import ScheduleDaySelect, ScheduleView
+
+    async def _test():
+        bot = MagicMock(spec=[])
+        cog = AcademicsCog(bot)
+
+        view = ScheduleView(cog.schedule_service)
+        select = view.children[0]
+        assert isinstance(select, ScheduleDaySelect)
+        assert len(select.options) == 6  # Full Week + Mon-Fri
+
+        interaction = MagicMock()
+        interaction.response.edit_message = AsyncMock()
+
+        select._values = ["Monday"]
+        await select.callback(interaction)
+
+        interaction.response.edit_message.assert_called_once()
+        content = interaction.response.edit_message.call_args.kwargs["content"]
+        assert "**Class Schedule — Monday**" in content
+        assert "CIST101L — Introduction to Computing (Lab)" in content
+
+    asyncio.run(_test())

@@ -4,16 +4,34 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+import httpx
+from bot.services.ocr import OCRService, is_supported_image
 from bot.utils.formatting import format_latency, format_timestamp
 
 logger = logging.getLogger(__name__)
 
 
 class GeneralCog(commands.Cog):
-    """Cog containing general utility slash commands."""
+    """Cog containing general utility slash commands and context menu apps."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.explain_menu = app_commands.ContextMenu(
+            name="Explain This",
+            callback=self.explain_this,
+        )
+        self.ocr_menu = app_commands.ContextMenu(
+            name="Run OCR",
+            callback=self.run_ocr,
+        )
+        if hasattr(self.bot, "tree") and self.bot.tree is not None:
+            self.bot.tree.add_command(self.explain_menu)
+            self.bot.tree.add_command(self.ocr_menu)
+
+    async def cog_unload(self) -> None:
+        if hasattr(self.bot, "tree") and self.bot.tree is not None:
+            self.bot.tree.remove_command(self.explain_menu.name, type=self.explain_menu.type)
+            self.bot.tree.remove_command(self.ocr_menu.name, type=self.ocr_menu.type)
 
     @app_commands.command(name="ping", description="Check the bot WebSocket latency.")
     async def ping(self, interaction: discord.Interaction) -> None:
@@ -241,6 +259,71 @@ class GeneralCog(commands.Cog):
 
         embed.set_footer(text="Bounded memory, controlled indexing, and read-only class tools")
         await interaction.response.send_message(embed=embed)
+
+    async def explain_this(self, interaction: discord.Interaction, message: discord.Message) -> None:
+        """Right-click context menu app to explain a message or code snippet."""
+        await interaction.response.defer(ephemeral=False)
+        content = message.clean_content.strip()
+        if not content:
+            if message.attachments:
+                content = f"[Attachment: {message.attachments[0].filename}]"
+            elif message.embeds:
+                content = f"[Embed: {message.embeds[0].title or message.embeds[0].description}]"
+            else:
+                await interaction.followup.send("That message doesn't contain readable text to explain.", ephemeral=True)
+                return
+
+        prompt = (
+            f"Explain this Discord message/code from {message.author.display_name} simply and clearly:\n\n"
+            f"{content}"
+        )
+        try:
+            response = await self.bot.chat_orchestrator.chat(
+                prompt,
+                guild_id=interaction.guild.id if interaction.guild else 0,
+                channel_id=interaction.channel.id if interaction.channel else 0,
+                user_id=interaction.user.id,
+                user_display_name=interaction.user.display_name,
+                channel_name=getattr(interaction.channel, "name", "unknown"),
+            )
+            await interaction.followup.send(
+                f"💡 **Explanation for {message.author.display_name}'s message:**\n{response.content}"
+            )
+        except Exception as e:
+            logger.warning("[context_menu] Error running 'Explain This': %s", e)
+            await interaction.followup.send("Couldn't generate an explanation for that message right now.", ephemeral=True)
+
+    async def run_ocr(self, interaction: discord.Interaction, message: discord.Message) -> None:
+        """Right-click context menu app to extract text from an image attachment on demand."""
+        await interaction.response.defer(ephemeral=True)
+        image_attachments = [
+            att for att in message.attachments
+            if is_supported_image(att.filename, getattr(att, "content_type", None))
+        ]
+        if not image_attachments:
+            await interaction.followup.send("No supported image attachments (.png, .jpg, .webp) found in that message.", ephemeral=True)
+            return
+
+        target_att = image_attachments[0]
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(target_att.url)
+                resp.raise_for_status()
+                image_bytes = resp.content
+
+            ocr_service = OCRService()
+            extracted_text = await ocr_service.extract_text(image_bytes)
+            if not extracted_text:
+                await interaction.followup.send(f"No readable text could be extracted from `{target_att.filename}`.", ephemeral=True)
+                return
+
+            await interaction.followup.send(
+                f"📝 **Extracted Text from `{target_att.filename}`:**\n```{extracted_text}```",
+                ephemeral=True,
+            )
+        except Exception as e:
+            logger.warning("[context_menu] Error running 'Run OCR': %s", e)
+            await interaction.followup.send("Failed to extract text from that image.", ephemeral=True)
 
     async def cog_app_command_error(
         self,
