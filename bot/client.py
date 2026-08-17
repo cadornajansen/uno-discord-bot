@@ -73,13 +73,46 @@ class UnoDiscordBot(commands.Bot):
         )
 
 
+class ColoredConsoleFormatter(logging.Formatter):
+    """ANSI colorized log formatter for terminal and Docker console output.
+
+    Colors:
+    - CRITICAL / ERROR: Bold / Bright Red (\033[91m)
+    - WARNING: Bright Yellow (\033[93m)
+    - INFO: Bright Green (\033[92m)
+    - DEBUG / DEFAULT: Reset / White (\033[0m)
+    """
+
+    COLOR_RESET = "\033[0m"
+    COLOR_RED = "\033[91m"
+    COLOR_YELLOW = "\033[93m"
+    COLOR_GREEN = "\033[92m"
+    COLOR_CYAN = "\033[96m"
+
+    LEVEL_COLORS = {
+        logging.CRITICAL: COLOR_RED,
+        logging.ERROR: COLOR_RED,
+        logging.WARNING: COLOR_YELLOW,
+        logging.INFO: COLOR_GREEN,
+        logging.DEBUG: COLOR_CYAN,
+    }
+
+    def format(self, record: logging.LogRecord) -> str:
+        color = self.LEVEL_COLORS.get(record.levelno, self.COLOR_RESET)
+        formatted = super().format(record)
+        return f"{color}{formatted}{self.COLOR_RESET}"
+
+
 def configure_logging() -> None:
-    """Setup clean console + rotating file logging for production."""
+    """Setup clean colorized console + uncolored rotating file logging."""
     import os
     from logging.handlers import RotatingFileHandler
 
     log_format = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stdout)]
+    
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(ColoredConsoleFormatter(log_format))
+    handlers: list[logging.Handler] = [console_handler]
 
     # Write logs to file if LOG_FILE env var is set (recommended for deployment)
     log_file = os.getenv("LOG_FILE", "").strip()
@@ -95,8 +128,8 @@ def configure_logging() -> None:
 
     logging.basicConfig(
         level=logging.INFO,
-        format=log_format,
         handlers=handlers,
+        force=True,
     )
 
 

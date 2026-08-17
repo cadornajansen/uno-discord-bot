@@ -131,9 +131,29 @@ class AIModelNotFoundError(AIError):
 class AITimeoutError(AIError):
     """Raised when AI generation exceeds the configured timeout."""
 
+    pass
+
 
 class AIAPIError(AIError):
     """Raised when the gateway returns an unexpected status or payload."""
+
+    pass
+
+
+class AISafetyBlockError(AIAPIError):
+    """Raised when the AI gateway blocks output due to content or safety filters."""
+
+    pass
+
+
+class AIEmptyResponseError(AIAPIError):
+    """Raised when the AI gateway returns 200 OK with no text or tool calls."""
+
+    pass
+
+
+class AIResponseShapeError(AIAPIError):
+    """Raised when the AI gateway returns an unexpected JSON payload structure."""
 
     pass
 
@@ -203,7 +223,7 @@ class AIService:
             max_tokens=max_tokens,
         )
         if response.content is None:
-            raise AIAPIError("The AI gateway returned no text response.")
+            raise AIEmptyResponseError("The AI gateway returned no text response.")
         return response.content
 
     async def complete(
@@ -257,7 +277,7 @@ class AIService:
 
                 data = response.json()
                 if not isinstance(data, dict):
-                    raise AIAPIError("Received an invalid response structure from the AI gateway.")
+                    raise AIResponseShapeError("Received an invalid response structure from the AI gateway.")
 
                 request_id = str(
                     data.get("request_id")
@@ -265,10 +285,22 @@ class AIService:
                     or response.headers.get("x-request-id", "unknown")
                 )
                 choices = data.get("choices")
-                choice = choices[0] if isinstance(choices, list) and choices else {}
+                if not isinstance(choices, list):
+                    raise AIResponseShapeError("Received an invalid response structure from the AI gateway.")
+                choice = choices[0] if choices else {}
                 message = choice.get("message", {}) if isinstance(choice, dict) else {}
                 if not isinstance(message, dict):
                     message = {}
+
+                finish_reason = choice.get("finish_reason") if isinstance(choice, dict) else None
+                finish_reason_str = str(finish_reason).lower() if finish_reason is not None else ""
+                if finish_reason_str in {"safety", "content_filter", "recitation", "block"}:
+                    logger.error(
+                        "AI request blocked by safety filter (request_id=%s, finish_reason=%s)",
+                        request_id,
+                        finish_reason,
+                    )
+                    raise AISafetyBlockError(f"Response blocked by AI safety policy ({finish_reason}).")
 
                 raw_content = message.get("content")
                 content = _normalize_response_content(raw_content)
@@ -285,9 +317,9 @@ class AIService:
                         message=message,
                         content=raw_content,
                     )
-                    raise AIAPIError("Received an invalid response structure from the AI gateway.")
+                    raise AIResponseShapeError("Received an invalid response structure from the AI gateway.")
                 if not isinstance(tool_calls_raw, list):
-                    raise AIAPIError("Received invalid tool calls from the AI gateway.")
+                    raise AIResponseShapeError("Received invalid tool calls from the AI gateway.")
                 tool_calls = tuple(call for call in tool_calls_raw if isinstance(call, dict))
                 if content is None and not tool_calls:
                     _log_invalid_response_shape(
@@ -296,7 +328,7 @@ class AIService:
                         message=message,
                         content=raw_content,
                     )
-                    raise AIAPIError("Received an invalid response structure from the AI gateway.")
+                    raise AIEmptyResponseError("The AI gateway returned an empty text response.")
 
                 usage_raw = data.get("usage", {})
                 usage = AIUsage(

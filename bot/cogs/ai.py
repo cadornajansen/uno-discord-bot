@@ -5,9 +5,11 @@ from discord.ext import commands
 
 from bot.services.ai import (
     AIConnectionError,
-    AIModelNotFoundError,
-    AITimeoutError,
+    AIEmptyResponseError,
     AIError,
+    AIModelNotFoundError,
+    AISafetyBlockError,
+    AITimeoutError,
 )
 from bot.utils.formatting import send_deferred_chat_response
 
@@ -71,6 +73,22 @@ class AICog(commands.Cog):
                 response.content,
                 response.assignment_items,
                 response.current_datetime,
+            )
+
+        except AISafetyBlockError:
+            logger.warning(
+                f"User {interaction.user.id} '/ask' triggered AI safety filter."
+            )
+            await interaction.edit_original_response(
+                content="That prompt triggered a content safety filter. Rephrase it and try again."
+            )
+
+        except AIEmptyResponseError:
+            logger.warning(
+                f"User {interaction.user.id} '/ask' received empty response from AI gateway."
+            )
+            await interaction.edit_original_response(
+                content="The AI returned an empty response. Try rephrasing your question."
             )
 
         except AIConnectionError:

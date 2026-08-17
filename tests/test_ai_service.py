@@ -8,6 +8,8 @@ from bot.services.ai import (
     AIConnectionError,
     AIModelNotFoundError,
     AITimeoutError,
+    AISafetyBlockError,
+    AIEmptyResponseError,
     AIAPIError,
 )
 
@@ -240,5 +242,54 @@ def test_complete_accepts_choice_level_tool_calls() -> None:
 
         assert result.content is None
         assert result.tool_calls[0]["function"]["name"] == "get_latest_assignments"
+
+    asyncio.run(_test())
+
+
+def test_complete_raises_safety_block_error_on_safety_finish_reason():
+    """AIService raises AISafetyBlockError when finish_reason indicates a safety filter block."""
+    async def _test():
+        service = AIService(api_key="test-key")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "request_id": "req-safety-1",
+            "choices": [{
+                "finish_reason": "safety",
+                "message": {"role": "assistant", "content": None},
+            }],
+        }
+
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_response
+            with pytest.raises(AISafetyBlockError, match="blocked by AI safety policy"):
+                await service.complete([{"role": "user", "content": "unsafe query"}])
+
+    asyncio.run(_test())
+
+
+def test_complete_raises_empty_response_error_on_empty_payload():
+    """AIService raises AIEmptyResponseError when gateway returns no content and no tool calls."""
+    async def _test():
+        service = AIService(api_key="test-key")
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {}
+        mock_response.json.return_value = {
+            "request_id": "req-empty-1",
+            "choices": [{
+                "finish_reason": "stop",
+                "message": {"role": "assistant", "content": None},
+                "tool_calls": [],
+            }],
+        }
+
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_response
+            with pytest.raises(AIEmptyResponseError, match="empty text response"):
+                await service.complete([{"role": "user", "content": "empty result query"}])
 
     asyncio.run(_test())

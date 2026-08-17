@@ -6,7 +6,12 @@ from typing import Literal
 import discord
 from discord.ext import commands
 
-from bot.services.ai import AIError
+from bot.services.ai import (
+    AIEmptyResponseError,
+    AIError,
+    AISafetyBlockError,
+    AITimeoutError,
+)
 from bot.utils.formatting import build_assignment_embeds
 
 logger = logging.getLogger(__name__)
@@ -243,6 +248,24 @@ class MentionsCog(commands.Cog):
                     await message.channel.send(embed=embed)
             else:
                 await message.reply(response.content)
+        except AISafetyBlockError:
+            logger.warning("[mentions] AI reply blocked by safety filter")
+            try:
+                await message.reply("That prompt triggered a content safety filter. Rephrase it and try again.")
+            except discord.HTTPException:
+                pass
+        except AITimeoutError:
+            logger.warning("[mentions] AI reply timed out")
+            try:
+                await message.reply("The AI gateway timed out. Give it another shot in a moment.")
+            except discord.HTTPException:
+                pass
+        except AIEmptyResponseError:
+            logger.warning("[mentions] AI reply returned empty response from gateway")
+            try:
+                await message.reply("The AI returned an empty response. Try asking in a slightly different way.")
+            except discord.HTTPException:
+                pass
         except AIError as e:
             logger.warning("[mentions] AI conversational reply error: %s", e)
             fallback = random.choice([
