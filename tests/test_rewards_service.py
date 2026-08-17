@@ -354,3 +354,66 @@ def test_trivia_anti_repetition_and_reset(rewards_service: RewardsDBService):
     # Next call resets history and returns a question successfully
     next_idx, next_q = rewards_service.get_random_trivia_question(user_id=1001)
     assert 0 <= next_idx < total
+
+
+def test_uno_reverse_card_counter_steals(rewards_service: RewardsDBService):
+    """Test that Uno Reverse card in defender's inventory deflects steal and counter-robs thief."""
+    rewards_service.add_points(1001, 200, "THIEF")
+    rewards_service.add_points(1002, 300, "DEFENDER")
+    rewards_service.add_item(1001, "pickpocket", 1)
+    rewards_service.add_item(1002, "uno_reverse", 1)
+
+    res = rewards_service.execute_steal(1001, 1002)
+    assert res.reversed_by_uno is True
+    assert res.success is False
+    assert res.blocked_by_shield is False
+    assert res.points_stolen > 0  # 15% of thief 200 pts = 30 pts
+    assert res.thief_new_balance == 200 - res.points_stolen
+    assert res.target_new_balance == 300 + res.points_stolen
+
+    # Uno reverse is consumed
+    assert "uno_reverse" not in rewards_service.get_inventory(1002)
+
+
+def test_shield_breaker_and_tax_audit(rewards_service: RewardsDBService):
+    """Test EMP Shield Breaker destroying shields and Tax Audit taxing Top-3 players."""
+    now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+    rewards_service.add_points(1001, 500, "TOP1")
+    rewards_service.add_points(1002, 100, "AUDITOR")
+
+    # 1. Activate shield on Top 1
+    rewards_service.add_item(1001, "shield_1w", 1)
+    rewards_service.use_item(1001, "shield_1w", now=now)
+    assert rewards_service.has_active_shield(1001, now=now)
+
+    # 2. Break shield using EMP Shield Breaker
+    rewards_service.add_item(1002, "shield_breaker", 1)
+    res_break = rewards_service.use_item(1002, "shield_breaker", target_id=1001, now=now)
+    assert "EMP Shatter" in res_break.description
+    assert not rewards_service.has_active_shield(1001, now=now)
+    assert "shield_breaker" not in rewards_service.get_inventory(1002)
+
+    # 3. Tax Audit Top 1 player (5% of 500 = 25 pts)
+    rewards_service.add_item(1002, "tax_audit", 1)
+    res_tax = rewards_service.use_item(1002, "tax_audit", target_id=1001, now=now)
+    assert res_tax.points_awarded == 25
+    assert rewards_service.get_balance(1001) == 475
+    assert rewards_service.get_balance(1002) == 125
+
+
+def test_coffee_bribe_and_gacha_box(rewards_service: RewardsDBService):
+    """Test Coffee Bribe instant points and Gacha Box opening."""
+    rewards_service.add_points(1001, 100, "TEST")
+
+    # Coffee Bribe
+    rewards_service.add_item(1001, "coffee_bribe", 1)
+    res_coffee = rewards_service.use_item(1001, "coffee_bribe")
+    assert 100 <= res_coffee.points_awarded <= 180
+    assert rewards_service.get_balance(1001) == 100 + res_coffee.points_awarded
+
+    # Gacha Box
+    rewards_service.add_item(1001, "gacha_box", 1)
+    res_gacha = rewards_service.use_item(1001, "gacha_box")
+    assert res_gacha.points_awarded >= 50
+    assert res_gacha.bonus_item_name is not None
+

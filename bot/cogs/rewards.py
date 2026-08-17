@@ -256,6 +256,74 @@ class TriviaView(discord.ui.View):
             self.add_item(TriviaAnswerButton(option_index=idx, label=opt, is_true_false=is_tf))
 
 
+class AirdropCatchButton(discord.ui.Button):
+    """Button for catching a portion of a public point airdrop."""
+
+    def __init__(self):
+        super().__init__(
+            label="🎁 Catch Points! (4/4 Left)",
+            style=discord.ButtonStyle.success,
+            custom_id="airdrop_catch",
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: "AirdropCatchView" = self.view  # type: ignore
+        user_id = interaction.user.id
+        if user_id in view.claimers:
+            await interaction.response.send_message(
+                "❌ You already caught a portion of this airdrop! Leave some for your classmates.",
+                ephemeral=True,
+            )
+            return
+
+        view.claimers.append(user_id)
+        view.claimer_names.append(interaction.user.display_name)
+        pts_per_claim = 25
+        new_bal = view.rewards_service.add_points(
+            user_id, pts_per_claim, "AIRDROP_CATCH", f"Caught airdrop from user {view.launcher_id}"
+        )
+        remaining = view.max_claims - len(view.claimers)
+
+        if remaining <= 0:
+            self.disabled = True
+            self.label = "🎁 Airdrop Fully Claimed!"
+            self.style = discord.ButtonStyle.secondary
+            view.embed.title = "🌧️ Point Airdrop — FULLY CLAIMED!"
+            view.embed.color = discord.Color.dark_grey()
+            winners = ", ".join(f"**{n}**" for n in view.claimer_names)
+            view.embed.description = (
+                f"**Care package dropped by <@{view.launcher_id}> has been completely caught!**\n\n"
+                f"🎉 **Lucky Catchers:** {winners} (+25 pts each!)"
+            )
+            await interaction.response.edit_message(embed=view.embed, view=view)
+        else:
+            self.label = f"🎁 Catch Points! ({remaining}/{view.max_claims} Left)"
+            await interaction.response.edit_message(embed=view.embed, view=view)
+            await interaction.followup.send(
+                f"🎉 You caught **+25 Uno Points** from the airdrop! Your new balance: **{new_bal:,} pts**.",
+                ephemeral=True,
+            )
+
+
+class AirdropCatchView(discord.ui.View):
+    """Interactive view for public point airdrops."""
+
+    def __init__(
+        self,
+        rewards_service: RewardsDBService,
+        launcher_id: int,
+        embed: discord.Embed,
+    ):
+        super().__init__(timeout=180.0)
+        self.rewards_service = rewards_service
+        self.launcher_id = launcher_id
+        self.embed = embed
+        self.max_claims = 4
+        self.claimers: list[int] = []
+        self.claimer_names: list[str] = []
+        self.add_item(AirdropCatchButton())
+
+
 class RewardsCog(commands.Cog):
     """Cog managing student economy, daily attendance streaks, profiles, and leaderboard."""
 
@@ -528,6 +596,25 @@ class RewardsCog(commands.Cog):
         try:
             res = self.rewards_service.execute_steal(interaction.user.id, target.id)
 
+            if res.reversed_by_uno:
+                embed = discord.Embed(
+                    title="🔄 UNO REVERSED! Steal Countered!",
+                    description=(
+                        f"💥 **{target.display_name}** held an active **🔄 Uno Reverse Card**!\n\n"
+                        f"Your robbery was **REVERSED**! **{target.display_name}** counter-stole **{res.points_stolen:,} Uno Points** from your wallet!"
+                    ),
+                    color=discord.Color.magenta(),
+                )
+                embed.add_field(name="Your Balance", value=f"**{res.thief_new_balance:,} pts**", inline=True)
+                embed.add_field(name=f"{target.display_name}'s Balance", value=f"**{res.target_new_balance:,} pts**", inline=True)
+                await interaction.response.send_message(embed=embed)
+                await self._log_activity(
+                    title="🔄 Uno Reverse Triggered",
+                    description=f"**{target.display_name}** reversed **{interaction.user.display_name}**'s steal and counter-stole **{res.points_stolen:,} pts**!",
+                    color=discord.Color.magenta(),
+                )
+                return
+
             if res.blocked_by_shield:
                 embed = discord.Embed(
                     title="🛡️ BLOCKED by Immunity Shield!",
@@ -614,16 +701,58 @@ class RewardsCog(commands.Cog):
             embed.set_footer(text="Use /use to activate consumable cards!")
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="use", description="Activate a consumable item from your inventory (e.g. 1-Week Shield).")
-    @app_commands.describe(item="The consumable item to activate.")
+    @app_commands.command(name="use", description="Activate a consumable item from your inventory (e.g. Shield, Airdrop, Gacha, EMP).")
+    @app_commands.describe(
+        item="The consumable item to activate.",
+        target="Target classmate (required for EMP Shield Breaker or Class Treasurer Audit).",
+    )
     @app_commands.choices(item=[
         app_commands.Choice(name="🛡️ 1-Week Immunity Shield", value="shield_1w"),
         app_commands.Choice(name="⚡ 2x Daily Booster Card", value="double_daily"),
+        app_commands.Choice(name="🌧️ Point Airdrop", value="airdrop"),
+        app_commands.Choice(name="📦 Mystery Gacha Box", value="gacha_box"),
+        app_commands.Choice(name="🔨 EMP Shield Breaker", value="shield_breaker"),
+        app_commands.Choice(name="🕵️ Class Treasurer Audit", value="tax_audit"),
+        app_commands.Choice(name="☕ Dean's Coffee Bribe", value="coffee_bribe"),
     ])
-    async def use(self, interaction: discord.Interaction, item: app_commands.Choice[str]) -> None:
+    async def use(
+        self,
+        interaction: discord.Interaction,
+        item: app_commands.Choice[str],
+        target: Optional[discord.Member] = None,
+    ) -> None:
         """Activate an item from inventory."""
+        target_id = target.id if target else None
         try:
-            res = self.rewards_service.use_item(interaction.user.id, item.value)
+            res = self.rewards_service.use_item(
+                user_id=interaction.user.id,
+                item_id=item.value,
+                target_id=target_id,
+            )
+
+            # Special UI for Point Airdrop
+            if item.value == "airdrop":
+                embed = discord.Embed(
+                    title="🌧️ POINT AIRDROP INCOMING!",
+                    description=(
+                        f"**{interaction.user.display_name}** just dropped a **100-Point Care Package** in the channel!\n\n"
+                        f"⚡ The first **4 classmates** to smash the button below get **+25 Uno Points** each!"
+                    ),
+                    color=discord.Color.gold(),
+                )
+                view = AirdropCatchView(
+                    rewards_service=self.rewards_service,
+                    launcher_id=interaction.user.id,
+                    embed=embed,
+                )
+                await interaction.response.send_message(embed=embed, view=view)
+                await self._log_activity(
+                    title="🌧️ Point Airdrop Launched",
+                    description=f"**{interaction.user.display_name}** launched a 100 pt community airdrop!",
+                    color=discord.Color.gold(),
+                )
+                return
+
             embed = discord.Embed(
                 title=f"✨ {res.item_name} Activated!",
                 description=res.description,
@@ -633,12 +762,12 @@ class RewardsCog(commands.Cog):
 
             await self._log_activity(
                 title="✨ Item Activated",
-                description=f"**{interaction.user.display_name}** activated **{res.item_name}**.",
+                description=f"**{interaction.user.display_name}** activated **{res.item_name}**" + (f" on {target.display_name}" if target else "") + ".",
                 color=discord.Color.blue(),
             )
         except ItemNotFoundError:
             await interaction.response.send_message(
-                f"❌ You do not have **{item.name}** in your inventory!",
+                f"❌ You do not have **{item.name}** in your inventory! Buy one from `/shop` or win from `/bet`.",
                 ephemeral=True,
             )
         except RewardsError as e:
@@ -933,10 +1062,16 @@ class RewardsCog(commands.Cog):
         )
 
         embed.add_field(
-            name="🛡️ 2. Protection & Skills",
+            name="🛡️ 2. Protection & Special Skill Cards",
             value=(
                 "• **`/inventory` or `!inv`**: Inspect your owned skill cards.\n"
-                "• **`/use shield_1w` or `!use shield_1w`**: Activates a **1-Week Immunity Shield** that completely deflects all `/steal` robbery attempts for 7 days!"
+                "• **`🛡️ 1-Week Immunity Shield`**: Deflects all `/steal` robbery attempts for 7 days!\n"
+                "• **`🔄 Uno Reverse Card`**: Passive trap! Counter-steals 15% from anyone who attempts to steal from you!\n"
+                "• **`🌧️ Point Airdrop`**: Launches a 100 pt community care package in chat (+25 pts each for 4 catchers)!\n"
+                "• **`📦 Mystery Gacha Box`**: Lucky lootbox with rewards up to 1,000 points and rare cards!\n"
+                "• **`🔨 EMP Shield Breaker`**: Target a protected classmate (`/use shield_breaker @user`) to shatter their Immunity Shield!\n"
+                "• **`🕵️ Class Treasurer Audit`**: Audit a 5% Class Tax from a Top-3 Leaderboard player (`/use tax_audit @user`)!\n"
+                "• **`☕ Dean's Coffee Bribe`**: Instant grant of +100 to +180 Uno Points!"
             ),
             inline=False,
         )

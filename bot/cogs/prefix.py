@@ -234,10 +234,15 @@ class PrefixCommandsCog(commands.Cog):
         await self._invoke_app_command(context, "RewardsCog", "inventory")
 
     @commands.command(name="use")
-    async def use_prefix(self, context: commands.Context, *, item: str) -> None:
+    async def use_prefix(
+        self,
+        context: commands.Context,
+        item: str,
+        target: Optional[discord.Member] = None,
+    ) -> None:
         """Prefix alias for /use."""
         choice = app_commands.Choice(name=item.strip(), value=item.strip().lower())
-        await self._invoke_app_command(context, "RewardsCog", "use", choice)
+        await self._invoke_app_command(context, "RewardsCog", "use", choice, target)
 
     @commands.command(name="shop", aliases=["store", "market"])
     async def shop_prefix(self, context: commands.Context) -> None:

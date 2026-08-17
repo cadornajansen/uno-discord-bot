@@ -400,6 +400,36 @@ ITEM_DEFINITIONS = {
         "description": "Repairs a broken `/daily` streak back to its previous number.",
         "usable": True,
     },
+    "uno_reverse": {
+        "name": "🔄 Uno Reverse Card",
+        "description": "Passive trap! Reverses any `/steal` attempt to steal 15% from the attacker instead.",
+        "usable": False,
+    },
+    "airdrop": {
+        "name": "🌧️ Point Airdrop",
+        "description": "Launches a 100-pt public care package in chat for the first 4 fast classmates to catch (+25 pts each)!",
+        "usable": True,
+    },
+    "gacha_box": {
+        "name": "📦 Mystery Gacha Box",
+        "description": "Lucky lootbox with rewards up to 1,000 points and exclusive badges.",
+        "usable": True,
+    },
+    "shield_breaker": {
+        "name": "🔨 EMP Shield Breaker",
+        "description": "Target a protected classmate to instantly shatter their active Immunity Shield!",
+        "usable": True,
+    },
+    "tax_audit": {
+        "name": "🕵️ Class Treasurer Audit",
+        "description": "Target a Top-3 Leaderboard player to audit 5% of their points into your wallet (max 200 pts)!",
+        "usable": True,
+    },
+    "coffee_bribe": {
+        "name": "☕ Dean's Coffee Bribe",
+        "description": "Instant lucky grant of +100 to +180 Uno Points from the CS Faculty coffee fund!",
+        "usable": True,
+    },
 }
 
 
@@ -421,6 +451,42 @@ SHOP_CATALOG = {
         "cost": 120,
         "category": "consumable",
         "description": "Doubles the points earned on your next `/daily` attendance claim.",
+    },
+    "uno_reverse": {
+        "name": "🔄 Uno Reverse Card",
+        "cost": 180,
+        "category": "consumable",
+        "description": "Passive trap! Counter-steals 15% from anyone who attempts to `/steal` from you.",
+    },
+    "airdrop": {
+        "name": "🌧️ Point Airdrop",
+        "cost": 120,
+        "category": "consumable",
+        "description": "Launches a 100-pt public care package for the first 4 classmates to catch (+25 pts each).",
+    },
+    "gacha_box": {
+        "name": "📦 Mystery Gacha Box",
+        "cost": 150,
+        "category": "consumable",
+        "description": "Lucky lootbox with rewards up to 1,000 points and exclusive badges.",
+    },
+    "shield_breaker": {
+        "name": "🔨 EMP Shield Breaker",
+        "cost": 140,
+        "category": "consumable",
+        "description": "Target a protected classmate to instantly shatter their active Immunity Shield.",
+    },
+    "tax_audit": {
+        "name": "🕵️ Class Treasurer Audit",
+        "cost": 200,
+        "category": "consumable",
+        "description": "Target a Top-3 Leaderboard player to audit 5% of their points into your wallet.",
+    },
+    "coffee_bribe": {
+        "name": "☕ Dean's Coffee Bribe",
+        "cost": 100,
+        "category": "consumable",
+        "description": "Instant lucky grant of +100 to +180 Uno Points.",
     },
     "coffee": {
         "name": "☕ Intramuros Coffee Treat",
@@ -467,6 +533,7 @@ class StealResult:
     fine_paid: int
     thief_new_balance: int
     target_new_balance: int
+    reversed_by_uno: bool = False
 
 
 @dataclass(frozen=True)
@@ -475,6 +542,12 @@ class UseItemResult:
     item_name: str
     description: str
     shield_until: Optional[datetime] = None
+    points_awarded: int = 0
+    points_deducted: int = 0
+    target_id: Optional[int] = None
+    bonus_item_name: Optional[str] = None
+    gacha_tier: Optional[str] = None
+    new_balance: int = 0
 
 
 @dataclass(frozen=True)
@@ -1058,7 +1131,17 @@ class RewardsDBService:
             points_delta = -50  # Deducted 50 cost
             new_balance = user.points - 50
             new_lifetime = user.lifetime_points
-            possible_skills = ["pickpocket", "shield_1w", "double_daily"]
+            possible_skills = [
+                "pickpocket",
+                "shield_1w",
+                "double_daily",
+                "uno_reverse",
+                "airdrop",
+                "gacha_box",
+                "shield_breaker",
+                "tax_audit",
+                "coffee_bribe",
+            ]
             reward_item_id = fixed_skill if fixed_skill in possible_skills else random.choice(possible_skills)
             reward_item_name = ITEM_DEFINITIONS[reward_item_id]["name"]
             self.add_item(user_id, reward_item_id, 1)
@@ -1112,7 +1195,7 @@ class RewardsDBService:
         fixed_success: Optional[bool] = None,
         fixed_amount: Optional[int] = None,
     ) -> StealResult:
-        """Attempt to steal 10-15% of target points using a Pickpocket Card (checked against target shield)."""
+        """Attempt to steal 10-15% of target points using a Pickpocket Card (checked against target shield and Uno Reverse)."""
         if thief_id == target_id:
             raise RewardsError("You cannot pickpocket yourself!")
 
@@ -1122,6 +1205,28 @@ class RewardsDBService:
 
         # Consume pickpocket card
         self.remove_item(thief_id, "pickpocket", 1)
+
+        # Check target Uno Reverse Card (passive counter-trap!)
+        target_inv = self.get_inventory(target_id)
+        if target_inv.get("uno_reverse", 0) > 0:
+            self.remove_item(target_id, "uno_reverse", 1)
+            thief = self.get_or_create_user(thief_id)
+            counter_stolen = min(thief.points, max(10, int(thief.points * 0.15)))
+            if counter_stolen > 0:
+                thief_new = self.deduct_points(thief_id, counter_stolen, "UNO_REVERSE_LOST", f"Counter-stolen by user {target_id}")
+                target_new = self.add_points(target_id, counter_stolen, "UNO_REVERSE_WON", f"Uno Reverse counter-steal from user {thief_id}")
+            else:
+                thief_new = thief.points
+                target_new = target.points
+            return StealResult(
+                success=False,
+                blocked_by_shield=False,
+                points_stolen=counter_stolen,
+                fine_paid=0,
+                thief_new_balance=thief_new,
+                target_new_balance=target_new,
+                reversed_by_uno=True,
+            )
 
         # Check target immunity shield
         if self.has_active_shield(target_id, now=now):
@@ -1133,6 +1238,7 @@ class RewardsDBService:
                 fine_paid=0,
                 thief_new_balance=thief.points,
                 target_new_balance=target.points,
+                reversed_by_uno=False,
             )
 
         # Roll steal success (65% success, 35% caught)
@@ -1154,6 +1260,7 @@ class RewardsDBService:
                 fine_paid=0,
                 thief_new_balance=thief_new,
                 target_new_balance=target_new,
+                reversed_by_uno=False,
             )
         else:
             # Thief caught red-handed!
@@ -1173,22 +1280,116 @@ class RewardsDBService:
                 fine_paid=fine,
                 thief_new_balance=thief_new,
                 target_new_balance=target_new,
+                reversed_by_uno=False,
             )
 
-    def use_item(self, user_id: int, item_id: str, now: Optional[datetime] = None) -> UseItemResult:
+    def use_item(
+        self,
+        user_id: int,
+        item_id: str,
+        target_id: Optional[int] = None,
+        now: Optional[datetime] = None,
+    ) -> UseItemResult:
         """Consume and activate an item from user's inventory."""
         if item_id not in ITEM_DEFINITIONS or not ITEM_DEFINITIONS[item_id]["usable"]:
             raise RewardsError(f"Item '{item_id}' cannot be activated directly.")
 
-        self.remove_item(user_id, item_id, 1)
-
+        user = self.get_or_create_user(user_id)
         shield_until = None
+        points_awarded = 0
+        points_deducted = 0
+        bonus_item_name = None
+        gacha_tier = None
+        new_balance = user.points
+
         if item_id == "shield_1w":
+            self.remove_item(user_id, item_id, 1)
             shield_until = self.activate_shield(user_id, duration_days=7, now=now)
             desc = f"Activated 7-Day Immunity Shield! Protected until <t:{int(shield_until.timestamp())}:f>."
+
         elif item_id == "double_daily":
+            self.remove_item(user_id, item_id, 1)
             desc = "Activated 2x Daily Booster! Your next `/daily` claim will reward double points."
+
+        elif item_id == "streak_bandage":
+            self.remove_item(user_id, item_id, 1)
+            desc = "Applied Streak Bandage! Your daily streak is safe."
+
+        elif item_id == "shield_breaker":
+            if not target_id:
+                raise RewardsError("You must specify a target classmate with `/use shield_breaker @classmate`!")
+            if target_id == user_id:
+                raise RewardsError("You cannot break your own shield!")
+            if not self.has_active_shield(target_id, now=now):
+                raise RewardsError("That classmate does not have an active Immunity Shield to break!")
+
+            self.remove_item(user_id, item_id, 1)
+            with self._get_connection() as conn:
+                conn.execute("UPDATE users SET shield_until = NULL WHERE user_id = ?", (target_id,))
+                conn.commit()
+            desc = f"🔨 EMP Shatter! You struck <@{target_id}> with an EMP shockwave and completely destroyed their Immunity Shield!"
+
+        elif item_id == "tax_audit":
+            if not target_id:
+                raise RewardsError("You must specify a Top-3 classmate to audit with `/use tax_audit @classmate`!")
+            if target_id == user_id:
+                raise RewardsError("You cannot audit yourself!")
+            target_profile = self.get_profile(target_id, now=now)
+            if target_profile.rank > 3:
+                raise RewardsError(
+                    f"That classmate is ranked #{target_profile.rank}. The Class Treasurer Audit can only target students in the Top 3!"
+                )
+            self.remove_item(user_id, item_id, 1)
+            tax_amount = min(max(int(target_profile.points * 0.05), 10), 200)
+            self.deduct_points(target_id, tax_amount, "TAX_AUDITED", f"Audited by Class Treasurer {user_id}")
+            new_balance = self.add_points(user_id, tax_amount, "TAX_COLLECTED", f"Collected 5% Class Tax from {target_id}")
+            points_awarded = tax_amount
+            desc = f"🕵️ Class Treasurer Audit executed! You audited a 5% Class Fund Tax (**+{tax_amount:,} Uno Points**) from <@{target_id}>!"
+
+        elif item_id == "coffee_bribe":
+            self.remove_item(user_id, item_id, 1)
+            bribe_pts = random.randint(100, 180)
+            new_balance = self.add_points(user_id, bribe_pts, "COFFEE_BRIBE", "Dean's Coffee Bribe Grant")
+            points_awarded = bribe_pts
+            desc = f"☕ You treated the CS Faculty to iced coffee and received an academic grant of **+{bribe_pts} Uno Points**!"
+
+        elif item_id == "gacha_box":
+            self.remove_item(user_id, item_id, 1)
+            roll = random.random()
+            if roll < 0.50:
+                gacha_tier = "🥉 Common"
+                pts = random.randint(50, 90)
+                b_item = "pickpocket"
+            elif roll < 0.80:
+                gacha_tier = "🥈 Rare"
+                pts = random.randint(150, 250)
+                b_item = "shield_1w"
+            elif roll < 0.95:
+                gacha_tier = "🥇 Epic"
+                pts = random.randint(350, 500)
+                b_item = "uno_reverse"
+            else:
+                gacha_tier = "💎 LEGENDARY"
+                pts = 1000
+                b_item = "uno_reverse"
+
+            self.add_item(user_id, b_item, 1)
+            bonus_item_name = ITEM_DEFINITIONS[b_item]["name"]
+            new_balance = self.add_points(user_id, pts, "GACHA_BOX", f"Gacha Lootbox {gacha_tier}")
+            points_awarded = pts
+            desc = (
+                f"📦 Opened Mystery Gacha Box!\n"
+                f"🌟 Tier: **{gacha_tier}**\n"
+                f"💰 Reward: **+{pts:,} Uno Points**\n"
+                f"🎁 Bonus Item: **{bonus_item_name}**"
+            )
+
+        elif item_id == "airdrop":
+            self.remove_item(user_id, item_id, 1)
+            desc = "Launched a 100-pt Point Airdrop in the channel!"
+
         else:
+            self.remove_item(user_id, item_id, 1)
             desc = f"Activated {ITEM_DEFINITIONS[item_id]['name']}!"
 
         return UseItemResult(
@@ -1196,6 +1397,12 @@ class RewardsDBService:
             item_name=ITEM_DEFINITIONS[item_id]["name"],
             description=desc,
             shield_until=shield_until,
+            points_awarded=points_awarded,
+            points_deducted=points_deducted,
+            target_id=target_id,
+            bonus_item_name=bonus_item_name,
+            gacha_tier=gacha_tier,
+            new_balance=new_balance,
         )
 
     def export_csv(self) -> str:

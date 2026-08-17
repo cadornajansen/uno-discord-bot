@@ -434,3 +434,68 @@ def test_trivia_command_and_view():
         assert service.get_balance(777) == 50
 
     asyncio.run(_test())
+
+
+def test_airdrop_command_and_catch_view():
+    """Test /use airdrop creates interactive view and users catch points."""
+    async def _test():
+        cog, service, _ = _make_rewards_cog()
+        service.add_item(555, "airdrop", 1)
+
+        # 1. /use airdrop
+        interaction = MagicMock()
+        interaction.user.id = 555
+        interaction.user.display_name = "Launcher"
+        interaction.response.send_message = AsyncMock()
+
+        item_choice = MagicMock()
+        item_choice.name = "🌧️ Point Airdrop"
+        item_choice.value = "airdrop"
+
+        await cog.use.callback(cog, interaction, item=item_choice)
+        interaction.response.send_message.assert_awaited_once()
+        embed = interaction.response.send_message.call_args.kwargs["embed"]
+        view = interaction.response.send_message.call_args.kwargs["view"]
+        assert "POINT AIRDROP" in embed.title
+
+        # 2. Catcher 1 clicks catch button (+25 pts)
+        btn = view.children[0]
+        interaction_c1 = MagicMock()
+        interaction_c1.user.id = 888
+        interaction_c1.user.display_name = "Catcher1"
+        interaction_c1.response.edit_message = AsyncMock()
+        interaction_c1.followup.send = AsyncMock()
+
+        await btn.callback(interaction_c1)
+        interaction_c1.response.edit_message.assert_awaited_once()
+        assert service.get_balance(888) == 25
+
+    asyncio.run(_test())
+
+
+def test_steal_reversed_by_uno():
+    """Test that /steal against a defender with Uno Reverse returns the REVERSED embed."""
+    async def _test():
+        cog, service, _ = _make_rewards_cog()
+        service.add_points(111, 200, "THIEF")
+        service.add_points(222, 300, "DEFENDER")
+        service.add_item(111, "pickpocket", 1)
+        service.add_item(222, "uno_reverse", 1)
+
+        interaction = MagicMock()
+        interaction.user.id = 111
+        interaction.user.display_name = "Thief"
+        interaction.response.send_message = AsyncMock()
+
+        target_member = MagicMock()
+        target_member.id = 222
+        target_member.display_name = "Defender"
+        target_member.bot = False
+
+        await cog.steal.callback(cog, interaction, target=target_member)
+        interaction.response.send_message.assert_awaited_once()
+        embed = interaction.response.send_message.call_args.kwargs["embed"]
+        assert "UNO REVERSED" in embed.title
+
+    asyncio.run(_test())
+
