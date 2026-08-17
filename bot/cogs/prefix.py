@@ -285,6 +285,11 @@ class PrefixCommandsCog(commands.Cog):
         """Prefix alias for /milestone."""
         await self._invoke_app_command(context, "RewardsCog", "milestone")
 
+    @commands.command(name="trivia", aliases=["quiz", "q"])
+    async def trivia_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /trivia."""
+        await self._invoke_app_command(context, "RewardsCog", "trivia")
+
     # -------------------------------------------------------------------------
     # Slash-Only Explanations
     # -------------------------------------------------------------------------

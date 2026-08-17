@@ -372,3 +372,52 @@ def test_guide_and_milestone_commands():
         assert "PRODUCTION MILESTONE" in milestone_embed.title
 
     asyncio.run(_test())
+
+
+def test_trivia_command_and_view():
+    """Test /trivia command launch and interactive TriviaView answer flow."""
+    async def _test():
+        cog, service, _ = _make_rewards_cog()
+
+        # 1. Launch /trivia
+        interaction = MagicMock()
+        interaction.user.id = 777
+        interaction.user.display_name = "Dave"
+        interaction.response.send_message = AsyncMock()
+
+        await cog.trivia.callback(cog, interaction)
+        interaction.response.send_message.assert_awaited_once()
+        embed = interaction.response.send_message.call_args.kwargs["embed"]
+        view = interaction.response.send_message.call_args.kwargs["view"]
+        assert "Uno Daily Trivia" in embed.title
+        assert len(view.children) == 4
+
+        # 2. Click wrong button -> 0 points, attempt recorded
+        btn_wrong = next(b for b in view.children if getattr(b, "option_index", None) != view.question.correct_index)
+        interaction_btn1 = MagicMock()
+        interaction_btn1.user.id = 777
+        interaction_btn1.response.edit_message = AsyncMock()
+
+        await btn_wrong.callback(interaction_btn1)
+        interaction_btn1.response.edit_message.assert_awaited_once()
+        assert service.get_balance(777) == 0
+
+        # 3. New question -> click correct button -> +50 points
+        interaction2 = MagicMock()
+        interaction2.user.id = 777
+        interaction2.user.display_name = "Dave"
+        interaction2.response.send_message = AsyncMock()
+
+        await cog.trivia.callback(cog, interaction2)
+        view2 = interaction2.response.send_message.call_args.kwargs["view"]
+
+        btn_correct = next(b for b in view2.children if getattr(b, "option_index", None) == view2.question.correct_index)
+        interaction_btn2 = MagicMock()
+        interaction_btn2.user.id = 777
+        interaction_btn2.response.edit_message = AsyncMock()
+
+        await btn_correct.callback(interaction_btn2)
+        interaction_btn2.response.edit_message.assert_awaited_once()
+        assert service.get_balance(777) == 50
+
+    asyncio.run(_test())

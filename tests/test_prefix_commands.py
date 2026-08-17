@@ -63,6 +63,7 @@ def test_prefix_cog_registers_all_non_document_aliases():
         "admin-export",
         "guide",
         "milestone",
+        "trivia",
     }.issubset(command_names)
 
 
@@ -196,5 +197,9 @@ def test_rewards_prefix_commands_forward_correctly():
         assert prefix_cog._invoke_app_command.await_args[0][1] == "RewardsCog"
         assert prefix_cog._invoke_app_command.await_args[0][2] == "admin_points"
         assert prefix_cog._invoke_app_command.await_args[0][3].value == "add"
+
+        # 9. !trivia
+        await PrefixCommandsCog.trivia_prefix.callback(prefix_cog, context)
+        prefix_cog._invoke_app_command.assert_awaited_with(context, "RewardsCog", "trivia")
 
     asyncio.run(_test())

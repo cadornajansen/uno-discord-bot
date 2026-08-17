@@ -39,8 +39,139 @@ class MaxBetsReachedError(RewardsError):
     pass
 
 
+class MaxTriviaReachedError(RewardsError):
+    """Raised when user has already completed 3 trivia quizzes today."""
+    pass
+
+
 from enum import Enum
 import random
+
+
+@dataclass(frozen=True)
+class TriviaQuestion:
+    question: str
+    options: list[str]
+    correct_index: int
+    explanation: str
+    category: str
+
+
+TRIVIA_QUESTIONS: list[TriviaQuestion] = [
+    TriviaQuestion(
+        question="In C programming, what operator is used to obtain the memory address of a variable?",
+        options=["*", "&", "->", "%"],
+        correct_index=1,
+        explanation="The `&` (address-of) operator retrieves the memory address of a variable in C.",
+        category="💻 C Programming",
+    ),
+    TriviaQuestion(
+        question="What is the average time complexity of searching an element in a balanced Binary Search Tree (BST)?",
+        options=["O(1)", "O(n)", "O(log n)", "O(n log n)"],
+        correct_index=2,
+        explanation="Searching in a balanced BST halves the search space each step, giving O(log n) time complexity.",
+        category="🧠 Data Structures",
+    ),
+    TriviaQuestion(
+        question="Which data structure operates on a Last-In, First-Out (LIFO) principle?",
+        options=["Queue", "Stack", "Linked List", "Priority Queue"],
+        correct_index=1,
+        explanation="A Stack follows LIFO, where the last element inserted is the first one popped.",
+        category="🧠 Data Structures",
+    ),
+    TriviaQuestion(
+        question="What standard C library function is used to allocate dynamic memory on the Heap?",
+        options=["alloc()", "malloc()", "heap_alloc()", "new()"],
+        correct_index=1,
+        explanation="`malloc()` (Memory Allocation) allocates uninitialized bytes on the heap in C.",
+        category="💻 C Programming",
+    ),
+    TriviaQuestion(
+        question="In Boolean algebra, what is the output of `A XOR A` for any boolean variable A?",
+        options=["1 (True)", "0 (False)", "A", "NOT A"],
+        correct_index=1,
+        explanation="`A XOR A` is always 0 (False) because both operands have identical truth values.",
+        category="📐 Discrete Math",
+    ),
+    TriviaQuestion(
+        question="Which standard default port number is used for secure HTTPS web traffic?",
+        options=["21", "80", "443", "8080"],
+        correct_index=2,
+        explanation="HTTPS encrypts communication over port 443 (HTTP uses port 80).",
+        category="🌐 Computer Networks",
+    ),
+    TriviaQuestion(
+        question="Who is widely recognized in history as the world's first computer programmer for writing an algorithm for the Analytical Engine?",
+        options=["Alan Turing", "Ada Lovelace", "Grace Hopper", "Charles Babbage"],
+        correct_index=1,
+        explanation="Ada Lovelace wrote the first published algorithm intended for implementation on Charles Babbage's Analytical Engine.",
+        category="🏛️ Tech History",
+    ),
+    TriviaQuestion(
+        question="In what historic walled district of Manila is Pamantasan ng Lungsod ng Maynila (PLM) situated?",
+        options=["Binondo", "Quiapo", "Intramuros", "Ermita"],
+        correct_index=2,
+        explanation="PLM was established in 1965 inside the historic walled city of Intramuros, Manila.",
+        category="🏛️ PLM Lore",
+    ),
+    TriviaQuestion(
+        question="What is the size in bytes of a standard `char` data type in C according to the C standard?",
+        options=["1 byte", "2 bytes", "4 bytes", "Depends on architecture"],
+        correct_index=0,
+        explanation="By definition in the C standard, `sizeof(char)` is always guaranteed to be exactly 1 byte.",
+        category="💻 C Programming",
+    ),
+    TriviaQuestion(
+        question="Which sorting algorithm has a worst-case time complexity of O(n log n) and uses the Divide-and-Conquer paradigm?",
+        options=["Bubble Sort", "Insertion Sort", "Merge Sort", "Selection Sort"],
+        correct_index=2,
+        explanation="Merge Sort always divides arrays in half and merges in linear time, guaranteeing O(n log n) even in worst case.",
+        category="🧠 Algorithms",
+    ),
+    TriviaQuestion(
+        question="In Python, which built-in data type is immutable (cannot be modified after creation)?",
+        options=["List", "Dictionary", "Tuple", "Set"],
+        correct_index=2,
+        explanation="Tuples are immutable sequences in Python; lists, dictionaries, and sets are mutable.",
+        category="🐍 Python",
+    ),
+    TriviaQuestion(
+        question="What does CPU stand for?",
+        options=["Central Processing Unit", "Central Program Utility", "Core Processor Unit", "Computer Processing Unit"],
+        correct_index=0,
+        explanation="CPU stands for Central Processing Unit, the primary component that executes computer instructions.",
+        category="⚙️ Computer Systems",
+    ),
+    TriviaQuestion(
+        question="In Operating Systems, what condition occurs when multiple processes are blocked because each is holding a resource that another process needs?",
+        options=["Starvation", "Race Condition", "Deadlock", "Thrashing"],
+        correct_index=2,
+        explanation="Deadlock occurs when processes are permanently waiting on resources held by one another in a circular chain.",
+        category="⚙️ Operating Systems",
+    ),
+    TriviaQuestion(
+        question="What is the result of binary addition `1010` (10 in decimal) + `0101` (5 in decimal)?",
+        options=["1100 (12)", "1111 (15)", "10000 (16)", "1001 (9)"],
+        correct_index=1,
+        explanation="`1010` + `0101` = `1111` in binary, which equals 15 in decimal.",
+        category="📐 Discrete Math",
+    ),
+    TriviaQuestion(
+        question="In Object-Oriented Programming (OOP), what principle describes creating a new class based on an existing class?",
+        options=["Polymorphism", "Encapsulation", "Inheritance", "Abstraction"],
+        correct_index=2,
+        explanation="Inheritance allows a child class to inherit properties and methods from a parent base class.",
+        category="💻 Software Engineering",
+    ),
+]
+
+
+@dataclass(frozen=True)
+class TriviaResult:
+    is_correct: bool
+    points_awarded: int
+    new_balance: int
+    trivia_remaining: int
 
 
 class ItemNotFoundError(RewardsError):
@@ -162,6 +293,8 @@ class UserRecord:
     last_daily_claim: Optional[str]
     daily_bets_count: int
     last_bet_date: Optional[str]
+    daily_trivia_count: int
+    last_trivia_date: Optional[str]
     shield_until: Optional[str]
     created_at: str
 
@@ -234,6 +367,8 @@ class RewardsDBService:
                     last_daily_claim TEXT,
                     daily_bets_count INTEGER DEFAULT 0,
                     last_bet_date TEXT,
+                    daily_trivia_count INTEGER DEFAULT 0,
+                    last_trivia_date TEXT,
                     shield_until TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
@@ -263,7 +398,15 @@ class RewardsDBService:
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
                 """
-            )
+        )
+        # Migration: ensure daily_trivia_count and last_trivia_date columns exist
+        cursor = conn.execute("PRAGMA table_info(users)")
+        cols = [r["name"] for r in cursor.fetchall()]
+        if "daily_trivia_count" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN daily_trivia_count INTEGER DEFAULT 0")
+        if "last_trivia_date" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN last_trivia_date TEXT")
+        conn.commit()
 
     def get_or_create_user(self, user_id: int) -> UserRecord:
         with self._get_connection() as conn:
@@ -276,6 +419,7 @@ class RewardsDBService:
                 conn.commit()
                 row = conn.execute("SELECT * FROM users WHERE user_id = ?", (user_id,)).fetchone()
 
+            keys = row.keys()
             return UserRecord(
                 user_id=row["user_id"],
                 points=row["points"],
@@ -284,6 +428,8 @@ class RewardsDBService:
                 last_daily_claim=row["last_daily_claim"],
                 daily_bets_count=row["daily_bets_count"],
                 last_bet_date=row["last_bet_date"],
+                daily_trivia_count=row["daily_trivia_count"] if "daily_trivia_count" in keys else 0,
+                last_trivia_date=row["last_trivia_date"] if "last_trivia_date" in keys else None,
                 shield_until=row["shield_until"],
                 created_at=row["created_at"],
             )
@@ -849,3 +995,66 @@ class RewardsDBService:
             for r in rows:
                 writer.writerow([r["user_id"], r["points"], r["lifetime_points"], r["daily_streak"], r["last_daily_claim"], r["shield_until"], r["created_at"]])
             return output.getvalue()
+
+    def get_random_trivia_question(self, exclude_index: Optional[int] = None) -> tuple[int, TriviaQuestion]:
+        """Return a random trivia question and its index, optionally avoiding a previous index."""
+        available_indices = list(range(len(TRIVIA_QUESTIONS)))
+        if exclude_index is not None and len(available_indices) > 1 and exclude_index in available_indices:
+            available_indices.remove(exclude_index)
+        chosen_idx = random.choice(available_indices)
+        return chosen_idx, TRIVIA_QUESTIONS[chosen_idx]
+
+    def record_trivia_attempt(
+        self,
+        user_id: int,
+        is_correct: bool,
+        now: Optional[datetime] = None,
+    ) -> TriviaResult:
+        """Process a trivia answer. If correct, awards +50 pts (max 3 quizzes/day with no cooldown)."""
+        TRIVIA_REWARD = 50
+        MAX_TRIVIA = 3
+        current_time = now or datetime.now(timezone.utc)
+        today_str = current_time.strftime("%Y-%m-%d")
+
+        user = self.get_or_create_user(user_id)
+
+        if user.last_trivia_date == today_str and user.daily_trivia_count >= MAX_TRIVIA:
+            raise MaxTriviaReachedError(
+                f"You have already completed all {MAX_TRIVIA} of your trivia quizzes for today! Come back tomorrow after midnight PHT."
+            )
+
+        new_trivia_count = (user.daily_trivia_count + 1) if user.last_trivia_date == today_str else 1
+        trivia_remaining = MAX_TRIVIA - new_trivia_count
+
+        points_awarded = TRIVIA_REWARD if is_correct else 0
+        new_balance = user.points + points_awarded
+        new_lifetime = user.lifetime_points + points_awarded
+
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                UPDATE users
+                SET points = ?,
+                    lifetime_points = ?,
+                    daily_trivia_count = ?,
+                    last_trivia_date = ?
+                WHERE user_id = ?
+                """,
+                (new_balance, new_lifetime, new_trivia_count, today_str, user_id),
+            )
+            action_desc = f"Trivia Quiz {'Correct (+50 pts)' if is_correct else 'Incorrect (0 pts)'}"
+            conn.execute(
+                """
+                INSERT INTO transactions (user_id, amount, action_type, description)
+                VALUES (?, ?, 'TRIVIA', ?)
+                """,
+                (user_id, points_awarded, action_desc),
+            )
+            conn.commit()
+
+        return TriviaResult(
+            is_correct=is_correct,
+            points_awarded=points_awarded,
+            new_balance=new_balance,
+            trivia_remaining=trivia_remaining,
+        )

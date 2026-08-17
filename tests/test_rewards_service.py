@@ -6,6 +6,7 @@ from bot.services.rewards_db import (
     DailyAlreadyClaimedError,
     InsufficientPointsError,
     ItemNotFoundError,
+    MaxTriviaReachedError,
 )
 
 
@@ -270,3 +271,43 @@ def test_record_and_update_redemptions(rewards_service: RewardsDBService):
     rej_res = rewards_service.update_redemption_status(res_gcash["id"], "REJECTED")
     assert rej_res["status"] == "REJECTED"
     assert rewards_service.get_balance(1001) == 2700
+
+
+def test_trivia_service_mechanics(rewards_service: RewardsDBService):
+    """Test trivia quiz rewards (+50 pts), wrong answers (0 pts), daily cap (3/day), and reset."""
+    today = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
+    next_day = datetime(2026, 8, 2, 10, 0, tzinfo=timezone.utc)
+
+    # 1. Correct answer -> +50 points
+    res1 = rewards_service.record_trivia_attempt(1001, is_correct=True, now=today)
+    assert res1.is_correct is True
+    assert res1.points_awarded == 50
+    assert res1.new_balance == 50
+    assert res1.trivia_remaining == 2
+    assert rewards_service.get_balance(1001) == 50
+
+    # 2. Incorrect answer -> 0 points, attempt counted
+    res2 = rewards_service.record_trivia_attempt(1001, is_correct=False, now=today)
+    assert res2.is_correct is False
+    assert res2.points_awarded == 0
+    assert res2.new_balance == 50
+    assert res2.trivia_remaining == 1
+    assert rewards_service.get_balance(1001) == 50
+
+    # 3. Third attempt (correct) -> +50 points, 0 remaining
+    res3 = rewards_service.record_trivia_attempt(1001, is_correct=True, now=today)
+    assert res3.is_correct is True
+    assert res3.points_awarded == 50
+    assert res3.new_balance == 100
+    assert res3.trivia_remaining == 0
+
+    # 4. 4th attempt on same day -> MaxTriviaReachedError
+    with pytest.raises(MaxTriviaReachedError):
+        rewards_service.record_trivia_attempt(1001, is_correct=True, now=today)
+
+    # 5. Next day -> resets, allows 3 new attempts
+    res_next = rewards_service.record_trivia_attempt(1001, is_correct=True, now=next_day)
+    assert res_next.is_correct is True
+    assert res_next.points_awarded == 50
+    assert res_next.new_balance == 150
+    assert res_next.trivia_remaining == 2

@@ -13,9 +13,12 @@ from bot.services.rewards_db import (
     InsufficientPointsError,
     ItemNotFoundError,
     MaxBetsReachedError,
+    MaxTriviaReachedError,
     RewardsDBService,
     RewardsError,
     ShieldActiveError,
+    TriviaQuestion,
+    TriviaResult,
     ITEM_DEFINITIONS,
     SHOP_CATALOG,
 )
@@ -140,6 +143,109 @@ class LeaderboardView(discord.ui.View):
             )
             self._update_buttons()
             await interaction.response.edit_message(embed=embed, view=self)
+
+
+class TriviaAnswerButton(discord.ui.Button):
+    """Button for a single trivia answer choice."""
+
+    def __init__(self, option_index: int, label: str):
+        letters = ["A", "B", "C", "D"]
+        prefix = f"{letters[option_index]}: " if option_index < len(letters) else ""
+        display_label = f"{prefix}{label}"[:80]
+        super().__init__(
+            label=display_label,
+            style=discord.ButtonStyle.secondary,
+            custom_id=f"trivia_ans_{option_index}",
+        )
+        self.option_index = option_index
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: "TriviaView" = self.view  # type: ignore
+        if interaction.user.id != view.user_id:
+            await interaction.response.send_message(
+                "❌ Only the student who started this trivia quiz can answer it!", ephemeral=True
+            )
+            return
+
+        is_correct = (self.option_index == view.question.correct_index)
+
+        try:
+            result = view.rewards_service.record_trivia_attempt(view.user_id, is_correct)
+        except MaxTriviaReachedError as e:
+            await interaction.response.send_message(f"⏳ {e}", ephemeral=True)
+            return
+
+        # Disable all buttons & highlight correct (green) and clicked (red if wrong)
+        for child in view.children:
+            if isinstance(child, discord.ui.Button):
+                child.disabled = True
+                if getattr(child, "option_index", None) == view.question.correct_index:
+                    child.style = discord.ButtonStyle.success
+                elif child == self and not is_correct:
+                    child.style = discord.ButtonStyle.danger
+
+        letters = ["A", "B", "C", "D"]
+        correct_letter = letters[view.question.correct_index]
+        correct_answer_text = view.question.options[view.question.correct_index]
+
+        embed = discord.Embed()
+        if is_correct:
+            embed.title = "🎉 Correct Answer! (+50 Uno Points)"
+            embed.color = discord.Color.green()
+            embed.description = (
+                f"**You nailed it!**\n\n"
+                f"**Question:** {view.question.question}\n"
+                f"**Answer:** `{correct_letter}: {correct_answer_text}`\n\n"
+                f"💡 **Explanation:** {view.question.explanation}\n\n"
+                f"💰 **Reward:** `+50 Uno Points`\n"
+                f"💳 **New Balance:** `{result.new_balance:,} pts`\n"
+                f"🎯 **Quizzes Remaining Today:** `{result.trivia_remaining} / 3`"
+            )
+            if view.cog:
+                await view.cog._log_activity(
+                    title="🧠 Trivia Quiz Success (+50 pts)",
+                    description=f"**{interaction.user.display_name}** correctly answered a **{view.question.category}** question!",
+                    color=discord.Color.green(),
+                    fields=[
+                        ("Question", view.question.question, False),
+                        ("Reward", "+50 Uno Points", True),
+                        ("Balance", f"{result.new_balance:,} pts", True),
+                    ],
+                )
+        else:
+            embed.title = "❌ Incorrect Answer!"
+            embed.color = discord.Color.red()
+            embed.description = (
+                f"**Nice try!** Better luck on your next question.\n\n"
+                f"**Question:** {view.question.question}\n"
+                f"**Correct Answer:** `{correct_letter}: {correct_answer_text}`\n\n"
+                f"💡 **Explanation:** {view.question.explanation}\n\n"
+                f"💳 **Current Balance:** `{result.new_balance:,} pts`\n"
+                f"🎯 **Quizzes Remaining Today:** `{result.trivia_remaining} / 3`"
+            )
+
+        embed.set_footer(text=f"{view.question.category} • BSCS 1-4 Trivia Quiz")
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class TriviaView(discord.ui.View):
+    """Interactive Discord view for answering a trivia quiz."""
+
+    def __init__(
+        self,
+        rewards_service: RewardsDBService,
+        user_id: int,
+        question: TriviaQuestion,
+        cog: Optional[Any] = None,
+    ):
+        super().__init__(timeout=120.0)
+        self.rewards_service = rewards_service
+        self.user_id = user_id
+        self.question = question
+        self.cog = cog
+
+        for idx, opt in enumerate(question.options):
+            self.add_item(TriviaAnswerButton(option_index=idx, label=opt))
 
 
 class RewardsCog(commands.Cog):
@@ -708,6 +814,49 @@ class RewardsCog(commands.Cog):
         )
         await interaction.response.send_message("📊 Here is the updated Uno Rewards database export:", file=file, ephemeral=True)
 
+    @app_commands.command(name="trivia", description="Answer a CS, Programming, or PLM trivia quiz to earn +50 Uno Points! (Max 3/day)")
+    async def trivia(self, interaction: discord.Interaction) -> None:
+        """Play a trivia quiz question."""
+        user_id = interaction.user.id
+        user = self.rewards_service.get_or_create_user(user_id)
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+        if user.last_trivia_date == today_str and user.daily_trivia_count >= 3:
+            await interaction.response.send_message(
+                "⏳ You have already completed all **3** of your trivia quizzes for today!\n"
+                "Come back tomorrow after midnight PHT to earn more points.",
+                ephemeral=True,
+            )
+            return
+
+        _, question = self.rewards_service.get_random_trivia_question()
+        letters = ["A", "B", "C", "D"]
+        options_formatted = "\n".join(
+            f"**{letters[i]}.** {opt}" for i, opt in enumerate(question.options)
+        )
+
+        remaining_before = 3 - (user.daily_trivia_count if user.last_trivia_date == today_str else 0)
+
+        embed = discord.Embed(
+            title=f"🧠 Uno Daily Trivia — {question.category}",
+            description=(
+                f"**{question.question}**\n\n"
+                f"{options_formatted}\n\n"
+                f"💰 **Reward:** `+50 Uno Points` on correct answer\n"
+                f"🎯 **Quizzes Remaining Today:** `{remaining_before} / 3`"
+            ),
+            color=discord.Color.gold(),
+        )
+        embed.set_footer(text="Click the button below matching your answer! • Timeout: 2 minutes")
+
+        view = TriviaView(
+            rewards_service=self.rewards_service,
+            user_id=user_id,
+            question=question,
+            cog=self,
+        )
+        await interaction.response.send_message(embed=embed, view=view)
+
     @app_commands.command(name="guide", description="Complete guide on how to earn points, gamble, steal, and redeem prizes in Uno!")
     async def guide(self, interaction: discord.Interaction) -> None:
         """Display the complete student game guide for Uno Rewards."""
@@ -715,7 +864,7 @@ class RewardsCog(commands.Cog):
             title="🎮 Uno AI Rewards & Economy — Complete Student Guide",
             description=(
                 "Welcome to the **BSCS 1-4 Uno Rewards System**! Earn points by interacting, "
-                "competing on the leaderboard, and redeeming real-world and server prizes!"
+                "competing on the leaderboard, answering daily trivia, and redeeming real-world prizes!"
             ),
             color=discord.Color.blue(),
         )
@@ -724,6 +873,7 @@ class RewardsCog(commands.Cog):
             name="📅 1. How to Earn Points",
             value=(
                 "• **`/daily` or `!daily`**: Claim your daily attendance reward (+30 pts base + 5 pts/day of streak, max +35 pts bonus!).\n"
+                "• **`/trivia` or `!trivia`**: Answer CS & Tech quizzes for **`+50 Uno Points`** each (max 3/day, no cooldown)!\n"
                 "• **`/bet` or `!bet`**: Risk 50 pts on roulette (max 3/day). 25% Jackpot (+100 pts), 25% Skill Drop, 15% Refund, 35% Bust.\n"
                 "• **`/steal @user` or `!steal`**: Use a *Pickpocket Card* to steal 10%–15% points from an unshielded classmate!"
             ),
@@ -773,10 +923,11 @@ class RewardsCog(commands.Cog):
             title="✅ PRODUCTION MILESTONE: UNO REWARDS & GAMIFICATION",
             description=(
                 "**Uno AI Gamification & Rewards System is officially live 🟢**\n\n"
-                "Earn Uno Points every day, climb the student leaderboards, roll the roulette, "
+                "Earn Uno Points every day, answer daily trivia, climb the student leaderboards, roll the roulette, "
                 "protect your wallet with Immunity Shields, and redeem real-world student perks!\n\n"
                 "**ECONOMY FEATURES**\n"
                 "• 📅 Daily Attendance & Streak Bonus (`/daily` or `!daily`)\n"
+                "• 🧠 Daily CS Trivia Quizzes (`/trivia` or `!trivia` — +50 pts, max 3/day)\n"
                 "• 🎰 50pt Roulette Gambling (`/bet` or `!bet`)\n"
                 "• 🦹 Pickpocket Robberies & 1-Week Shields (`/steal`, `/use`)\n"
                 "• 🏆 Paginated Class Leaderboard (`/leaderboard` or `!lb`)\n"
