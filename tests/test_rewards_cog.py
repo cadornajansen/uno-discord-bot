@@ -232,3 +232,119 @@ def test_inventory_and_use_command():
         assert service.has_active_shield(555) is True
 
     asyncio.run(_test())
+
+
+def test_shop_and_redeem_commands():
+    """Test /shop and /redeem commands."""
+    async def _test():
+        cog, service, log_channel = _make_rewards_cog()
+        service.add_points(555, 2000, "TEST")
+
+        # 1. /shop
+        interaction = MagicMock()
+        interaction.user.id = 555
+        interaction.user.display_name = "Charlie"
+        interaction.response.send_message = AsyncMock()
+
+        await cog.shop.callback(cog, interaction)
+        interaction.response.send_message.assert_awaited_once()
+        shop_embed = interaction.response.send_message.call_args.kwargs["embed"]
+        assert "Uno Rewards Shop" in shop_embed.title
+
+        # 2. /redeem consumable (pickpocket - 100 pts)
+        interaction2 = MagicMock()
+        interaction2.user.id = 555
+        interaction2.user.display_name = "Charlie"
+        interaction2.response.send_message = AsyncMock()
+
+        item_choice = MagicMock()
+        item_choice.value = "pickpocket"
+
+        await cog.redeem.callback(cog, interaction2, item=item_choice)
+        interaction2.response.send_message.assert_awaited_once()
+        redeem_embed = interaction2.response.send_message.call_args.kwargs["embed"]
+        assert "Consumable Purchased!" in redeem_embed.title
+        assert service.get_balance(555) == 1900
+        assert service.get_inventory(555)["pickpocket"] == 1
+
+        # 3. /redeem physical (coffee - 1200 pts)
+        interaction3 = MagicMock()
+        interaction3.user.id = 555
+        interaction3.user.display_name = "Charlie"
+        interaction3.response.send_message = AsyncMock()
+
+        item_choice2 = MagicMock()
+        item_choice2.value = "coffee"
+
+        await cog.redeem.callback(cog, interaction3, item=item_choice2)
+        interaction3.response.send_message.assert_awaited_once()
+        redeem_embed2 = interaction3.response.send_message.call_args.kwargs["embed"]
+        assert "Prize Redemption Submitted!" in redeem_embed2.title
+        assert service.get_balance(555) == 700
+        log_channel.send.assert_awaited_once()
+
+    asyncio.run(_test())
+
+
+def test_redemption_approval_view():
+    """Test RedemptionApprovalView buttons."""
+    async def _test():
+        from bot.cogs.rewards import RedemptionApprovalView
+        cog, service, _ = _make_rewards_cog()
+        service.add_points(555, 1500, "TEST")
+        redemption = service.record_redemption(555, "coffee")
+        assert service.get_balance(555) == 300
+
+        view = RedemptionApprovalView(service, redemption["id"])
+
+        # Approve
+        interaction = MagicMock()
+        interaction.user.display_name = "Admin Jansen"
+        interaction.message.embeds = [discord.Embed(title="Redemption")]
+        interaction.response.edit_message = AsyncMock()
+
+        await view.approve_button.callback(interaction)
+        interaction.response.edit_message.assert_awaited_once()
+
+    asyncio.run(_test())
+
+
+def test_admin_commands():
+    """Test /admin-inspect, /admin-points, and /admin-export."""
+    async def _test():
+        cog, service, log_channel = _make_rewards_cog()
+        service.add_points(555, 500, "TEST")
+
+        target_member = MagicMock()
+        target_member.id = 555
+        target_member.display_name = "Charlie"
+        target_member.display_avatar.url = "https://cdn.discordapp.com/avatar.png"
+
+        # 1. /admin-inspect
+        interaction = MagicMock()
+        interaction.response.send_message = AsyncMock()
+        await cog.admin_inspect.callback(cog, interaction, member=target_member)
+        interaction.response.send_message.assert_awaited_once()
+        inspect_embed = interaction.response.send_message.call_args.kwargs["embed"]
+        assert "Admin Inspection" in inspect_embed.title
+
+        # 2. /admin-points add
+        interaction2 = MagicMock()
+        interaction2.user.display_name = "Admin Jansen"
+        interaction2.response.send_message = AsyncMock()
+        action_choice = MagicMock()
+        action_choice.value = "add"
+
+        await cog.admin_points.callback(cog, interaction2, action=action_choice, member=target_member, amount=200, reason="Quiz Bee")
+        interaction2.response.send_message.assert_awaited_once()
+        assert service.get_balance(555) == 700
+
+        # 3. /admin-export
+        interaction3 = MagicMock()
+        interaction3.response.send_message = AsyncMock()
+        await cog.admin_export.callback(cog, interaction3)
+        interaction3.response.send_message.assert_awaited_once()
+        file_arg = interaction3.response.send_message.call_args.kwargs["file"]
+        assert file_arg.filename.startswith("uno_rewards_")
+
+    asyncio.run(_test())

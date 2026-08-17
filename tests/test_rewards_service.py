@@ -240,3 +240,33 @@ def test_use_item_activation(rewards_service: RewardsDBService):
     assert rewards_service.has_active_shield(1001, now=now)
     inv = rewards_service.get_inventory(1001)
     assert "shield_1w" not in inv
+
+
+def test_record_and_update_redemptions(rewards_service: RewardsDBService):
+    """Test purchasing shop items, approvals, and refunds."""
+    rewards_service.add_points(1001, 3000, "TEST")
+
+    # 1. Consumable purchase -> auto-granted to inventory
+    res_cons = rewards_service.record_redemption(1001, "pickpocket")
+    assert res_cons["status"] == "DELIVERED"
+    assert rewards_service.get_balance(1001) == 2900
+    assert rewards_service.get_inventory(1001)["pickpocket"] == 1
+
+    # 2. Physical prize purchase -> PENDING status
+    res_coffee = rewards_service.record_redemption(1001, "coffee")
+    assert res_coffee["status"] == "PENDING"
+    assert rewards_service.get_balance(1001) == 1700
+
+    # 3. Approve redemption
+    app_res = rewards_service.update_redemption_status(res_coffee["id"], "APPROVED")
+    assert app_res["status"] == "APPROVED"
+
+    # 4. Another redemption -> REJECT & REFUND
+    rewards_service.add_points(1001, 1000, "TEST")  # 1700 + 1000 = 2700
+    res_gcash = rewards_service.record_redemption(1001, "gcash_100")
+    assert rewards_service.get_balance(1001) == 500
+
+    # Reject -> refund 2200 points
+    rej_res = rewards_service.update_redemption_status(res_gcash["id"], "REJECTED")
+    assert rej_res["status"] == "REJECTED"
+    assert rewards_service.get_balance(1001) == 2700

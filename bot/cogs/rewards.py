@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import io
 import logging
 import math
 from typing import Optional
@@ -16,6 +17,7 @@ from bot.services.rewards_db import (
     RewardsError,
     ShieldActiveError,
     ITEM_DEFINITIONS,
+    SHOP_CATALOG,
 )
 
 logger = logging.getLogger(__name__)
@@ -492,6 +494,239 @@ class RewardsCog(commands.Cog):
                 f"❌ You do not have **{item.name}** in your inventory!",
                 ephemeral=True,
             )
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+
+    @app_commands.command(name="shop", description="Browse redeemable prizes and consumable skill cards.")
+    async def shop(self, interaction: discord.Interaction) -> None:
+        """Display Uno Rewards prize shop."""
+        user_points = self.rewards_service.get_balance(interaction.user.id)
+        embed = discord.Embed(
+            title="🏪 BSCS 1-4 — Uno Rewards Shop",
+            description=(
+                f"Your Current Balance: **{user_points:,} Uno Points**\n"
+                "Redeem items using `/redeem <item>` below!"
+            ),
+            color=discord.Color.gold(),
+        )
+
+        consumable_lines = []
+        physical_lines = []
+
+        for item_id, item in SHOP_CATALOG.items():
+            line = f"• `{item['cost']:,} pts` — **{item['name']}**\n  *{item['description']}*"
+            if item.get("category") == "consumable":
+                consumable_lines.append(line)
+            else:
+                physical_lines.append(line)
+
+        embed.add_field(name="🃏 Consumable Skill Cards", value="\n".join(consumable_lines), inline=False)
+        embed.add_field(name="🎁 Real-World & Server Prizes", value="\n".join(physical_lines), inline=False)
+        embed.add_field(
+            name="🍫 Milestone Reward: Exams Survival Kit",
+            value="*Auto-unlocked for free once you reach **3,000 Lifetime Points**!*",
+            inline=False,
+        )
+        embed.set_footer(text="Redeem with /redeem <item> • Earn points with /daily and /bet")
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="redeem", description="Redeem a prize or consumable item from the shop.")
+    @app_commands.describe(item="The prize item you want to purchase.")
+    @app_commands.choices(item=[
+        app_commands.Choice(name="🦹 Pickpocket Card (100 pts)", value="pickpocket"),
+        app_commands.Choice(name="🛡️ 1-Week Immunity Shield (150 pts)", value="shield_1w"),
+        app_commands.Choice(name="⚡ 2x Daily Booster Card (120 pts)", value="double_daily"),
+        app_commands.Choice(name="☕ Intramuros Coffee Treat (1,200 pts)", value="coffee"),
+        app_commands.Choice(name="💳 GCash Gift Card ₱100 (2,200 pts)", value="gcash_100"),
+        app_commands.Choice(name="🖨️ Free Printing Service 1 Month (2,800 pts)", value="printing_1m"),
+        app_commands.Choice(name="🚀 1 Month Discord Nitro (5,500 pts)", value="nitro_1m"),
+    ])
+    async def redeem(self, interaction: discord.Interaction, item: app_commands.Choice[str]) -> None:
+        """Redeem a shop item."""
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.record_redemption(user_id, item.value)
+            new_balance = self.rewards_service.get_balance(user_id)
+
+            if res["category"] == "consumable":
+                embed = discord.Embed(
+                    title="🛍️ Consumable Purchased!",
+                    description=f"You purchased **{res['item_name']}** for **{res['points_spent']:,} pts**!\nItem has been added to your `/inventory`.",
+                    color=discord.Color.green(),
+                )
+                embed.add_field(name="Remaining Balance", value=f"**{new_balance:,} pts**", inline=True)
+                await interaction.response.send_message(embed=embed)
+            else:
+                embed = discord.Embed(
+                    title="🎉 Prize Redemption Submitted!",
+                    description=(
+                        f"You submitted a redemption for **{res['item_name']}** for **{res['points_spent']:,} pts**!\n"
+                        f"Jansen has been notified in staff logs. You will receive your prize fulfillment shortly."
+                    ),
+                    color=discord.Color.gold(),
+                )
+                embed.add_field(name="Remaining Balance", value=f"**{new_balance:,} pts**", inline=True)
+                await interaction.response.send_message(embed=embed)
+
+                # Send approval prompt to staff channel
+                log_channel_id = getattr(self.bot.settings, "rewards_log_channel_id", None)
+                if log_channel_id:
+                    channel = self.bot.get_channel(log_channel_id)
+                    if channel:
+                        approval_embed = discord.Embed(
+                            title="🎁 New Prize Redemption Claim",
+                            description=f"Student **{interaction.user.display_name}** (`{interaction.user.id}`) redeemed **{res['item_name']}**.",
+                            color=discord.Color.gold(),
+                            timestamp=datetime.now(timezone.utc),
+                        )
+                        approval_embed.add_field(name="Item", value=res["item_name"], inline=True)
+                        approval_embed.add_field(name="Points Spent", value=f"{res['points_spent']:,} pts", inline=True)
+                        approval_embed.add_field(name="Claim ID", value=f"#{res['id']}", inline=True)
+                        view = RedemptionApprovalView(self.rewards_service, res["id"])
+                        await channel.send(embed=approval_embed, view=view)
+
+        except InsufficientPointsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @app_commands.command(name="admin-inspect", description="[Admin] Inspect a student's points, streaks, badges, and recent transactions.")
+    @app_commands.describe(member="The classmate to inspect.")
+    async def admin_inspect(self, interaction: discord.Interaction, member: discord.Member) -> None:
+        """Admin command to inspect student economy details."""
+        profile = self.rewards_service.get_profile(member.id)
+        txs = self.rewards_service.get_user_transactions(member.id, limit=5)
+
+        embed = discord.Embed(
+            title=f"🔍 Admin Inspection — {member.display_name}",
+            color=discord.Color.dark_blue(),
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+        embed.add_field(name="User ID", value=str(member.id), inline=True)
+        embed.add_field(name="Current Points", value=f"{profile.points:,} pts", inline=True)
+        embed.add_field(name="Lifetime Earned", value=f"{profile.lifetime_points:,} pts", inline=True)
+        embed.add_field(name="Daily Streak", value=f"{profile.daily_streak}d 🔥", inline=True)
+        embed.add_field(name="Rank", value=f"#{profile.rank}", inline=True)
+        embed.add_field(
+            name="Shield",
+            value=f"Active until <t:{int(profile.shield_until.timestamp())}:f>" if profile.shield_until else "None",
+            inline=True,
+        )
+
+        if txs:
+            tx_lines = [
+                f"• `{tx['action_type']}` ({'+' if tx['amount'] > 0 else ''}{tx['amount']:,} pts): {tx['description']}"
+                for tx in txs
+            ]
+            embed.add_field(name="Recent Transactions (Last 5)", value="\n".join(tx_lines), inline=False)
+
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @app_commands.command(name="admin-points", description="[Admin] Add or deduct Uno Points for a member.")
+    @app_commands.describe(
+        action="Whether to add or deduct points.",
+        member="The student whose points to modify.",
+        amount="The amount of points to adjust.",
+        reason="Reason for the adjustment (e.g. Quiz Bee Winner).",
+    )
+    @app_commands.choices(action=[
+        app_commands.Choice(name="➕ Add Points", value="add"),
+        app_commands.Choice(name="➖ Deduct Points", value="deduct"),
+    ])
+    async def admin_points(
+        self,
+        interaction: discord.Interaction,
+        action: app_commands.Choice[str],
+        member: discord.Member,
+        amount: int,
+        reason: str,
+    ) -> None:
+        """Admin point adjustment command."""
+        if amount <= 0:
+            await interaction.response.send_message("❌ Amount must be greater than 0.", ephemeral=True)
+            return
+
+        if action.value == "add":
+            new_bal = self.rewards_service.add_points(member.id, amount, "ADMIN_ADD", f"Admin Grant: {reason}")
+            embed = discord.Embed(
+                title="✨ Points Granted",
+                description=f"Added **+{amount:,} Uno Points** to **{member.display_name}**.\nReason: *{reason}*",
+                color=discord.Color.green(),
+            )
+            embed.add_field(name="New Balance", value=f"**{new_bal:,} pts**", inline=True)
+            await interaction.response.send_message(embed=embed)
+
+            await self._log_activity(
+                title="👑 Admin Point Adjustment",
+                description=f"**{interaction.user.display_name}** added **+{amount:,} pts** to **{member.display_name}** ({reason}).",
+                color=discord.Color.gold(),
+            )
+        else:
+            try:
+                new_bal = self.rewards_service.deduct_points(member.id, amount, "ADMIN_DEDUCT", f"Admin Deduction: {reason}")
+                embed = discord.Embed(
+                    title="➖ Points Deducted",
+                    description=f"Deducted **-{amount:,} Uno Points** from **{member.display_name}**.\nReason: *{reason}*",
+                    color=discord.Color.red(),
+                )
+                embed.add_field(name="New Balance", value=f"**{new_bal:,} pts**", inline=True)
+                await interaction.response.send_message(embed=embed)
+
+                await self._log_activity(
+                    title="👑 Admin Point Adjustment",
+                    description=f"**{interaction.user.display_name}** deducted **-{amount:,} pts** from **{member.display_name}** ({reason}).",
+                    color=discord.Color.orange(),
+                )
+            except InsufficientPointsError as e:
+                await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @app_commands.command(name="admin-export", description="[Admin] Export the entire Uno Rewards database to a CSV spreadsheet file.")
+    async def admin_export(self, interaction: discord.Interaction) -> None:
+        """Export database as CSV file."""
+        csv_data = self.rewards_service.export_csv()
+        file = discord.File(
+            fp=io.BytesIO(csv_data.encode("utf-8")),
+            filename=f"uno_rewards_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+        )
+        await interaction.response.send_message("📊 Here is the updated Uno Rewards database export:", file=file, ephemeral=True)
+
+
+class RedemptionApprovalView(discord.ui.View):
+    """Interactive Admin view for approving or rejecting prize claims."""
+
+    def __init__(self, rewards_service: RewardsDBService, redemption_id: int):
+        super().__init__(timeout=None)
+        self.rewards_service = rewards_service
+        self.redemption_id = redemption_id
+
+    @discord.ui.button(label="Approve Prize", style=discord.ButtonStyle.success, emoji="✅")
+    async def approve_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        try:
+            res = self.rewards_service.update_redemption_status(self.redemption_id, "APPROVED")
+            for item in self.children:
+                item.disabled = True
+
+            embed = interaction.message.embeds[0] if interaction.message.embeds else discord.Embed()
+            embed.color = discord.Color.green()
+            embed.add_field(name="Status", value=f"✅ **APPROVED by {interaction.user.display_name}**", inline=False)
+
+            await interaction.response.edit_message(embed=embed, view=self)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @discord.ui.button(label="Reject & Refund", style=discord.ButtonStyle.danger, emoji="❌")
+    async def reject_button(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        try:
+            res = self.rewards_service.update_redemption_status(self.redemption_id, "REJECTED")
+            for item in self.children:
+                item.disabled = True
+
+            embed = interaction.message.embeds[0] if interaction.message.embeds else discord.Embed()
+            embed.color = discord.Color.red()
+            embed.add_field(name="Status", value=f"❌ **REJECTED & REFUNDED ({res['points_spent']:,} pts returned) by {interaction.user.display_name}**", inline=False)
+
+            await interaction.response.edit_message(embed=embed, view=self)
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 

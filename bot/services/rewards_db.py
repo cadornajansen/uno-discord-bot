@@ -79,6 +79,52 @@ ITEM_DEFINITIONS = {
 }
 
 
+SHOP_CATALOG = {
+    "pickpocket": {
+        "name": "🦹 Pickpocket Card",
+        "cost": 100,
+        "category": "consumable",
+        "description": "Consumable skill card that lets you attempt to steal 10%–15% points with `/steal`.",
+    },
+    "shield_1w": {
+        "name": "🛡️ 1-Week Immunity Shield",
+        "cost": 150,
+        "category": "consumable",
+        "description": "Consumable item that protects your points from `/steal` attempts for 7 days.",
+    },
+    "double_daily": {
+        "name": "⚡ 2x Daily Booster Card",
+        "cost": 120,
+        "category": "consumable",
+        "description": "Doubles the points earned on your next `/daily` attendance claim.",
+    },
+    "coffee": {
+        "name": "☕ Intramuros Coffee Treat",
+        "cost": 1200,
+        "category": "physical",
+        "description": "₱50–₱80 Iced Coffee / drink treat around PLM / Intramuros (7-Eleven / Lawson).",
+    },
+    "gcash_100": {
+        "name": "💳 GCash Gift Card ₱100",
+        "cost": 2200,
+        "category": "physical",
+        "description": "₱100 Direct GCash transfer to your Philippine mobile number.",
+    },
+    "printing_1m": {
+        "name": "🖨️ Free Printing Service (1 Month)",
+        "cost": 2800,
+        "category": "physical",
+        "description": "Free academic reviewer / project paper printing service for 30 days.",
+    },
+    "nitro_1m": {
+        "name": "🚀 1 Month Discord Nitro",
+        "cost": 5500,
+        "category": "physical",
+        "description": "1-Month Discord Nitro subscription gift code.",
+    },
+}
+
+
 @dataclass(frozen=True)
 class BetResult:
     outcome: BetOutcome
@@ -505,19 +551,95 @@ class RewardsDBService:
             badges=badges,
         )
 
-    def record_redemption(self, user_id: int, item_name: str, points_cost: int) -> int:
-        """Deduct points and log a pending prize redemption."""
-        self.deduct_points(user_id, points_cost, "SHOP_REDEEM", f"Redeemed {item_name}")
+    def record_redemption(self, user_id: int, item_id: str) -> dict:
+        """Deduct points and log a prize redemption or consumable purchase."""
+        if item_id not in SHOP_CATALOG:
+            raise RewardsError(f"Item '{item_id}' is not available in the shop.")
+
+        item = SHOP_CATALOG[item_id]
+        points_cost = item["cost"]
+        item_name = item["name"]
+
+        # Deduct points
+        self.deduct_points(user_id, points_cost, "SHOP_PURCHASE", f"Purchased {item_name}")
+
+        # If consumable item, automatically grant to inventory
+        if item.get("category") == "consumable":
+            self.add_item(user_id, item_id, 1)
+            status = "DELIVERED"
+        else:
+            status = "PENDING"
+
         with self._get_connection() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO redemptions (user_id, item_name, points_spent, status)
-                VALUES (?, ?, ?, 'PENDING')
+                VALUES (?, ?, ?, ?)
                 """,
-                (user_id, item_name, points_cost),
+                (user_id, item_name, points_cost, status),
             )
             conn.commit()
-            return cursor.lastrowid
+            redemption_id = cursor.lastrowid
+
+        return {
+            "id": redemption_id,
+            "user_id": user_id,
+            "item_id": item_id,
+            "item_name": item_name,
+            "points_spent": points_cost,
+            "category": item.get("category"),
+            "status": status,
+        }
+
+    def update_redemption_status(self, redemption_id: int, status: str) -> dict:
+        """Approve or reject a redemption. If rejected, automatically refunds points."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM redemptions WHERE id = ?", (redemption_id,)
+            ).fetchone()
+            if not row:
+                raise RewardsError(f"Redemption ID #{redemption_id} not found.")
+
+            user_id = row["user_id"]
+            points_spent = row["points_spent"]
+            item_name = row["item_name"]
+            prev_status = row["status"]
+
+            if prev_status != "PENDING" and status in ("APPROVED", "REJECTED"):
+                raise RewardsError(f"Redemption #{redemption_id} is already {prev_status}.")
+
+            conn.execute(
+                "UPDATE redemptions SET status = ? WHERE id = ?",
+                (status, redemption_id),
+            )
+            conn.commit()
+
+        # If rejected, refund points to user
+        if status == "REJECTED":
+            self.add_points(user_id, points_spent, "REDEEM_REFUND", f"Refund for rejected {item_name}")
+
+        return {
+            "id": redemption_id,
+            "user_id": user_id,
+            "item_name": item_name,
+            "points_spent": points_spent,
+            "status": status,
+        }
+
+    def get_user_transactions(self, user_id: int, limit: int = 5) -> list[dict]:
+        """Fetch latest transactions for a user."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT amount, action_type, description, created_at
+                FROM transactions
+                WHERE user_id = ?
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            ).fetchall()
+            return [dict(r) for r in rows]
 
     def play_bet(
         self,
