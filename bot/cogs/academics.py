@@ -103,7 +103,7 @@ class AcademicsCog(commands.Cog):
 
             embed.add_field(
                 name=name,
-                value=f"Target: `<t:{int(dt.timestamp())}:F>`\nStatus: {time_str}",
+                value=f"Target: <t:{int(dt.timestamp())}:F> (<t:{int(dt.timestamp())}:R>)\nStatus: {time_str}",
                 inline=False,
             )
 

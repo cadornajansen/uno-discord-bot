@@ -57,6 +57,8 @@ def test_format_weather_response_helper():
     assert "Heavy Rainfall Warning No. 26" in text
     assert "Metro Manila — ORANGE WARNING" in text
     assert "Issued: 11:00 AM" in text
+    assert "<t:" in text
+    assert ":R>" in text
     assert "Associated Hazard: Flooding is still threatening." in text
     assert "Zambales" not in text
     assert "Bataan" not in text

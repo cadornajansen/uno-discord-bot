@@ -170,3 +170,28 @@ def test_subject_autocomplete():
         assert values == {"CIST_102", "CIST102L"}
 
     asyncio.run(_test())
+
+
+def test_countdown_command_timestamps():
+    """Test /countdown command generates native unescaped Discord timestamps."""
+    async def _test():
+        bot = MagicMock(spec=[])
+        cog = AcademicsCog(bot)
+
+        interaction = MagicMock()
+        interaction.response.send_message = AsyncMock()
+
+        await cog.countdown.callback(cog, interaction)
+
+        interaction.response.send_message.assert_called_once()
+        embed = interaction.response.send_message.call_args.kwargs["embed"]
+        assert embed.title == "Academic Countdown & Milestones"
+        assert len(embed.fields) >= 3
+        # Check first field contains native timestamp syntax <t:...:F> (<t:...:R>)
+        field_value = embed.fields[0].value
+        assert "<t:" in field_value
+        assert ":F>" in field_value
+        assert ":R>" in field_value
+        assert "`<t:" not in field_value  # Verify no backticks
+
+    asyncio.run(_test())
