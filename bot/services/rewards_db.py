@@ -39,9 +39,72 @@ class MaxBetsReachedError(RewardsError):
     pass
 
 
+from enum import Enum
+import random
+
+
 class ItemNotFoundError(RewardsError):
     """Raised when user attempts to consume an item they do not own."""
     pass
+
+
+class BetOutcome(str, Enum):
+    DOUBLE = "DOUBLE"
+    SKILL_DROP = "SKILL_DROP"
+    REFUND = "REFUND"
+    BUST = "BUST"
+
+
+ITEM_DEFINITIONS = {
+    "pickpocket": {
+        "name": "🦹 Pickpocket Card",
+        "description": "Allows you to attempt to steal 10%–15% points from a classmate with `/steal`.",
+        "usable": False,
+    },
+    "shield_1w": {
+        "name": "🛡️ 1-Week Immunity Shield",
+        "description": "Protects your wallet completely from all `/steal` attempts for 7 days.",
+        "usable": True,
+    },
+    "double_daily": {
+        "name": "⚡ 2x Daily Booster Card",
+        "description": "Doubles the points awarded on your next `/daily` claim.",
+        "usable": True,
+    },
+    "streak_bandage": {
+        "name": "🩹 Streak Bandage",
+        "description": "Repairs a broken `/daily` streak back to its previous number.",
+        "usable": True,
+    },
+}
+
+
+@dataclass(frozen=True)
+class BetResult:
+    outcome: BetOutcome
+    points_delta: int
+    new_balance: int
+    bets_remaining: int
+    reward_item_id: Optional[str] = None
+    reward_item_name: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class StealResult:
+    success: bool
+    blocked_by_shield: bool
+    points_stolen: int
+    fine_paid: int
+    thief_new_balance: int
+    target_new_balance: int
+
+
+@dataclass(frozen=True)
+class UseItemResult:
+    item_id: str
+    item_name: str
+    description: str
+    shield_until: Optional[datetime] = None
 
 
 @dataclass(frozen=True)
@@ -455,6 +518,197 @@ class RewardsDBService:
             )
             conn.commit()
             return cursor.lastrowid
+
+    def play_bet(
+        self,
+        user_id: int,
+        now: Optional[datetime] = None,
+        fixed_outcome: Optional[BetOutcome] = None,
+        fixed_skill: Optional[str] = None,
+    ) -> BetResult:
+        """Place a 50 pt bet (max 3/day). Outcomes: Double (25%), Skill Drop (25%), Refund (15%), Bust (35%)."""
+        BET_COST = 50
+        MAX_BETS = 3
+        current_time = now or datetime.now(timezone.utc)
+        today_str = current_time.strftime("%Y-%m-%d")
+
+        user = self.get_or_create_user(user_id)
+        if user.points < BET_COST:
+            raise InsufficientPointsError(
+                f"You need at least {BET_COST} pts to place a bet! You have {user.points:,} pts."
+            )
+
+        if user.last_bet_date == today_str and user.daily_bets_count >= MAX_BETS:
+            raise MaxBetsReachedError("You've used all 3 of your bets today! Come back tomorrow.")
+
+        new_bets_count = (user.daily_bets_count + 1) if user.last_bet_date == today_str else 1
+        bets_remaining = MAX_BETS - new_bets_count
+
+        # Determine outcome
+        if fixed_outcome is not None:
+            outcome = fixed_outcome
+        else:
+            roll = random.random()
+            if roll < 0.25:
+                outcome = BetOutcome.DOUBLE
+            elif roll < 0.50:
+                outcome = BetOutcome.SKILL_DROP
+            elif roll < 0.65:
+                outcome = BetOutcome.REFUND
+            else:
+                outcome = BetOutcome.BUST
+
+        points_delta = 0
+        reward_item_id = None
+        reward_item_name = None
+
+        if outcome == BetOutcome.DOUBLE:
+            points_delta = 50  # Won 100 - 50 cost = +50 net
+            new_balance = user.points + points_delta
+            new_lifetime = user.lifetime_points + 50
+        elif outcome == BetOutcome.SKILL_DROP:
+            points_delta = -50  # Deducted 50 cost
+            new_balance = user.points - 50
+            new_lifetime = user.lifetime_points
+            possible_skills = ["pickpocket", "shield_1w", "double_daily"]
+            reward_item_id = fixed_skill if fixed_skill in possible_skills else random.choice(possible_skills)
+            reward_item_name = ITEM_DEFINITIONS[reward_item_id]["name"]
+            self.add_item(user_id, reward_item_id, 1)
+        elif outcome == BetOutcome.REFUND:
+            points_delta = 0
+            new_balance = user.points
+            new_lifetime = user.lifetime_points
+        else:  # BUST
+            points_delta = -50
+            new_balance = user.points - 50
+            new_lifetime = user.lifetime_points
+
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                UPDATE users
+                SET points = ?,
+                    lifetime_points = ?,
+                    daily_bets_count = ?,
+                    last_bet_date = ?
+                WHERE user_id = ?
+                """,
+                (new_balance, new_lifetime, new_bets_count, today_str, user_id),
+            )
+            action_desc = f"Bet Outcome: {outcome.value} ({'+' if points_delta > 0 else ''}{points_delta} pts)"
+            if reward_item_name:
+                action_desc += f" + Won {reward_item_name}"
+            conn.execute(
+                """
+                INSERT INTO transactions (user_id, amount, action_type, description)
+                VALUES (?, ?, 'BET', ?)
+                """,
+                (user_id, points_delta, action_desc),
+            )
+            conn.commit()
+
+        return BetResult(
+            outcome=outcome,
+            points_delta=points_delta,
+            new_balance=new_balance,
+            bets_remaining=bets_remaining,
+            reward_item_id=reward_item_id,
+            reward_item_name=reward_item_name,
+        )
+
+    def execute_steal(
+        self,
+        thief_id: int,
+        target_id: int,
+        now: Optional[datetime] = None,
+        fixed_success: Optional[bool] = None,
+        fixed_amount: Optional[int] = None,
+    ) -> StealResult:
+        """Attempt to steal 10-15% of target points using a Pickpocket Card (checked against target shield)."""
+        if thief_id == target_id:
+            raise RewardsError("You cannot pickpocket yourself!")
+
+        target = self.get_or_create_user(target_id)
+        if target.points < 20:
+            raise RewardsError(f"That classmate only has {target.points} pts. They're too broke to steal from (< 20 pts)!")
+
+        # Consume pickpocket card
+        self.remove_item(thief_id, "pickpocket", 1)
+
+        # Check target immunity shield
+        if self.has_active_shield(target_id, now=now):
+            thief = self.get_or_create_user(thief_id)
+            return StealResult(
+                success=False,
+                blocked_by_shield=True,
+                points_stolen=0,
+                fine_paid=0,
+                thief_new_balance=thief.points,
+                target_new_balance=target.points,
+            )
+
+        # Roll steal success (65% success, 35% caught)
+        is_success = fixed_success if fixed_success is not None else (random.random() < 0.65)
+
+        if is_success:
+            pct = random.uniform(0.10, 0.15)
+            calc_stolen = int(target.points * pct)
+            stolen = fixed_amount if fixed_amount is not None else min(80, max(10, calc_stolen))
+            stolen = min(stolen, target.points)
+
+            target_new = self.deduct_points(target_id, stolen, "STEAL_VICTIM", f"Stolen by user {thief_id}")
+            thief_new = self.add_points(thief_id, stolen, "STEAL_SUCCESS", f"Stolen from user {target_id}")
+
+            return StealResult(
+                success=True,
+                blocked_by_shield=False,
+                points_stolen=stolen,
+                fine_paid=0,
+                thief_new_balance=thief_new,
+                target_new_balance=target_new,
+            )
+        else:
+            # Thief caught red-handed!
+            thief = self.get_or_create_user(thief_id)
+            fine = min(30, thief.points)
+            if fine > 0:
+                thief_new = self.deduct_points(thief_id, fine, "STEAL_FINE", f"Caught stealing from user {target_id}")
+                target_new = self.add_points(target_id, fine, "STEAL_COMPENSATION", f"Compensation from caught thief {thief_id}")
+            else:
+                thief_new = thief.points
+                target_new = target.points
+
+            return StealResult(
+                success=False,
+                blocked_by_shield=False,
+                points_stolen=0,
+                fine_paid=fine,
+                thief_new_balance=thief_new,
+                target_new_balance=target_new,
+            )
+
+    def use_item(self, user_id: int, item_id: str, now: Optional[datetime] = None) -> UseItemResult:
+        """Consume and activate an item from user's inventory."""
+        if item_id not in ITEM_DEFINITIONS or not ITEM_DEFINITIONS[item_id]["usable"]:
+            raise RewardsError(f"Item '{item_id}' cannot be activated directly.")
+
+        self.remove_item(user_id, item_id, 1)
+
+        shield_until = None
+        if item_id == "shield_1w":
+            shield_until = self.activate_shield(user_id, duration_days=7, now=now)
+            desc = f"Activated 7-Day Immunity Shield! Protected until <t:{int(shield_until.timestamp())}:f>."
+        elif item_id == "double_daily":
+            desc = "Activated 2x Daily Booster! Your next `/daily` claim will reward double points."
+        else:
+            desc = f"Activated {ITEM_DEFINITIONS[item_id]['name']}!"
+
+        return UseItemResult(
+            item_id=item_id,
+            item_name=ITEM_DEFINITIONS[item_id]["name"],
+            description=desc,
+            shield_until=shield_until,
+        )
 
     def export_csv(self) -> str:
         """Export users and points to a clean CSV string."""

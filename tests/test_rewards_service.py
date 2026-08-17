@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 import pytest
 
 from bot.services.rewards_db import (
@@ -157,3 +157,86 @@ def test_csv_export(rewards_service: RewardsDBService):
     csv_text = rewards_service.export_csv()
     assert "user_id,points,lifetime_points" in csv_text
     assert "1001,500,500" in csv_text
+
+
+def test_play_bet_outcomes_and_limit(rewards_service: RewardsDBService):
+    """Test bet mechanics, skill drops, and 3-bet daily cap."""
+    from bot.services.rewards_db import BetOutcome, MaxBetsReachedError
+
+    rewards_service.add_points(1001, 300, "TEST")
+    now = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
+
+    # Bet 1: DOUBLE (+50 net)
+    b1 = rewards_service.play_bet(1001, now=now, fixed_outcome=BetOutcome.DOUBLE)
+    assert b1.points_delta == 50
+    assert b1.new_balance == 350
+    assert b1.bets_remaining == 2
+
+    # Bet 2: SKILL_DROP (-50 pts, +1 pickpocket)
+    b2 = rewards_service.play_bet(1001, now=now, fixed_outcome=BetOutcome.SKILL_DROP, fixed_skill="pickpocket")
+    assert b2.points_delta == -50
+    assert b2.new_balance == 300
+    assert b2.bets_remaining == 1
+    inv = rewards_service.get_inventory(1001)
+    assert inv["pickpocket"] == 1
+
+    # Bet 3: BUST (-50 pts)
+    b3 = rewards_service.play_bet(1001, now=now, fixed_outcome=BetOutcome.BUST)
+    assert b3.new_balance == 250
+    assert b3.bets_remaining == 0
+
+    # Bet 4 on same day -> MaxBetsReachedError
+    with pytest.raises(MaxBetsReachedError):
+        rewards_service.play_bet(1001, now=now)
+
+    # Next day -> bets reset
+    next_day = now + timedelta(days=1)
+    b4 = rewards_service.play_bet(1001, now=next_day, fixed_outcome=BetOutcome.REFUND)
+    assert b4.bets_remaining == 2
+
+
+def test_execute_steal_mechanics(rewards_service: RewardsDBService):
+    """Test pickpocket steal success, shield block, and caught fine."""
+    from bot.services.rewards_db import RewardsError
+
+    rewards_service.add_points(1001, 100, "THIEF")  # Thief
+    rewards_service.add_points(1002, 500, "TARGET") # Target
+    rewards_service.add_item(1001, "pickpocket", 2)
+
+    # 1. Successful Steal
+    res_win = rewards_service.execute_steal(1001, 1002, fixed_success=True, fixed_amount=50)
+    assert res_win.success is True
+    assert res_win.points_stolen == 50
+    assert res_win.thief_new_balance == 150
+    assert res_win.target_new_balance == 450
+
+    # 2. Target activates Immunity Shield -> Next steal is BLOCKED
+    rewards_service.activate_shield(1002, duration_days=7)
+    res_blocked = rewards_service.execute_steal(1001, 1002)
+    assert res_blocked.blocked_by_shield is True
+    assert res_blocked.points_stolen == 0
+    assert res_blocked.thief_new_balance == 150
+
+    # 3. Steal without item -> ItemNotFoundError
+    with pytest.raises(ItemNotFoundError):
+        rewards_service.execute_steal(1001, 1002)
+
+    # 4. Thief caught red-handed -> pays fine
+    rewards_service.add_item(1001, "pickpocket", 1)
+    rewards_service.add_points(1003, 300, "UNSHIELDED")
+    res_busted = rewards_service.execute_steal(1001, 1003, fixed_success=False)
+    assert res_busted.success is False
+    assert res_busted.fine_paid == 30
+    assert res_busted.thief_new_balance == 120  # 150 - 30
+
+
+def test_use_item_activation(rewards_service: RewardsDBService):
+    """Test using inventory items activates 7-day shield."""
+    now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+    rewards_service.add_item(1001, "shield_1w", 1)
+
+    res = rewards_service.use_item(1001, "shield_1w", now=now)
+    assert "1-Week Immunity Shield" in res.item_name
+    assert rewards_service.has_active_shield(1001, now=now)
+    inv = rewards_service.get_inventory(1001)
+    assert "shield_1w" not in inv

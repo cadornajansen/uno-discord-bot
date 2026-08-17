@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
 import logging
 import math
 from typing import Optional
@@ -7,11 +7,15 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot.services.rewards_db import (
+    BetOutcome,
     DailyAlreadyClaimedError,
     InsufficientPointsError,
     ItemNotFoundError,
+    MaxBetsReachedError,
     RewardsDBService,
     RewardsError,
+    ShieldActiveError,
+    ITEM_DEFINITIONS,
 )
 
 logger = logging.getLogger(__name__)
@@ -301,6 +305,195 @@ class RewardsCog(commands.Cog):
             total_pages=total_pages,
         )
         await interaction.response.send_message(embed=embed, view=view)
+
+    @app_commands.command(name="bet", description="Gamble 50 Uno Points for double points, skill drops, or bust! (Max 3/day)")
+    async def bet(self, interaction: discord.Interaction) -> None:
+        """Play 50 pt roulette minigame."""
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.play_bet(user_id)
+
+            if res.outcome == BetOutcome.DOUBLE:
+                title = "🎰 JACKPOT! Double Points!"
+                desc = f"You won **+100 Uno Points**! (Net Gain: **+50 pts**)"
+                color = discord.Color.gold()
+            elif res.outcome == BetOutcome.SKILL_DROP:
+                title = "🃏 Skill Card Dropped!"
+                desc = f"You won a rare consumable item: **{res.reward_item_name}**!\n*Check `/inventory` or activate with `/use`!*"
+                color = discord.Color.purple()
+            elif res.outcome == BetOutcome.REFUND:
+                title = "🪙 Break-Even / Refund"
+                desc = "You rolled a safe break-even! Your **50 Uno Points** were refunded."
+                color = discord.Color.blue()
+            else:
+                title = "❌ Busted! (House Wins)"
+                desc = "The house took your bet. You lost **50 Uno Points**."
+                color = discord.Color.red()
+
+            embed = discord.Embed(title=title, description=desc, color=color)
+            embed.add_field(name="Current Balance", value=f"**{res.new_balance:,} pts**", inline=True)
+            embed.add_field(name="Bets Remaining Today", value=f"**{res.bets_remaining} / 3**", inline=True)
+            embed.set_footer(text="Gamble responsibly • Max 3 bets per day • Resets midnight PHT")
+
+            await interaction.response.send_message(embed=embed)
+
+            # Log to admin channel
+            await self._log_activity(
+                title=f"🎰 Bet: {res.outcome.value}",
+                description=f"**{interaction.user.display_name}** placed a 50 pt bet.",
+                color=color,
+                fields=[
+                    ("Outcome", res.outcome.value, True),
+                    (
+                        "Reward / Change",
+                        f"{'+' if res.points_delta > 0 else ''}{res.points_delta} pts"
+                        + (f" ({res.reward_item_name})" if res.reward_item_name else ""),
+                        True,
+                    ),
+                    ("New Balance", f"{res.new_balance:,} pts", True),
+                ],
+            )
+        except InsufficientPointsError:
+            await interaction.response.send_message(
+                "❌ You need at least **50 Uno Points** to place a bet! Earn more with `/daily`.",
+                ephemeral=True,
+            )
+        except MaxBetsReachedError:
+            await interaction.response.send_message(
+                "⏳ You've reached your daily limit of **3 bets** today! Come back tomorrow after midnight PHT.",
+                ephemeral=True,
+            )
+
+    @app_commands.command(name="steal", description="Consume a Pickpocket Card to attempt stealing 10%-15% points from a classmate!")
+    @app_commands.describe(target="The classmate you want to pickpocket.")
+    async def steal(self, interaction: discord.Interaction, target: discord.Member) -> None:
+        """Attempt pickpocketing a classmate."""
+        if target.bot:
+            await interaction.response.send_message("❌ You cannot steal from a bot!", ephemeral=True)
+            return
+
+        if target.id == interaction.user.id:
+            await interaction.response.send_message("❌ You cannot pickpocket yourself!", ephemeral=True)
+            return
+
+        try:
+            res = self.rewards_service.execute_steal(interaction.user.id, target.id)
+
+            if res.blocked_by_shield:
+                embed = discord.Embed(
+                    title="🛡️ BLOCKED by Immunity Shield!",
+                    description=(
+                        f"**{target.display_name}** is protected by an active **1-Week Immunity Shield**!\n"
+                        f"Your steal was deflected and your **🦹 Pickpocket Card** was consumed."
+                    ),
+                    color=discord.Color.blue(),
+                )
+                await interaction.response.send_message(embed=embed)
+                await self._log_activity(
+                    title="🛡️ Steal Blocked by Shield",
+                    description=f"**{interaction.user.display_name}** attempted to steal from **{target.display_name}**, but was blocked by shield.",
+                    color=discord.Color.blue(),
+                )
+                return
+
+            if res.success:
+                embed = discord.Embed(
+                    title="🦹 Robbery Successful!",
+                    description=(
+                        f"You sneaked up on **{target.display_name}** and stole **+{res.points_stolen:,} Uno Points**!\n"
+                        f"Your **🦹 Pickpocket Card** was consumed."
+                    ),
+                    color=discord.Color.green(),
+                )
+                embed.add_field(name="Your New Balance", value=f"**{res.thief_new_balance:,} pts**", inline=True)
+                embed.add_field(name=f"{target.display_name}'s Balance", value=f"**{res.target_new_balance:,} pts**", inline=True)
+                await interaction.response.send_message(embed=embed)
+
+                await self._log_activity(
+                    title="🦹 Steal Success",
+                    description=f"**{interaction.user.display_name}** stole **{res.points_stolen:,} pts** from **{target.display_name}**.",
+                    color=discord.Color.green(),
+                    fields=[
+                        ("Stolen Amount", f"{res.points_stolen:,} pts", True),
+                        ("Thief Balance", f"{res.thief_new_balance:,} pts", True),
+                        ("Victim Balance", f"{res.target_new_balance:,} pts", True),
+                    ],
+                )
+            else:
+                embed = discord.Embed(
+                    title="🚨 BUSTED! Caught Red-Handed!",
+                    description=(
+                        f"**{target.display_name}** caught you trying to pickpocket them!\n"
+                        f"You were fined **-{res.fine_paid:,} Uno Points** which was transferred to them as compensation!"
+                    ),
+                    color=discord.Color.red(),
+                )
+                embed.add_field(name="Your Balance", value=f"**{res.thief_new_balance:,} pts**", inline=True)
+                embed.add_field(name=f"{target.display_name}'s Balance", value=f"**{res.target_new_balance:,} pts**", inline=True)
+                await interaction.response.send_message(embed=embed)
+
+                await self._log_activity(
+                    title="🚨 Steal Busted",
+                    description=f"**{interaction.user.display_name}** got caught stealing from **{target.display_name}** and paid a **{res.fine_paid:,} pt** fine.",
+                    color=discord.Color.red(),
+                )
+
+        except ItemNotFoundError:
+            await interaction.response.send_message(
+                "❌ You do not have a **🦹 Pickpocket Card** in your inventory! Win one from `/bet` or buy from `/shop`.",
+                ephemeral=True,
+            )
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @app_commands.command(name="inventory", description="View your owned skill cards and consumables.")
+    async def inventory(self, interaction: discord.Interaction) -> None:
+        """Display caller's inventory cards."""
+        inv = self.rewards_service.get_inventory(interaction.user.id)
+        embed = discord.Embed(
+            title=f"🎒 Inventory — {interaction.user.display_name}",
+            color=discord.Color.purple(),
+        )
+        if not inv:
+            embed.description = "Your inventory is currently empty! Win items from `/bet` or buy from `/shop`."
+        else:
+            lines = []
+            for item_id, qty in inv.items():
+                item_info = ITEM_DEFINITIONS.get(item_id, {"name": item_id, "description": ""})
+                lines.append(f"• `{qty}x` **{item_info['name']}**\n  *{item_info['description']}*")
+            embed.description = "\n\n".join(lines)
+            embed.set_footer(text="Use /use to activate consumable cards!")
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="use", description="Activate a consumable item from your inventory (e.g. 1-Week Shield).")
+    @app_commands.describe(item="The consumable item to activate.")
+    @app_commands.choices(item=[
+        app_commands.Choice(name="🛡️ 1-Week Immunity Shield", value="shield_1w"),
+        app_commands.Choice(name="⚡ 2x Daily Booster Card", value="double_daily"),
+    ])
+    async def use(self, interaction: discord.Interaction, item: app_commands.Choice[str]) -> None:
+        """Activate an item from inventory."""
+        try:
+            res = self.rewards_service.use_item(interaction.user.id, item.value)
+            embed = discord.Embed(
+                title=f"✨ {res.item_name} Activated!",
+                description=res.description,
+                color=discord.Color.green(),
+            )
+            await interaction.response.send_message(embed=embed)
+
+            await self._log_activity(
+                title="✨ Item Activated",
+                description=f"**{interaction.user.display_name}** activated **{res.item_name}**.",
+                color=discord.Color.blue(),
+            )
+        except ItemNotFoundError:
+            await interaction.response.send_message(
+                f"❌ You do not have **{item.name}** in your inventory!",
+                ephemeral=True,
+            )
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -1,4 +1,4 @@
-﻿import asyncio
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 import pytest
 import discord
@@ -142,5 +142,93 @@ def test_leaderboard_pagination_view():
         assert view.page == 2
         assert view.prev_button.disabled is False
         interaction.response.edit_message.assert_awaited_once()
+
+    asyncio.run(_test())
+
+
+def test_bet_command():
+    """Test /bet slash command places bet, updates points, and sends embed."""
+    async def _test():
+        cog, service, log_channel = _make_rewards_cog()
+        service.add_points(555, 100, "TEST")
+
+        interaction = MagicMock()
+        interaction.user.id = 555
+        interaction.user.display_name = "Charlie"
+        interaction.response.send_message = AsyncMock()
+
+        await cog.bet.callback(cog, interaction)
+
+        interaction.response.send_message.assert_awaited_once()
+        embed = interaction.response.send_message.call_args.kwargs["embed"]
+        assert "pts" in embed.fields[0].value
+        assert "Bets Remaining" in embed.fields[1].name
+        log_channel.send.assert_awaited_once()
+
+    asyncio.run(_test())
+
+
+def test_steal_command_shield_and_success():
+    """Test /steal slash command handles shield deflection and successful robbery."""
+    async def _test():
+        cog, service, log_channel = _make_rewards_cog()
+        service.add_points(555, 100, "THIEF")
+        service.add_points(777, 500, "TARGET")
+        service.add_item(555, "pickpocket", 2)
+
+        # 1. Target is shielded
+        service.activate_shield(777, duration_days=7)
+
+        target_member = MagicMock()
+        target_member.id = 777
+        target_member.display_name = "Victim"
+        target_member.bot = False
+
+        interaction = MagicMock()
+        interaction.user.id = 555
+        interaction.user.display_name = "Thief"
+        interaction.response.send_message = AsyncMock()
+
+        await cog.steal.callback(cog, interaction, target=target_member)
+
+        interaction.response.send_message.assert_awaited_once()
+        embed = interaction.response.send_message.call_args.kwargs["embed"]
+        assert "BLOCKED by Immunity Shield" in embed.title
+
+    asyncio.run(_test())
+
+
+def test_inventory_and_use_command():
+    """Test /inventory and /use commands."""
+    async def _test():
+        cog, service, _ = _make_rewards_cog()
+        service.add_item(555, "shield_1w", 1)
+
+        interaction = MagicMock()
+        interaction.user.id = 555
+        interaction.user.display_name = "Charlie"
+        interaction.response.send_message = AsyncMock()
+
+        # Check /inventory
+        await cog.inventory.callback(cog, interaction)
+        interaction.response.send_message.assert_awaited_once()
+        inv_embed = interaction.response.send_message.call_args.kwargs["embed"]
+        assert "1-Week Immunity Shield" in inv_embed.description
+
+        # Use shield
+        interaction2 = MagicMock()
+        interaction2.user.id = 555
+        interaction2.user.display_name = "Charlie"
+        interaction2.response.send_message = AsyncMock()
+
+        item_choice = MagicMock()
+        item_choice.name = "🛡️ 1-Week Immunity Shield"
+        item_choice.value = "shield_1w"
+
+        await cog.use.callback(cog, interaction2, item=item_choice)
+        interaction2.response.send_message.assert_awaited_once()
+        use_embed = interaction2.response.send_message.call_args.kwargs["embed"]
+        assert "Activated" in use_embed.title
+        assert service.has_active_shield(555) is True
 
     asyncio.run(_test())
