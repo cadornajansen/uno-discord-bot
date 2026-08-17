@@ -446,9 +446,12 @@ class RewardsCog(commands.Cog):
         try:
             res = self.rewards_service.play_bet(user_id)
 
-            if res.outcome == BetOutcome.DOUBLE:
-                title = "🎰 JACKPOT! Double Points!"
-                desc = f"You won **+100 Uno Points**! (Net Gain: **+50 pts**)"
+            if res.outcome in (BetOutcome.JACKPOT, BetOutcome.DOUBLE):
+                title = "🎰 JACKPOT! Mega Win! (+200 pts)"
+                desc = (
+                    f"🎉 **JACKPOT!** You kept your **50 pts** bet and won **+200 Uno Points**!\n"
+                    f"💰 **Total Return:** `250 pts` (Net Gain: **+200 pts**)"
+                )
                 color = discord.Color.gold()
             elif res.outcome == BetOutcome.SKILL_DROP:
                 title = "🃏 Skill Card Dropped!"
@@ -886,7 +889,7 @@ class RewardsCog(commands.Cog):
             value=(
                 "• **`/daily` or `!daily`**: Claim your daily attendance reward (+30 pts base + 5 pts/day of streak, max +35 pts bonus!).\n"
                 "• **`/trivia` or `!trivia`**: Answer CS & Tech quizzes for **`+50 Uno Points`** each (max 3/day, no cooldown)!\n"
-                "• **`/bet` or `!bet`**: Risk 50 pts on roulette (max 3/day). 25% Jackpot (+100 pts), 25% Skill Drop, 15% Refund, 35% Bust.\n"
+                "• **`/bet` or `!bet`**: Risk 50 pts on roulette (max 3/day). 25% Jackpot (+200 pts net!), 25% Skill Drop, 15% Refund, 35% Bust.\n"
                 "• **`/steal @user` or `!steal`**: Use a *Pickpocket Card* to steal 10%–15% points from an unshielded classmate!"
             ),
             inline=False,

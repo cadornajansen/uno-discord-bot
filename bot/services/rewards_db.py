@@ -372,6 +372,7 @@ class ItemNotFoundError(RewardsError):
 
 
 class BetOutcome(str, Enum):
+    JACKPOT = "JACKPOT"
     DOUBLE = "DOUBLE"
     SKILL_DROP = "SKILL_DROP"
     REFUND = "REFUND"
@@ -1037,7 +1038,7 @@ class RewardsDBService:
         else:
             roll = random.random()
             if roll < 0.25:
-                outcome = BetOutcome.DOUBLE
+                outcome = BetOutcome.JACKPOT
             elif roll < 0.50:
                 outcome = BetOutcome.SKILL_DROP
             elif roll < 0.65:
@@ -1049,10 +1050,10 @@ class RewardsDBService:
         reward_item_id = None
         reward_item_name = None
 
-        if outcome == BetOutcome.DOUBLE:
-            points_delta = 50  # Won 100 - 50 cost = +50 net
-            new_balance = user.points + points_delta
-            new_lifetime = user.lifetime_points + 50
+        if outcome in (BetOutcome.JACKPOT, BetOutcome.DOUBLE):
+            points_delta = 200  # Bet 50 cost reimbursed + 200 bonus = +200 net (250 total return)
+            new_balance = user.points + 200
+            new_lifetime = user.lifetime_points + 200
         elif outcome == BetOutcome.SKILL_DROP:
             points_delta = -50  # Deducted 50 cost
             new_balance = user.points - 50

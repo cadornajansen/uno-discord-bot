@@ -191,23 +191,23 @@ def test_play_bet_outcomes_and_limit(rewards_service: RewardsDBService):
     rewards_service.add_points(1001, 300, "TEST")
     now = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
 
-    # Bet 1: DOUBLE (+50 net)
-    b1 = rewards_service.play_bet(1001, now=now, fixed_outcome=BetOutcome.DOUBLE)
-    assert b1.points_delta == 50
-    assert b1.new_balance == 350
+    # Bet 1: JACKPOT (+200 net, 250 return)
+    b1 = rewards_service.play_bet(1001, now=now, fixed_outcome=BetOutcome.JACKPOT)
+    assert b1.points_delta == 200
+    assert b1.new_balance == 500
     assert b1.bets_remaining == 2
 
     # Bet 2: SKILL_DROP (-50 pts, +1 pickpocket)
     b2 = rewards_service.play_bet(1001, now=now, fixed_outcome=BetOutcome.SKILL_DROP, fixed_skill="pickpocket")
     assert b2.points_delta == -50
-    assert b2.new_balance == 300
+    assert b2.new_balance == 450
     assert b2.bets_remaining == 1
     inv = rewards_service.get_inventory(1001)
     assert inv["pickpocket"] == 1
 
     # Bet 3: BUST (-50 pts)
     b3 = rewards_service.play_bet(1001, now=now, fixed_outcome=BetOutcome.BUST)
-    assert b3.new_balance == 250
+    assert b3.new_balance == 400
     assert b3.bets_remaining == 0
 
     # Bet 4 on same day -> MaxBetsReachedError
