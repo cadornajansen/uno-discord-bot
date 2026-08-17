@@ -320,16 +320,28 @@ def test_admin_commands():
         target_member.display_name = "Charlie"
         target_member.display_avatar.url = "https://cdn.discordapp.com/avatar.png"
 
-        # 1. /admin-inspect
+        # 1. /admin-inspect (as Admin)
         interaction = MagicMock()
+        interaction.user.guild_permissions.administrator = True
         interaction.response.send_message = AsyncMock()
         await cog.admin_inspect.callback(cog, interaction, member=target_member)
         interaction.response.send_message.assert_awaited_once()
         inspect_embed = interaction.response.send_message.call_args.kwargs["embed"]
         assert "Admin Inspection" in inspect_embed.title
 
-        # 2. /admin-points add
+        # Non-admin rejection test
+        non_admin = MagicMock()
+        non_admin.user.guild_permissions.administrator = False
+        non_admin.user.guild_permissions.manage_guild = False
+        non_admin.guild.owner_id = 999999
+        non_admin.user.id = 123456
+        non_admin.response.send_message = AsyncMock()
+        await cog.admin_inspect.callback(cog, non_admin, member=target_member)
+        assert "Access Denied" in non_admin.response.send_message.call_args.args[0]
+
+        # 2. /admin-points add (as Admin)
         interaction2 = MagicMock()
+        interaction2.user.guild_permissions.administrator = True
         interaction2.user.display_name = "Admin Jansen"
         interaction2.response.send_message = AsyncMock()
         action_choice = MagicMock()
@@ -339,8 +351,9 @@ def test_admin_commands():
         interaction2.response.send_message.assert_awaited_once()
         assert service.get_balance(555) == 700
 
-        # 3. /admin-export
+        # 3. /admin-export (as Admin)
         interaction3 = MagicMock()
+        interaction3.user.guild_permissions.administrator = True
         interaction3.response.send_message = AsyncMock()
         await cog.admin_export.callback(cog, interaction3)
         interaction3.response.send_message.assert_awaited_once()

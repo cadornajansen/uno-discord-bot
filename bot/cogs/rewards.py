@@ -265,6 +265,19 @@ class RewardsCog(commands.Cog):
             bot, "rewards_service", RewardsDBService(getattr(bot.settings, "rewards_db_path", "data/rewards.db"))
         )
 
+    def _check_admin_permissions(self, interaction: discord.Interaction) -> bool:
+        """Verify whether caller is a server administrator or guild owner."""
+        user = interaction.user
+        guild = interaction.guild
+        if not user:
+            return False
+        if guild and getattr(guild, "owner_id", None) == user.id:
+            return True
+        perms = getattr(user, "guild_permissions", None)
+        if perms and (getattr(perms, "administrator", False) or getattr(perms, "manage_guild", False)):
+            return True
+        return False
+
     async def _log_activity(
         self,
         title: str,
@@ -726,9 +739,17 @@ class RewardsCog(commands.Cog):
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
     @app_commands.command(name="admin-inspect", description="[Admin] Inspect a student's points, streaks, badges, and recent transactions.")
+    @app_commands.default_permissions(administrator=True)
     @app_commands.describe(member="The classmate to inspect.")
     async def admin_inspect(self, interaction: discord.Interaction, member: discord.Member) -> None:
         """Admin command to inspect student economy details."""
+        if not self._check_admin_permissions(interaction):
+            await interaction.response.send_message(
+                "⛔ **Access Denied**: You must be a Server Administrator to use this command.",
+                ephemeral=True,
+            )
+            return
+
         profile = self.rewards_service.get_profile(member.id)
         txs = self.rewards_service.get_user_transactions(member.id, limit=5)
 
@@ -758,6 +779,7 @@ class RewardsCog(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="admin-points", description="[Admin] Add or deduct Uno Points for a member.")
+    @app_commands.default_permissions(administrator=True)
     @app_commands.describe(
         action="Whether to add or deduct points.",
         member="The student whose points to modify.",
@@ -777,6 +799,13 @@ class RewardsCog(commands.Cog):
         reason: str,
     ) -> None:
         """Admin point adjustment command."""
+        if not self._check_admin_permissions(interaction):
+            await interaction.response.send_message(
+                "⛔ **Access Denied**: You must be a Server Administrator to use this command.",
+                ephemeral=True,
+            )
+            return
+
         if amount <= 0:
             await interaction.response.send_message("❌ Amount must be greater than 0.", ephemeral=True)
             return
@@ -816,8 +845,16 @@ class RewardsCog(commands.Cog):
                 await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
     @app_commands.command(name="admin-export", description="[Admin] Export the entire Uno Rewards database to a CSV spreadsheet file.")
+    @app_commands.default_permissions(administrator=True)
     async def admin_export(self, interaction: discord.Interaction) -> None:
         """Export database as CSV file."""
+        if not self._check_admin_permissions(interaction):
+            await interaction.response.send_message(
+                "⛔ **Access Denied**: You must be a Server Administrator to use this command.",
+                ephemeral=True,
+            )
+            return
+
         csv_data = self.rewards_service.export_csv()
         file = discord.File(
             fp=io.BytesIO(csv_data.encode("utf-8")),

@@ -251,11 +251,13 @@ class PrefixCommandsCog(commands.Cog):
         await self._invoke_app_command(context, "RewardsCog", "redeem", choice)
 
     @commands.command(name="admin-inspect", aliases=["inspect"])
+    @commands.has_permissions(administrator=True)
     async def admin_inspect_prefix(self, context: commands.Context, member: discord.Member) -> None:
         """Prefix alias for /admin-inspect."""
         await self._invoke_app_command(context, "RewardsCog", "admin_inspect", member)
 
     @commands.command(name="admin-points")
+    @commands.has_permissions(administrator=True)
     async def admin_points_prefix(
         self,
         context: commands.Context,
@@ -271,6 +273,7 @@ class PrefixCommandsCog(commands.Cog):
         await self._invoke_app_command(context, "RewardsCog", "admin_points", choice, member, amount, reason)
 
     @commands.command(name="admin-export", aliases=["export-rewards"])
+    @commands.has_permissions(administrator=True)
     async def admin_export_prefix(self, context: commands.Context) -> None:
         """Prefix alias for /admin-export."""
         await self._invoke_app_command(context, "RewardsCog", "admin_export")
@@ -340,6 +343,10 @@ class PrefixCommandsCog(commands.Cog):
             command_name = context.command.name if context.command else "command"
             usage = usage_by_command.get(command_name, f"!{command_name}")
             await context.reply(f"Usage: `{usage}`", suppress_embeds=True)
+            return
+
+        if isinstance(error, (commands.MissingPermissions, commands.CheckFailure)):
+            await context.reply("⛔ **Access Denied**: You must be a Server Administrator to use this command.", suppress_embeds=True)
             return
 
         if isinstance(error, commands.BadArgument):
