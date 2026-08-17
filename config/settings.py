@@ -53,6 +53,7 @@ class Settings:
         ocr_max_image_mb: int,
         ocr_min_text_chars: int,
         ocr_max_images_per_message: int,
+        forum_channel_ids: frozenset[int],
         chat_memory_max_turns: int,
         chat_memory_ttl_minutes: int,
         chat_memory_max_tokens: int,
@@ -95,6 +96,7 @@ class Settings:
         self.ocr_max_image_mb = ocr_max_image_mb
         self.ocr_min_text_chars = ocr_min_text_chars
         self.ocr_max_images_per_message = ocr_max_images_per_message
+        self.forum_channel_ids = forum_channel_ids
         self.chat_memory_max_turns = chat_memory_max_turns
         self.chat_memory_ttl_minutes = chat_memory_ttl_minutes
         self.chat_memory_max_tokens = chat_memory_max_tokens
@@ -315,6 +317,22 @@ def load_settings() -> Settings:
         raise ConfigError("OCR_MAX_IMAGES_PER_MESSAGE must be a positive integer.")
     ocr_max_images_per_message = int(ocr_max_images_per_message_raw)
 
+    forum_channels_raw = os.getenv(
+        "FORUM_CHANNEL_IDS", "1538209328018886676"
+    ).strip()
+    forum_channel_ids: set[int] = set()
+    if forum_channels_raw:
+        for part in forum_channels_raw.split(","):
+            cleaned = part.strip()
+            if not cleaned:
+                continue
+            if not cleaned.isdigit():
+                raise ConfigError(
+                    f"Invalid channel ID '{cleaned}' in FORUM_CHANNEL_IDS. "
+                    "All channel IDs must be numeric integers."
+                )
+            forum_channel_ids.add(int(cleaned))
+
     chat_memory_max_turns = _positive_int_env("CHAT_MEMORY_MAX_TURNS", "4")
     chat_memory_ttl_minutes = _positive_int_env("CHAT_MEMORY_TTL_MINUTES", "30")
     chat_memory_max_tokens = _positive_int_env("CHAT_MEMORY_MAX_TOKENS", "1200")
@@ -358,6 +376,7 @@ def load_settings() -> Settings:
         ocr_max_image_mb=ocr_max_image_mb,
         ocr_min_text_chars=ocr_min_text_chars,
         ocr_max_images_per_message=ocr_max_images_per_message,
+        forum_channel_ids=frozenset(forum_channel_ids),
         chat_memory_max_turns=chat_memory_max_turns,
         chat_memory_ttl_minutes=chat_memory_ttl_minutes,
         chat_memory_max_tokens=chat_memory_max_tokens,

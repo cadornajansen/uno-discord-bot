@@ -146,3 +146,12 @@ def test_ocr_channel_ids_and_settings_parsing(monkeypatch: pytest.MonkeyPatch) -
     assert settings.ocr_max_image_mb == 12
     assert settings.ocr_min_text_chars == 15
     assert settings.ocr_max_images_per_message == 5
+
+
+def test_forum_channel_ids_parsing(monkeypatch):
+    """Test custom parsing of FORUM_CHANNEL_IDS."""
+    monkeypatch.setenv("DISCORD_TOKEN", "mock_token")
+    monkeypatch.setenv("FORUM_CHANNEL_IDS", "1538209328018886676, 123456789")
+
+    settings = load_settings()
+    assert settings.forum_channel_ids == frozenset({1538209328018886676, 123456789})
