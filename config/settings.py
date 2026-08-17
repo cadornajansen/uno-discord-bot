@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from typing import Optional
 from dotenv import load_dotenv
 
 # Load environment variables from .env if present
@@ -55,7 +56,7 @@ class Settings:
         ocr_min_text_chars: int,
         ocr_max_images_per_message: int,
         forum_channel_ids: frozenset[int],
-        rewards_log_channel_id: Optional[int],
+        rewards_log_channel_id: int | None,
         rewards_db_path: Path,
         chat_memory_max_turns: int,
         chat_memory_ttl_minutes: int,
