@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables from .env if present
@@ -54,6 +55,8 @@ class Settings:
         ocr_min_text_chars: int,
         ocr_max_images_per_message: int,
         forum_channel_ids: frozenset[int],
+        rewards_log_channel_id: Optional[int],
+        rewards_db_path: Path,
         chat_memory_max_turns: int,
         chat_memory_ttl_minutes: int,
         chat_memory_max_tokens: int,
@@ -97,6 +100,8 @@ class Settings:
         self.ocr_min_text_chars = ocr_min_text_chars
         self.ocr_max_images_per_message = ocr_max_images_per_message
         self.forum_channel_ids = forum_channel_ids
+        self.rewards_log_channel_id = rewards_log_channel_id
+        self.rewards_db_path = rewards_db_path
         self.chat_memory_max_turns = chat_memory_max_turns
         self.chat_memory_ttl_minutes = chat_memory_ttl_minutes
         self.chat_memory_max_tokens = chat_memory_max_tokens
@@ -333,6 +338,12 @@ def load_settings() -> Settings:
                 )
             forum_channel_ids.add(int(cleaned))
 
+    rewards_log_raw = os.getenv(
+        "REWARDS_LOG_CHANNEL_ID", "1538813495397589062"
+    ).strip()
+    rewards_log_channel_id = int(rewards_log_raw) if rewards_log_raw.isdigit() else None
+    rewards_db_path = Path(os.getenv("REWARDS_DB_PATH", "data/rewards.db").strip())
+
     chat_memory_max_turns = _positive_int_env("CHAT_MEMORY_MAX_TURNS", "4")
     chat_memory_ttl_minutes = _positive_int_env("CHAT_MEMORY_TTL_MINUTES", "30")
     chat_memory_max_tokens = _positive_int_env("CHAT_MEMORY_MAX_TOKENS", "1200")
@@ -377,6 +388,8 @@ def load_settings() -> Settings:
         ocr_min_text_chars=ocr_min_text_chars,
         ocr_max_images_per_message=ocr_max_images_per_message,
         forum_channel_ids=frozenset(forum_channel_ids),
+        rewards_log_channel_id=rewards_log_channel_id,
+        rewards_db_path=rewards_db_path,
         chat_memory_max_turns=chat_memory_max_turns,
         chat_memory_ttl_minutes=chat_memory_ttl_minutes,
         chat_memory_max_tokens=chat_memory_max_tokens,
