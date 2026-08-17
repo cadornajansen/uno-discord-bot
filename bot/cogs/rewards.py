@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import io
 import logging
 import math
-from typing import Optional
+from typing import Any, Optional
 import discord
 from discord import app_commands
 from discord.ext import commands
