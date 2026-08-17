@@ -286,13 +286,6 @@ class RewardsCog(commands.Cog):
         embed.title = "📊 Top 10 Scholars — Uno Rankings"
         await interaction.response.send_message(embed=embed)
 
-    @commands.command(name="rank")
-    async def rank_prefix(self, ctx: commands.Context) -> None:
-        """Prefix command !rank to view top 10 members."""
-        embed, _ = await build_leaderboard_embed(self.rewards_service, ctx.guild, page=1, per_page=10)
-        embed.title = "📊 Top 10 Scholars — Uno Rankings"
-        await ctx.send(embed=embed)
-
     @app_commands.command(name="leaderboard", description="Browse the full paginated class leaderboard.")
     async def leaderboard(self, interaction: discord.Interaction) -> None:
         """Browse the full class leaderboard with interactive pagination buttons."""

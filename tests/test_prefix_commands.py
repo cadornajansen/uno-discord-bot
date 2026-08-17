@@ -46,6 +46,21 @@ def test_prefix_cog_registers_all_non_document_aliases():
         "nextclass",
         "prof",
         "weather",
+        "countdown",
+        "daily",
+        "balance",
+        "profile",
+        "rank",
+        "leaderboard",
+        "bet",
+        "steal",
+        "inventory",
+        "use",
+        "shop",
+        "redeem",
+        "admin-inspect",
+        "admin-points",
+        "admin-export",
     }.issubset(command_names)
 
 
@@ -130,5 +145,54 @@ def test_document_prefix_commands_redirect_to_slash_commands():
 
         assert "/analyze" in analyze_context.reply.await_args.args[0]
         assert "/docask" in docask_context.reply.await_args.args[0]
+
+    asyncio.run(_test())
+
+
+def test_rewards_prefix_commands_forward_correctly():
+    """Verify prefix commands forward correctly to RewardsCog."""
+    async def _test():
+        prefix_cog = PrefixCommandsCog(MagicMock())
+        prefix_cog._invoke_app_command = AsyncMock()
+        context = make_context()
+
+        # 1. !daily
+        await PrefixCommandsCog.daily_prefix.callback(prefix_cog, context)
+        prefix_cog._invoke_app_command.assert_awaited_with(context, "RewardsCog", "daily")
+
+        # 2. !balance
+        await PrefixCommandsCog.balance_prefix.callback(prefix_cog, context)
+        prefix_cog._invoke_app_command.assert_awaited_with(context, "RewardsCog", "balance")
+
+        # 3. !bet
+        await PrefixCommandsCog.bet_prefix.callback(prefix_cog, context)
+        prefix_cog._invoke_app_command.assert_awaited_with(context, "RewardsCog", "bet")
+
+        # 4. !shop
+        await PrefixCommandsCog.shop_prefix.callback(prefix_cog, context)
+        prefix_cog._invoke_app_command.assert_awaited_with(context, "RewardsCog", "shop")
+
+        # 5. !countdown
+        await PrefixCommandsCog.countdown_prefix.callback(prefix_cog, context)
+        prefix_cog._invoke_app_command.assert_awaited_with(context, "AcademicsCog", "countdown")
+
+        # 6. !use shield_1w
+        await PrefixCommandsCog.use_prefix.callback(prefix_cog, context, item="shield_1w")
+        assert prefix_cog._invoke_app_command.await_args[0][1] == "RewardsCog"
+        assert prefix_cog._invoke_app_command.await_args[0][2] == "use"
+        assert prefix_cog._invoke_app_command.await_args[0][3].value == "shield_1w"
+
+        # 7. !redeem coffee
+        await PrefixCommandsCog.redeem_prefix.callback(prefix_cog, context, item="coffee")
+        assert prefix_cog._invoke_app_command.await_args[0][1] == "RewardsCog"
+        assert prefix_cog._invoke_app_command.await_args[0][2] == "redeem"
+        assert prefix_cog._invoke_app_command.await_args[0][3].value == "coffee"
+
+        # 8. !admin-points add @user 500 Quiz
+        member = MagicMock()
+        await PrefixCommandsCog.admin_points_prefix.callback(prefix_cog, context, action="add", member=member, amount=500, reason="Quiz")
+        assert prefix_cog._invoke_app_command.await_args[0][1] == "RewardsCog"
+        assert prefix_cog._invoke_app_command.await_args[0][2] == "admin_points"
+        assert prefix_cog._invoke_app_command.await_args[0][3].value == "add"
 
     asyncio.run(_test())
