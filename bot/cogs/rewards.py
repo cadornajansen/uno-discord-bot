@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 async def build_leaderboard_embed(
     rewards_service: RewardsDBService,
     guild: Optional[discord.Guild],
+    bot: Optional[commands.Bot] = None,
     page: int = 1,
     per_page: int = 10,
 ) -> tuple[discord.Embed, int]:
@@ -47,12 +48,30 @@ async def build_leaderboard_embed(
 
     lines = []
     for entry in entries:
-        # Resolve display name
-        display_name = f"User {entry.user_id}"
+        # Resolve display name or username
+        display_name = None
         if guild:
             member = guild.get_member(entry.user_id)
+            if not member:
+                try:
+                    member = await guild.fetch_member(entry.user_id)
+                except Exception:
+                    member = None
             if member:
                 display_name = member.display_name
+
+        if not display_name and bot:
+            user = bot.get_user(entry.user_id)
+            if not user:
+                try:
+                    user = await bot.fetch_user(entry.user_id)
+                except Exception:
+                    user = None
+            if user:
+                display_name = user.display_name or user.name
+
+        if not display_name:
+            display_name = f"<@{entry.user_id}>"
 
         # Rank badge
         if entry.rank == 1:
@@ -79,6 +98,7 @@ class LeaderboardView(discord.ui.View):
         self,
         rewards_service: RewardsDBService,
         guild: Optional[discord.Guild],
+        bot: Optional[commands.Bot] = None,
         page: int = 1,
         per_page: int = 10,
         total_pages: int = 1,
@@ -86,6 +106,7 @@ class LeaderboardView(discord.ui.View):
         super().__init__(timeout=180.0)
         self.rewards_service = rewards_service
         self.guild = guild
+        self.bot = bot
         self.page = page
         self.per_page = per_page
         self.total_pages = total_pages
@@ -101,7 +122,7 @@ class LeaderboardView(discord.ui.View):
         if self.page > 1:
             self.page -= 1
             embed, self.total_pages = await build_leaderboard_embed(
-                self.rewards_service, self.guild, self.page, self.per_page
+                self.rewards_service, self.guild, bot=self.bot, page=self.page, per_page=self.per_page
             )
             self._update_buttons()
             await interaction.response.edit_message(embed=embed, view=self)
@@ -115,7 +136,7 @@ class LeaderboardView(discord.ui.View):
         if self.page < self.total_pages:
             self.page += 1
             embed, self.total_pages = await build_leaderboard_embed(
-                self.rewards_service, self.guild, self.page, self.per_page
+                self.rewards_service, self.guild, bot=self.bot, page=self.page, per_page=self.per_page
             )
             self._update_buttons()
             await interaction.response.edit_message(embed=embed, view=self)
@@ -282,7 +303,9 @@ class RewardsCog(commands.Cog):
     @app_commands.command(name="rank", description="View the top 10 highest-ranked BSCS 1-4 members.")
     async def rank(self, interaction: discord.Interaction) -> None:
         """Display quick Top 10 leaderboard."""
-        embed, _ = await build_leaderboard_embed(self.rewards_service, interaction.guild, page=1, per_page=10)
+        embed, _ = await build_leaderboard_embed(
+            self.rewards_service, interaction.guild, bot=self.bot, page=1, per_page=10
+        )
         embed.title = "📊 Top 10 Scholars — Uno Rankings"
         await interaction.response.send_message(embed=embed)
 
@@ -290,11 +313,12 @@ class RewardsCog(commands.Cog):
     async def leaderboard(self, interaction: discord.Interaction) -> None:
         """Browse the full class leaderboard with interactive pagination buttons."""
         embed, total_pages = await build_leaderboard_embed(
-            self.rewards_service, interaction.guild, page=1, per_page=10
+            self.rewards_service, interaction.guild, bot=self.bot, page=1, per_page=10
         )
         view = LeaderboardView(
             self.rewards_service,
             interaction.guild,
+            bot=self.bot,
             page=1,
             per_page=10,
             total_pages=total_pages,
