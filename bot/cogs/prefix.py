@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from typing import Any, Optional
 
 import discord
@@ -274,6 +274,16 @@ class PrefixCommandsCog(commands.Cog):
     async def admin_export_prefix(self, context: commands.Context) -> None:
         """Prefix alias for /admin-export."""
         await self._invoke_app_command(context, "RewardsCog", "admin_export")
+
+    @commands.command(name="guide", aliases=["tutorial", "rules", "howtoplay"])
+    async def guide_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /guide."""
+        await self._invoke_app_command(context, "RewardsCog", "guide")
+
+    @commands.command(name="milestone", aliases=["announcement", "update"])
+    async def milestone_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /milestone."""
+        await self._invoke_app_command(context, "RewardsCog", "milestone")
 
     # -------------------------------------------------------------------------
     # Slash-Only Explanations

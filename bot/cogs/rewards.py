@@ -708,6 +708,94 @@ class RewardsCog(commands.Cog):
         )
         await interaction.response.send_message("📊 Here is the updated Uno Rewards database export:", file=file, ephemeral=True)
 
+    @app_commands.command(name="guide", description="Complete guide on how to earn points, gamble, steal, and redeem prizes in Uno!")
+    async def guide(self, interaction: discord.Interaction) -> None:
+        """Display the complete student game guide for Uno Rewards."""
+        embed = discord.Embed(
+            title="🎮 Uno AI Rewards & Economy — Complete Student Guide",
+            description=(
+                "Welcome to the **BSCS 1-4 Uno Rewards System**! Earn points by interacting, "
+                "competing on the leaderboard, and redeeming real-world and server prizes!"
+            ),
+            color=discord.Color.blue(),
+        )
+
+        embed.add_field(
+            name="📅 1. How to Earn Points",
+            value=(
+                "• **`/daily` or `!daily`**: Claim your daily attendance reward (+30 pts base + 5 pts/day of streak, max +35 pts bonus!).\n"
+                "• **`/bet` or `!bet`**: Risk 50 pts on roulette (max 3/day). 25% Jackpot (+100 pts), 25% Skill Drop, 15% Refund, 35% Bust.\n"
+                "• **`/steal @user` or `!steal`**: Use a *Pickpocket Card* to steal 10%–15% points from an unshielded classmate!"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="🛡️ 2. Protection & Skills",
+            value=(
+                "• **`/inventory` or `!inv`**: Inspect your owned skill cards.\n"
+                "• **`/use shield_1w` or `!use shield_1w`**: Activates a **1-Week Immunity Shield** that completely deflects all `/steal` robbery attempts for 7 days!"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="🎁 3. Prize Catalog (`/shop` or `!shop`)",
+            value=(
+                "• `1,200 pts` — **☕ Intramuros Coffee Treat** (7-Eleven / Lawson)\n"
+                "• `2,200 pts` — **💳 GCash Gift Card ₱100**\n"
+                "• `2,800 pts` — **🖨️ Free Printing Service (1 Month)**\n"
+                "• `3,000 pts` — **🍫 Exams Survival Kit** *(FREE Milestone Auto-Unlock!)*\n"
+                "• `5,500 pts` — **🚀 1 Month Discord Nitro**\n"
+                "• *Redeem with `/redeem <item>` or `!redeem <item>`!*"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="📊 4. Profiles & Leaderboard",
+            value=(
+                "• **`/balance` / `!bal`**: Check wallet balance, streak, and shield status.\n"
+                "• **`/profile` / `!profile`**: View student rank, badges, and inventory.\n"
+                "• **`/rank` / `!rank`**: Compact Top 10 members today.\n"
+                "• **`/leaderboard` / `!lb`**: Full class ranking with interactive page buttons."
+            ),
+            inline=False,
+        )
+
+        embed.set_footer(text="BSCS 1-4 • Pamantasan ng Lungsod ng Maynila • Built by Jansen")
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="milestone", description="Display the official Uno AI Rewards & Economy launch announcement milestone.")
+    async def milestone(self, interaction: discord.Interaction) -> None:
+        """Display the official production milestone announcement."""
+        embed = discord.Embed(
+            title="✅ PRODUCTION MILESTONE: UNO REWARDS & GAMIFICATION",
+            description=(
+                "**Uno AI Gamification & Rewards System is officially live 🟢**\n\n"
+                "Earn Uno Points every day, climb the student leaderboards, roll the roulette, "
+                "protect your wallet with Immunity Shields, and redeem real-world student perks!\n\n"
+                "**ECONOMY FEATURES**\n"
+                "• 📅 Daily Attendance & Streak Bonus (`/daily` or `!daily`)\n"
+                "• 🎰 50pt Roulette Gambling (`/bet` or `!bet`)\n"
+                "• 🦹 Pickpocket Robberies & 1-Week Shields (`/steal`, `/use`)\n"
+                "• 🏆 Paginated Class Leaderboard (`/leaderboard` or `!lb`)\n"
+                "• 🏪 Prize Shop & Real Redemptions (`/shop`, `/redeem`)\n\n"
+                "**REDEEMABLE PERKS**\n"
+                "Intramuros Coffee · GCash ₱100 · 1-Month Printing · 3k Exam Kit · Discord Nitro\n\n"
+                "**GET STARTED**\n"
+                "Run `/guide` or `!guide` to learn all game mechanics and claim your first `/daily`!"
+            ),
+            color=discord.Color.from_rgb(0, 114, 239),
+        )
+        embed.set_footer(text="BSCS 1-4 · Built for the block. Now living in the cloud.")
+
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(label="GitHub Repository ↗", url="https://github.com/cadornajansen/uno-discord-bot"))
+        view.add_item(discord.ui.Button(label="Read Documentation ↗", url="https://github.com/cadornajansen/uno-discord-bot#readme"))
+
+        await interaction.response.send_message(embed=embed, view=view)
+
 
 class RedemptionApprovalView(discord.ui.View):
     """Interactive Admin view for approving or rejecting prize claims."""

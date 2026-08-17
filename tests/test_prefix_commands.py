@@ -61,6 +61,8 @@ def test_prefix_cog_registers_all_non_document_aliases():
         "admin-inspect",
         "admin-points",
         "admin-export",
+        "guide",
+        "milestone",
     }.issubset(command_names)
 
 

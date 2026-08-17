@@ -348,3 +348,27 @@ def test_admin_commands():
         assert file_arg.filename.startswith("uno_rewards_")
 
     asyncio.run(_test())
+
+
+def test_guide_and_milestone_commands():
+    """Test /guide and /milestone commands."""
+    async def _test():
+        cog, _, _ = _make_rewards_cog()
+
+        # 1. /guide
+        interaction1 = MagicMock()
+        interaction1.response.send_message = AsyncMock()
+        await cog.guide.callback(cog, interaction1)
+        interaction1.response.send_message.assert_awaited_once()
+        guide_embed = interaction1.response.send_message.call_args.kwargs["embed"]
+        assert "Complete Student Guide" in guide_embed.title
+
+        # 2. /milestone
+        interaction2 = MagicMock()
+        interaction2.response.send_message = AsyncMock()
+        await cog.milestone.callback(cog, interaction2)
+        interaction2.response.send_message.assert_awaited_once()
+        milestone_embed = interaction2.response.send_message.call_args.kwargs["embed"]
+        assert "PRODUCTION MILESTONE" in milestone_embed.title
+
+    asyncio.run(_test())
