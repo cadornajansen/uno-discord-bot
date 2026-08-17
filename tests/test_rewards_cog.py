@@ -390,7 +390,7 @@ def test_trivia_command_and_view():
         embed = interaction.response.send_message.call_args.kwargs["embed"]
         view = interaction.response.send_message.call_args.kwargs["view"]
         assert "Uno Daily Trivia" in embed.title
-        assert len(view.children) == 4
+        assert len(view.children) in (2, 4)
 
         # 2. Click wrong button -> 0 points, attempt recorded
         btn_wrong = next(b for b in view.children if getattr(b, "option_index", None) != view.question.correct_index)

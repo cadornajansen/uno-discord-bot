@@ -148,10 +148,15 @@ class LeaderboardView(discord.ui.View):
 class TriviaAnswerButton(discord.ui.Button):
     """Button for a single trivia answer choice."""
 
-    def __init__(self, option_index: int, label: str):
-        letters = ["A", "B", "C", "D"]
-        prefix = f"{letters[option_index]}: " if option_index < len(letters) else ""
-        display_label = f"{prefix}{label}"[:80]
+    def __init__(self, option_index: int, label: str, is_true_false: bool = False):
+        if is_true_false:
+            emoji = "✅" if label.lower() == "true" else "❌"
+            display_label = f"{emoji} {label}"
+        else:
+            letters = ["A", "B", "C", "D"]
+            prefix = f"{letters[option_index]}: " if option_index < len(letters) else ""
+            display_label = f"{prefix}{label}"[:80]
+
         super().__init__(
             label=display_label,
             style=discord.ButtonStyle.secondary,
@@ -185,8 +190,9 @@ class TriviaAnswerButton(discord.ui.Button):
                     child.style = discord.ButtonStyle.danger
 
         letters = ["A", "B", "C", "D"]
-        correct_letter = letters[view.question.correct_index]
         correct_answer_text = view.question.options[view.question.correct_index]
+        is_tf = set(opt.lower() for opt in view.question.options) == {"true", "false"}
+        ans_prefix = "" if is_tf else f"{letters[view.question.correct_index]}: "
 
         embed = discord.Embed()
         if is_correct:
@@ -195,7 +201,7 @@ class TriviaAnswerButton(discord.ui.Button):
             embed.description = (
                 f"**You nailed it!**\n\n"
                 f"**Question:** {view.question.question}\n"
-                f"**Answer:** `{correct_letter}: {correct_answer_text}`\n\n"
+                f"**Answer:** `{ans_prefix}{correct_answer_text}`\n\n"
                 f"💡 **Explanation:** {view.question.explanation}\n\n"
                 f"💰 **Reward:** `+50 Uno Points`\n"
                 f"💳 **New Balance:** `{result.new_balance:,} pts`\n"
@@ -218,7 +224,7 @@ class TriviaAnswerButton(discord.ui.Button):
             embed.description = (
                 f"**Nice try!** Better luck on your next question.\n\n"
                 f"**Question:** {view.question.question}\n"
-                f"**Correct Answer:** `{correct_letter}: {correct_answer_text}`\n\n"
+                f"**Correct Answer:** `{ans_prefix}{correct_answer_text}`\n\n"
                 f"💡 **Explanation:** {view.question.explanation}\n\n"
                 f"💳 **Current Balance:** `{result.new_balance:,} pts`\n"
                 f"🎯 **Quizzes Remaining Today:** `{result.trivia_remaining} / 3`"
@@ -244,8 +250,9 @@ class TriviaView(discord.ui.View):
         self.question = question
         self.cog = cog
 
+        is_tf = set(opt.lower() for opt in question.options) == {"true", "false"}
         for idx, opt in enumerate(question.options):
-            self.add_item(TriviaAnswerButton(option_index=idx, label=opt))
+            self.add_item(TriviaAnswerButton(option_index=idx, label=opt, is_true_false=is_tf))
 
 
 class RewardsCog(commands.Cog):
@@ -829,11 +836,15 @@ class RewardsCog(commands.Cog):
             )
             return
 
-        _, question = self.rewards_service.get_random_trivia_question()
-        letters = ["A", "B", "C", "D"]
-        options_formatted = "\n".join(
-            f"**{letters[i]}.** {opt}" for i, opt in enumerate(question.options)
-        )
+        _, question = self.rewards_service.get_random_trivia_question(user_id=user_id)
+        is_tf = set(opt.lower() for opt in question.options) == {"true", "false"}
+        if is_tf:
+            options_formatted = "• **✅ True**\n• **❌ False**"
+        else:
+            letters = ["A", "B", "C", "D"]
+            options_formatted = "\n".join(
+                f"**{letters[i]}.** {opt}" for i, opt in enumerate(question.options)
+            )
 
         remaining_before = 3 - (user.daily_trivia_count if user.last_trivia_date == today_str else 0)
 

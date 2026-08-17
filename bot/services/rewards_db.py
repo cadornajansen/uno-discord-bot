@@ -58,110 +58,300 @@ class TriviaQuestion:
 
 
 TRIVIA_QUESTIONS: list[TriviaQuestion] = [
+    # -------------------------------------------------------------------------
+    # 🖥️ Intro to Computing & Fundamentals of Programming
+    # -------------------------------------------------------------------------
     TriviaQuestion(
-        question="In C programming, what operator is used to obtain the memory address of a variable?",
-        options=["*", "&", "->", "%"],
+        question="How many bits make up a single byte in standard computer architecture?",
+        options=["4 bits", "8 bits", "16 bits", "32 bits"],
         correct_index=1,
-        explanation="The `&` (address-of) operator retrieves the memory address of a variable in C.",
-        category="💻 C Programming",
+        explanation="A byte consists of exactly 8 bits, capable of representing 256 (2^8) distinct values.",
+        category="🖥️ Intro to Computing",
     ),
     TriviaQuestion(
-        question="What is the average time complexity of searching an element in a balanced Binary Search Tree (BST)?",
-        options=["O(1)", "O(n)", "O(log n)", "O(n log n)"],
+        question="Which of the following is considered an INPUT hardware device?",
+        options=["Monitor", "Keyboard", "Speaker", "Printer"],
+        correct_index=1,
+        explanation="A keyboard sends data into the computer system, making it an input device.",
+        category="🖥️ Intro to Computing",
+    ),
+    TriviaQuestion(
+        question="What does the acronym 'GUI' stand for in software and operating systems?",
+        options=["General User Input", "Graphical User Interface", "Global Unified Internet", "Graphic Utility Instruction"],
+        correct_index=1,
+        explanation="GUI stands for Graphical User Interface, enabling visual interaction with icons and windows.",
+        category="🖥️ Intro to Computing",
+    ),
+    TriviaQuestion(
+        question="In computer memory units, exactly how many bytes are in 1 Kilobyte (KB) in binary notation?",
+        options=["1000 bytes", "1024 bytes", "512 bytes", "2048 bytes"],
+        correct_index=1,
+        explanation="In binary computing (2^10), 1 Kilobyte equals 1,024 bytes.",
+        category="🖥️ Intro to Computing",
+    ),
+    TriviaQuestion(
+        question="In programming fundamentals, what is a 'variable'?",
+        options=["A permanent hardware chip", "A named memory location that stores a value", "A syntax error in code", "A type of computer screen"],
+        correct_index=1,
+        explanation="A variable is a symbolic name given to a memory location that holds changeable data during program execution.",
+        category="💻 Fund. of Programming",
+    ),
+    TriviaQuestion(
+        question="What type of programming error occurs when code violates the grammatical rules of the programming language?",
+        options=["Syntax Error", "Logic Error", "Runtime Error", "Segmentation Fault"],
+        correct_index=0,
+        explanation="A Syntax Error happens when the code breaks grammatical language rules (e.g. missing semicolon or bracket).",
+        category="💻 Fund. of Programming",
+    ),
+    TriviaQuestion(
+        question="In most modern programming languages (such as C, Java, and Python), array indexing starts at what number?",
+        options=["1", "0", "-1", "Any number specified"],
+        correct_index=1,
+        explanation="Zero-based indexing is standard in most languages, meaning the first element is at index 0.",
+        category="💻 Fund. of Programming",
+    ),
+    TriviaQuestion(
+        question="What tool translates entire high-level source code into machine code before program execution?",
+        options=["Interpreter", "Compiler", "Debugger", "Text Editor"],
+        correct_index=1,
+        explanation="A Compiler translates the entire program into machine code upfront, whereas an Interpreter translates line-by-line.",
+        category="💻 Fund. of Programming",
+    ),
+    TriviaQuestion(
+        question="RAM (Random Access Memory) retains all of its stored data even after the computer is powered off.",
+        options=["True", "False"],
+        correct_index=1,
+        explanation="False! RAM is volatile memory and loses all its stored data immediately when power is lost.",
+        category="🖥️ Intro to Computing",
+    ),
+    TriviaQuestion(
+        question="Open-source software allows anyone to inspect, modify, and enhance its source code freely.",
+        options=["True", "False"],
+        correct_index=0,
+        explanation="True! Open-source licenses grant users rights to study, change, and distribute the software.",
+        category="🖥️ Intro to Computing",
+    ),
+    TriviaQuestion(
+        question="An infinite loop is a loop that continues running indefinitely because its terminating condition is never met.",
+        options=["True", "False"],
+        correct_index=0,
+        explanation="True! If the loop's exit condition never evaluates to false, the loop runs forever until terminated.",
+        category="💻 Fund. of Programming",
+    ),
+    TriviaQuestion(
+        question="Comments written in code are executed by the CPU to help speed up program calculations.",
+        options=["True", "False"],
+        correct_index=1,
+        explanation="False! Comments are completely ignored by compilers and interpreters; they exist solely for human readers.",
+        category="💻 Fund. of Programming",
+    ),
+    TriviaQuestion(
+        question="Pseudocode is an informal, human-readable outline of a computer algorithm without strict syntax.",
+        options=["True", "False"],
+        correct_index=0,
+        explanation="True! Pseudocode uses natural language and structured conventions to design algorithms before coding.",
+        category="💻 Fund. of Programming",
+    ),
+
+    # -------------------------------------------------------------------------
+    # ⚡ General Science — Physics
+    # -------------------------------------------------------------------------
+    TriviaQuestion(
+        question="According to Newton's First Law of Motion, an object at rest will stay at rest unless acted upon by what?",
+        options=["Gravity only", "An unbalanced external force", "Frictional heat", "Magnetic pull"],
+        correct_index=1,
+        explanation="Newton's 1st Law (Law of Inertia) states an object remains at rest or in uniform motion unless acted upon by a net external force.",
+        category="⚡ Physics",
+    ),
+    TriviaQuestion(
+        question="What is the approximate speed of light in a vacuum?",
+        options=["3,000 km/s", "30,000 km/s", "300,000 km/s", "3,000,000 km/s"],
         correct_index=2,
-        explanation="Searching in a balanced BST halves the search space each step, giving O(log n) time complexity.",
-        category="🧠 Data Structures",
+        explanation="Light travels at approximately 300,000 km/s (or 3 × 10^8 m/s) in a vacuum.",
+        category="⚡ Physics",
     ),
     TriviaQuestion(
-        question="Which data structure operates on a Last-In, First-Out (LIFO) principle?",
-        options=["Queue", "Stack", "Linked List", "Priority Queue"],
-        correct_index=1,
-        explanation="A Stack follows LIFO, where the last element inserted is the first one popped.",
-        category="🧠 Data Structures",
-    ),
-    TriviaQuestion(
-        question="What standard C library function is used to allocate dynamic memory on the Heap?",
-        options=["alloc()", "malloc()", "heap_alloc()", "new()"],
-        correct_index=1,
-        explanation="`malloc()` (Memory Allocation) allocates uninitialized bytes on the heap in C.",
-        category="💻 C Programming",
-    ),
-    TriviaQuestion(
-        question="In Boolean algebra, what is the output of `A XOR A` for any boolean variable A?",
-        options=["1 (True)", "0 (False)", "A", "NOT A"],
-        correct_index=1,
-        explanation="`A XOR A` is always 0 (False) because both operands have identical truth values.",
-        category="📐 Discrete Math",
-    ),
-    TriviaQuestion(
-        question="Which standard default port number is used for secure HTTPS web traffic?",
-        options=["21", "80", "443", "8080"],
+        question="What is the standard International System (SI) unit for measuring electrical resistance?",
+        options=["Volt", "Watt", "Ohm (Ω)", "Ampere"],
         correct_index=2,
-        explanation="HTTPS encrypts communication over port 443 (HTTP uses port 80).",
-        category="🌐 Computer Networks",
+        explanation="The Ohm (symbol Ω) is the SI unit of electrical resistance, defined by Ohm's Law (V = I * R).",
+        category="⚡ Physics",
     ),
     TriviaQuestion(
-        question="Who is widely recognized in history as the world's first computer programmer for writing an algorithm for the Analytical Engine?",
-        options=["Alan Turing", "Ada Lovelace", "Grace Hopper", "Charles Babbage"],
+        question="What is the approximate acceleration due to Earth's gravity near the surface?",
+        options=["5.8 m/s²", "9.8 m/s²", "14.2 m/s²", "19.6 m/s²"],
         correct_index=1,
-        explanation="Ada Lovelace wrote the first published algorithm intended for implementation on Charles Babbage's Analytical Engine.",
-        category="🏛️ Tech History",
+        explanation="Standard Earth surface gravity causes freefalling objects to accelerate at approximately 9.8 m/s².",
+        category="⚡ Physics",
     ),
     TriviaQuestion(
-        question="In what historic walled district of Manila is Pamantasan ng Lungsod ng Maynila (PLM) situated?",
+        question="Sound waves can easily travel across a complete vacuum like outer space.",
+        options=["True", "False"],
+        correct_index=1,
+        explanation="False! Sound is a mechanical wave that requires a physical medium (gas, liquid, solid) to propagate.",
+        category="⚡ Physics",
+    ),
+    TriviaQuestion(
+        question="Sound travels significantly faster through water and solid metals than through air.",
+        options=["True", "False"],
+        correct_index=0,
+        explanation="True! Sound travels faster in denser media (about 1,480 m/s in water vs 343 m/s in air) because molecules are closer together.",
+        category="⚡ Physics",
+    ),
+    TriviaQuestion(
+        question="The Law of Conservation of Energy states that energy cannot be created or destroyed, only transformed from one form to another.",
+        options=["True", "False"],
+        correct_index=0,
+        explanation="True! The total energy of an isolated system always remains constant over time.",
+        category="⚡ Physics",
+    ),
+
+    # -------------------------------------------------------------------------
+    # 🧬 General Science — Biology & Life Science
+    # -------------------------------------------------------------------------
+    TriviaQuestion(
+        question="Which cellular organelle is famously known as the 'powerhouse of the cell' for generating ATP energy?",
+        options=["Nucleus", "Ribosome", "Mitochondrion", "Golgi Apparatus"],
+        correct_index=2,
+        explanation="Mitochondria produce most of the chemical energy (ATP) needed by the cell through cellular respiration.",
+        category="🧬 Biology",
+    ),
+    TriviaQuestion(
+        question="What green pigment inside plant chloroplasts absorbs sunlight to drive photosynthesis?",
+        options=["Carotenoid", "Chlorophyll", "Hemoglobin", "Melanin"],
+        correct_index=1,
+        explanation="Chlorophyll absorbs blue and red light wavelengths and reflects green light, powering photosynthesis.",
+        category="🧬 Biology",
+    ),
+    TriviaQuestion(
+        question="What does the scientific acronym 'DNA' stand for?",
+        options=["Deoxyribonucleic Acid", "Dynamic Nucleic Antigen", "Dual Nitrogen Acetate", "Deoxyribose Nitrogen Acid"],
+        correct_index=0,
+        explanation="DNA stands for Deoxyribonucleic Acid, the molecule carrying genetic instructions for all living organisms.",
+        category="🧬 Biology",
+    ),
+    TriviaQuestion(
+        question="Which component of human blood is primarily responsible for transporting oxygen throughout the body?",
+        options=["White Blood Cells", "Platelets", "Red Blood Cells (Hemoglobin)", "Blood Plasma"],
+        correct_index=2,
+        explanation="Red blood cells contain iron-rich hemoglobin protein that binds and delivers oxygen to tissues.",
+        category="🧬 Biology",
+    ),
+    TriviaQuestion(
+        question="Plants release oxygen into the atmosphere as a natural byproduct of photosynthesis.",
+        options=["True", "False"],
+        correct_index=0,
+        explanation="True! During light reactions, water molecules are split, releasing oxygen (O2) into the air.",
+        category="🧬 Biology",
+    ),
+    TriviaQuestion(
+        question="Viruses are classified as complete living cells that contain their own nucleus and organelles.",
+        options=["True", "False"],
+        correct_index=1,
+        explanation="False! Viruses are non-cellular genetic material (DNA/RNA) enclosed in a protein coat and rely on host cells to replicate.",
+        category="🧬 Biology",
+    ),
+    TriviaQuestion(
+        question="A normal human body cell (somatic cell) contains 46 chromosomes arranged in 23 pairs.",
+        options=["True", "False"],
+        correct_index=0,
+        explanation="True! Humans have 22 pairs of autosomes and 1 pair of sex chromosomes, totaling 46 chromosomes.",
+        category="🧬 Biology",
+    ),
+
+    # -------------------------------------------------------------------------
+    # 🇵🇭 Philippine History, Culture & Lore
+    # -------------------------------------------------------------------------
+    TriviaQuestion(
+        question="Who is recognized as the National Hero of the Philippines for his literary works that inspired the revolution?",
+        options=["Andres Bonifacio", "Dr. Jose Rizal", "Emilio Aguinaldo", "Apolinario Mabini"],
+        correct_index=1,
+        explanation="Dr. Jose Rizal inspired the Philippine national awakening through his novels Noli Me Tangere and El Filibusterismo.",
+        category="🇵🇭 Philippine History",
+    ),
+    TriviaQuestion(
+        question="On what date did General Emilio Aguinaldo proclaim Philippine Independence in Kawit, Cavite?",
+        options=["June 12, 1898", "July 4, 1946", "August 21, 1983", "November 30, 1896"],
+        correct_index=0,
+        explanation="Philippine Independence was proclaimed on June 12, 1898, where the Philippine flag was first unfurled.",
+        category="🇵🇭 Philippine History",
+    ),
+    TriviaQuestion(
+        question="Who is known as the 'Father of the Philippine Revolution' and Supremo of the Katipunan (KKK)?",
+        options=["Antonio Luna", "Andres Bonifacio", "Marcelo H. del Pilar", "Emilio Jacinto"],
+        correct_index=1,
+        explanation="Andres Bonifacio founded the Katipunan in 1892 and led the armed uprising against Spanish colonial rule.",
+        category="🇵🇭 Philippine History",
+    ),
+    TriviaQuestion(
+        question="Who was honored as the 'Mother of the Katipunan' (Tandang Sora) for feeding and nursing wounded revolutionaries?",
+        options=["Gabriela Silang", "Melchora Aquino", "Teresa Magbanua", "Trinidad Tecson"],
+        correct_index=1,
+        explanation="Melchora Aquino (Tandang Sora) operated a sanctuary in Balintawak, feeding and caring for Katipuneros at age 84.",
+        category="🇵🇭 Philippine History",
+    ),
+    TriviaQuestion(
+        question="What is the name of the ancient pre-colonial indigenous alphasyllabary writing script of the Philippines?",
+        options=["Baybayin", "Alibata", "Sanskrit", "Hanunoo"],
+        correct_index=0,
+        explanation="Baybayin is the authentic pre-colonial writing system widely used across Luzon and Visayas before Spanish arrival.",
+        category="🇵🇭 Philippine Culture",
+    ),
+    TriviaQuestion(
+        question="Approximately how many islands comprise the Philippine archipelago during high tide?",
+        options=["1,776", "4,500", "7,641", "10,200"],
+        correct_index=2,
+        explanation="According to the National Mapping and Resource Information Authority (NAMRIA), the Philippines has 7,641 islands.",
+        category="🇵🇭 Philippine Geography",
+    ),
+    TriviaQuestion(
+        question="What is the longest continuous mountain range in the Philippines, serving as a natural shield against typhoons?",
+        options=["Cordillera Central", "Sierra Madre", "Caraballo Mountains", "Zambales Mountains"],
+        correct_index=1,
+        explanation="The Sierra Madre spans over 540 kilometers along eastern Luzon, acting as a crucial barrier against Pacific storms.",
+        category="🇵🇭 Philippine Geography",
+    ),
+    TriviaQuestion(
+        question="In what historic walled district of Manila is Pamantasan ng Lungsod ng Maynila (PLM) located?",
         options=["Binondo", "Quiapo", "Intramuros", "Ermita"],
         correct_index=2,
-        explanation="PLM was established in 1965 inside the historic walled city of Intramuros, Manila.",
+        explanation="PLM is located inside the historic walled city of Intramuros, founded by the Spanish in the 16th century.",
         category="🏛️ PLM Lore",
     ),
     TriviaQuestion(
-        question="What is the size in bytes of a standard `char` data type in C according to the C standard?",
-        options=["1 byte", "2 bytes", "4 bytes", "Depends on architecture"],
+        question="The Battle of Mactan, where chieftain Lapu-Lapu defeated Portuguese explorer Ferdinand Magellan, occurred in the year 1521.",
+        options=["True", "False"],
         correct_index=0,
-        explanation="By definition in the C standard, `sizeof(char)` is always guaranteed to be exactly 1 byte.",
-        category="💻 C Programming",
+        explanation="True! On April 27, 1521, Lapu-Lapu and his warriors defeated Magellan's expedition on the shores of Mactan.",
+        category="🇵🇭 Philippine History",
     ),
     TriviaQuestion(
-        question="Which sorting algorithm has a worst-case time complexity of O(n log n) and uses the Divide-and-Conquer paradigm?",
-        options=["Bubble Sort", "Insertion Sort", "Merge Sort", "Selection Sort"],
-        correct_index=2,
-        explanation="Merge Sort always divides arrays in half and merges in linear time, guaranteeing O(n log n) even in worst case.",
-        category="🧠 Algorithms",
-    ),
-    TriviaQuestion(
-        question="In Python, which built-in data type is immutable (cannot be modified after creation)?",
-        options=["List", "Dictionary", "Tuple", "Set"],
-        correct_index=2,
-        explanation="Tuples are immutable sequences in Python; lists, dictionaries, and sets are mutable.",
-        category="🐍 Python",
-    ),
-    TriviaQuestion(
-        question="What does CPU stand for?",
-        options=["Central Processing Unit", "Central Program Utility", "Core Processor Unit", "Computer Processing Unit"],
+        question="The melody of the Philippine National Anthem ('Lupang Hinirang') was composed by Julian Felipe in 1898.",
+        options=["True", "False"],
         correct_index=0,
-        explanation="CPU stands for Central Processing Unit, the primary component that executes computer instructions.",
-        category="⚙️ Computer Systems",
+        explanation="True! Julian Felipe composed the 'Marcha Nacional Filipina' upon the request of Emilio Aguinaldo.",
+        category="🇵🇭 Philippine History",
     ),
     TriviaQuestion(
-        question="In Operating Systems, what condition occurs when multiple processes are blocked because each is holding a resource that another process needs?",
-        options=["Starvation", "Race Condition", "Deadlock", "Thrashing"],
-        correct_index=2,
-        explanation="Deadlock occurs when processes are permanently waiting on resources held by one another in a circular chain.",
-        category="⚙️ Operating Systems",
+        question="Mount Mayon in Albay, Bicol is internationally renowned for having an almost perfectly symmetrical conical shape.",
+        options=["True", "False"],
+        correct_index=0,
+        explanation="True! Mount Mayon is celebrated as the world's most symmetrical stratovolcano cone.",
+        category="🇵🇭 Philippine Geography",
     ),
     TriviaQuestion(
-        question="What is the result of binary addition `1010` (10 in decimal) + `0101` (5 in decimal)?",
-        options=["1100 (12)", "1111 (15)", "10000 (16)", "1001 (9)"],
-        correct_index=1,
-        explanation="`1010` + `0101` = `1111` in binary, which equals 15 in decimal.",
-        category="📐 Discrete Math",
+        question="Pamantasan ng Lungsod ng Maynila (PLM) is a tuition-free local government university chartered by the City of Manila in 1965.",
+        options=["True", "False"],
+        correct_index=0,
+        explanation="True! PLM was established under Republic Act 4196 in 1965 and provides free quality education funded by Manila taxpayers.",
+        category="🏛️ PLM Lore",
     ),
     TriviaQuestion(
-        question="In Object-Oriented Programming (OOP), what principle describes creating a new class based on an existing class?",
-        options=["Polymorphism", "Encapsulation", "Inheritance", "Abstraction"],
-        correct_index=2,
-        explanation="Inheritance allows a child class to inherit properties and methods from a parent base class.",
-        category="💻 Software Engineering",
+        question="The word 'Intramuros' translates literally from Latin/Spanish as 'within the walls'.",
+        options=["True", "False"],
+        correct_index=0,
+        explanation="True! 'Intra' (within) and 'muros' (walls) refers to the fortified Spanish colonial stone walls of Old Manila.",
+        category="🏛️ PLM Lore",
     ),
 ]
 
@@ -396,6 +586,12 @@ class RewardsDBService:
                     points_spent INTEGER,
                     status TEXT DEFAULT 'PENDING',
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE TABLE IF NOT EXISTS user_trivia_history (
+                    user_id INTEGER,
+                    question_id INTEGER,
+                    PRIMARY KEY (user_id, question_id)
                 );
                 """
         )
@@ -996,12 +1192,52 @@ class RewardsDBService:
                 writer.writerow([r["user_id"], r["points"], r["lifetime_points"], r["daily_streak"], r["last_daily_claim"], r["shield_until"], r["created_at"]])
             return output.getvalue()
 
-    def get_random_trivia_question(self, exclude_index: Optional[int] = None) -> tuple[int, TriviaQuestion]:
-        """Return a random trivia question and its index, optionally avoiding a previous index."""
-        available_indices = list(range(len(TRIVIA_QUESTIONS)))
-        if exclude_index is not None and len(available_indices) > 1 and exclude_index in available_indices:
-            available_indices.remove(exclude_index)
-        chosen_idx = random.choice(available_indices)
+    def get_random_trivia_question(
+        self,
+        user_id: Optional[int] = None,
+        exclude_index: Optional[int] = None,
+    ) -> tuple[int, TriviaQuestion]:
+        """Return a random trivia question, tracking per-user history in SQLite to avoid repeats."""
+        total_questions = len(TRIVIA_QUESTIONS)
+        if total_questions == 0:
+            raise RewardsError("No trivia questions available.")
+
+        if user_id is None:
+            available_indices = list(range(total_questions))
+            if exclude_index is not None and len(available_indices) > 1 and exclude_index in available_indices:
+                available_indices.remove(exclude_index)
+            chosen_idx = random.choice(available_indices)
+            return chosen_idx, TRIVIA_QUESTIONS[chosen_idx]
+
+        with self._get_connection() as conn:
+            seen_rows = conn.execute(
+                "SELECT question_id FROM user_trivia_history WHERE user_id = ?",
+                (user_id,),
+            ).fetchall()
+            seen_ids = {r["question_id"] for r in seen_rows}
+
+            # If user has seen all questions in the bank, clear history to start fresh cycle
+            if len(seen_ids) >= total_questions:
+                conn.execute("DELETE FROM user_trivia_history WHERE user_id = ?", (user_id,))
+                conn.commit()
+                seen_ids = set()
+
+            available_indices = [i for i in range(total_questions) if i not in seen_ids]
+            if exclude_index is not None and len(available_indices) > 1 and exclude_index in available_indices:
+                available_indices.remove(exclude_index)
+
+            if not available_indices:
+                available_indices = list(range(total_questions))
+
+            chosen_idx = random.choice(available_indices)
+
+            # Record seen question into history
+            conn.execute(
+                "INSERT OR IGNORE INTO user_trivia_history (user_id, question_id) VALUES (?, ?)",
+                (user_id, chosen_idx),
+            )
+            conn.commit()
+
         return chosen_idx, TRIVIA_QUESTIONS[chosen_idx]
 
     def record_trivia_attempt(

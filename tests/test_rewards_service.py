@@ -311,3 +311,22 @@ def test_trivia_service_mechanics(rewards_service: RewardsDBService):
     assert res_next.points_awarded == 50
     assert res_next.new_balance == 150
     assert res_next.trivia_remaining == 2
+
+
+def test_trivia_anti_repetition_and_reset(rewards_service: RewardsDBService):
+    """Test that users receive unique questions without repeats until the bank is fully completed."""
+    from bot.services.rewards_db import TRIVIA_QUESTIONS
+
+    total = len(TRIVIA_QUESTIONS)
+    seen_ids = set()
+
+    for _ in range(total):
+        idx, q = rewards_service.get_random_trivia_question(user_id=1001)
+        assert idx not in seen_ids
+        seen_ids.add(idx)
+
+    assert len(seen_ids) == total
+
+    # Next call resets history and returns a question successfully
+    next_idx, next_q = rewards_service.get_random_trivia_question(user_id=1001)
+    assert 0 <= next_idx < total
