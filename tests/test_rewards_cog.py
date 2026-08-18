@@ -37,7 +37,7 @@ def test_daily_command_success():
         interaction.response.send_message.assert_awaited_once()
         embed = interaction.response.send_message.call_args.kwargs["embed"]
         assert "Daily Attendance Claimed!" in embed.title
-        assert service.get_balance(555) == 30
+        assert service.get_balance(555) == 20
 
         # Verify activity log sent
         log_channel.send.assert_awaited_once()
@@ -430,7 +430,7 @@ def test_trivia_command_and_view():
 
         await btn_correct.callback(interaction_btn2)
         interaction_btn2.response.edit_message.assert_awaited_once()
-        assert service.get_balance(777) == 50
+        assert service.get_balance(777) == 25
 
     asyncio.run(_test())
 

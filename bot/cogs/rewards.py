@@ -2516,10 +2516,10 @@ class RewardsCog(commands.Cog):
         )
         await interaction.response.send_message(embed=embed, view=view)
 
-    @app_commands.command(name="bet", description="Gamble Uno Points on roulette with dynamic multipliers! (Unlimited bets)")
+    @app_commands.command(name="bet", description="Gamble Uno Points on roulette with dynamic multipliers! (Limit: 10 bets/day)")
     @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, default 50).")
     async def bet(self, interaction: discord.Interaction, amount: int = 50) -> None:
-        """Play roulette with custom wager."""
+        """Play roulette with custom wager (limit 10 bets/day)."""
         user_id = interaction.user.id
         try:
             res = self.rewards_service.play_bet(user_id, wager=amount)
@@ -2556,7 +2556,7 @@ class RewardsCog(commands.Cog):
 
             embed = discord.Embed(title=title, description=desc, color=color)
             embed.add_field(name="Current Balance", value=f"**{res.new_balance:,} Uno Points**", inline=True)
-            embed.set_footer(text="Gamble responsibly • Unlimited bets • 🐰 Bunny pet increases win rates!")
+            embed.set_footer(text=f"Gamble responsibly • {res.bets_remaining}/10 bets remaining today • 🐰 Bunny pet boosts luck")
 
             await interaction.response.send_message(embed=embed)
 

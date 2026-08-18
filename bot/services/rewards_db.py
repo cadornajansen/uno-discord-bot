@@ -875,6 +875,9 @@ class BetResult:
     new_balance: int
     reward_item_id: Optional[str] = None
     reward_item_name: Optional[str] = None
+    daily_bets_count: int = 1
+    max_daily_bets: int = 10
+    bets_remaining: int = 9
 
 
 @dataclass(frozen=True)
@@ -1080,6 +1083,9 @@ class UserRecord:
     duel_losses: int = 0
     duel_streak: int = 0
     bounties_claimed: int = 0
+    bet_win_streak: int = 0
+    bet_rigged_loss_remaining: int = 0
+    bet_loss_streak: int = 0
 
 
 @dataclass(frozen=True)
@@ -1125,12 +1131,12 @@ STARTER_PET_CHOICES: list[str] = ["tuxedo_cat", "golden_dog", "brown_bunny"]
 
 
 SLOTS_SYMBOLS: list[dict] = [
-    {"emoji": "🍒", "name": "Cherry", "weight": 30, "mult_3": 3.0, "mult_2": 1.5},
-    {"emoji": "🍋", "name": "Lemon", "weight": 25, "mult_3": 4.0, "mult_2": 1.5},
-    {"emoji": "🍇", "name": "Grape", "weight": 20, "mult_3": 6.0, "mult_2": 1.5},
-    {"emoji": "💎", "name": "Diamond", "weight": 12, "mult_3": 12.0, "mult_2": 2.0},
-    {"emoji": "👑", "name": "Crown", "weight": 8, "mult_3": 25.0, "mult_2": 3.0},
-    {"emoji": "🃏", "name": "Uno Wild", "weight": 5, "mult_3": 50.0, "mult_2": 5.0},
+    {"emoji": "🍒", "name": "Cherry", "weight": 32, "mult_3": 3.0, "mult_2": 0.5},
+    {"emoji": "🍋", "name": "Lemon", "weight": 26, "mult_3": 4.0, "mult_2": 0.5},
+    {"emoji": "🍇", "name": "Grape", "weight": 20, "mult_3": 6.0, "mult_2": 0.8},
+    {"emoji": "💎", "name": "Diamond", "weight": 12, "mult_3": 10.0, "mult_2": 1.0},
+    {"emoji": "👑", "name": "Crown", "weight": 7, "mult_3": 20.0, "mult_2": 1.5},
+    {"emoji": "🃏", "name": "Uno Wild", "weight": 3, "mult_3": 35.0, "mult_2": 2.0},
 ]
 
 WORK_JOBS: list[dict] = [
@@ -1138,43 +1144,43 @@ WORK_JOBS: list[dict] = [
         "title": "AVR Projector Whisperer",
         "company": "College of Engineering & Technology",
         "desc": "Fixed the faulty VGA-to-HDMI adapter right before the Dean's presentation.",
-        "min_pts": 50,
-        "max_pts": 90,
+        "min_pts": 18,
+        "max_pts": 32,
     },
     {
         "title": "C++ Debugging Hero",
         "company": "BSCS 2nd Year Lab",
         "desc": "Fixed a sophomore's memory leak and dangling pointer nightmare in 10 minutes.",
-        "min_pts": 60,
-        "max_pts": 110,
+        "min_pts": 22,
+        "max_pts": 40,
     },
     {
         "title": "Campus Pastry Distributor",
         "company": "Intramuros Treat Stand",
         "desc": "Sold homemade cookies and brownies to starving computer science students.",
-        "min_pts": 45,
-        "max_pts": 85,
+        "min_pts": 15,
+        "max_pts": 28,
     },
     {
         "title": "Freelance Web Scraper",
         "company": "PLM Student Startup",
         "desc": "Scraped research dataset papers for a senior thesis project.",
-        "min_pts": 70,
-        "max_pts": 120,
+        "min_pts": 25,
+        "max_pts": 45,
     },
     {
         "title": "Discrete Math Peer Tutor",
         "company": "Uno Study Circle",
         "desc": "Explained proof by induction to confused classmates before the midterms.",
-        "min_pts": 55,
-        "max_pts": 100,
+        "min_pts": 20,
+        "max_pts": 35,
     },
     {
         "title": "Linux Server Maintenance",
         "company": "PLM CS Lab",
         "desc": "Rebooted the lab workstation servers and cleared junk swap memory.",
-        "min_pts": 65,
-        "max_pts": 115,
+        "min_pts": 22,
+        "max_pts": 38,
     },
 ]
 
@@ -1182,32 +1188,32 @@ SCAVENGE_LOCATIONS: list[dict] = [
     {
         "location": "Plaza Roma / Intramuros Walls",
         "desc": "Searched around the cobblestone walkways and found forgotten coins from tourists.",
-        "min_pts": 10,
-        "max_pts": 30,
+        "min_pts": 5,
+        "max_pts": 12,
     },
     {
         "location": "Lawson Convenience Store Corner",
         "desc": "Picked up dropped change near the coffee machine and a lucky voucher.",
-        "min_pts": 15,
-        "max_pts": 35,
+        "min_pts": 6,
+        "max_pts": 15,
     },
     {
         "location": "CET Computer Lab Benches",
         "desc": "Looked under the keyboard trays and discovered loose Uno coins left behind.",
-        "min_pts": 20,
-        "max_pts": 40,
+        "min_pts": 8,
+        "max_pts": 18,
     },
     {
         "location": "PLM Grandstand & Oval",
         "desc": "Found extra pocket change dropped by jogging classmates after PE class.",
-        "min_pts": 12,
-        "max_pts": 28,
+        "min_pts": 5,
+        "max_pts": 14,
     },
     {
         "location": "Campus Canteen Recycle Bin",
         "desc": "Turned in recyclable bottles and cans for instant campus deposit points.",
-        "min_pts": 18,
-        "max_pts": 38,
+        "min_pts": 7,
+        "max_pts": 16,
     },
 ]
 
@@ -1297,6 +1303,9 @@ class RewardsDBService:
                     duel_losses INTEGER DEFAULT 0,
                     duel_streak INTEGER DEFAULT 0,
                     bounties_claimed INTEGER DEFAULT 0,
+                    bet_win_streak INTEGER DEFAULT 0,
+                    bet_rigged_loss_remaining INTEGER DEFAULT 0,
+                    bet_loss_streak INTEGER DEFAULT 0,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -1382,6 +1391,12 @@ class RewardsDBService:
             conn.execute("ALTER TABLE users ADD COLUMN duel_streak INTEGER DEFAULT 0")
         if "bounties_claimed" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN bounties_claimed INTEGER DEFAULT 0")
+        if "bet_win_streak" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN bet_win_streak INTEGER DEFAULT 0")
+        if "bet_rigged_loss_remaining" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN bet_rigged_loss_remaining INTEGER DEFAULT 0")
+        if "bet_loss_streak" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN bet_loss_streak INTEGER DEFAULT 0")
         conn.commit()
 
     def get_or_create_user(self, user_id: int) -> UserRecord:
@@ -1416,6 +1431,9 @@ class RewardsDBService:
                 duel_losses=row["duel_losses"] if "duel_losses" in keys else 0,
                 duel_streak=row["duel_streak"] if "duel_streak" in keys else 0,
                 bounties_claimed=row["bounties_claimed"] if "bounties_claimed" in keys else 0,
+                bet_win_streak=row["bet_win_streak"] if "bet_win_streak" in keys else 0,
+                bet_rigged_loss_remaining=row["bet_rigged_loss_remaining"] if "bet_rigged_loss_remaining" in keys else 0,
+                bet_loss_streak=row["bet_loss_streak"] if "bet_loss_streak" in keys else 0,
             )
 
     def get_balance(self, user_id: int) -> int:
@@ -1777,8 +1795,8 @@ class RewardsDBService:
         else:
             new_streak = 1
 
-        base_points = 30
-        streak_bonus = min((new_streak - 1) * 5, 35)
+        base_points = 20
+        streak_bonus = min((new_streak - 1) * 2, 20)
         total_points = base_points + streak_bonus
 
         # Cat 2x Daily Perk!
@@ -2170,9 +2188,11 @@ class RewardsDBService:
         fixed_outcome: Optional[BetOutcome] = None,
         fixed_skill: Optional[str] = None,
     ) -> BetResult:
-        """Place an unlimited wager roulette bet (min 10 pts). Outcomes: Jackpot (4x profit), Double (1x profit), Skill Drop, Refund, Bust."""
+        """Place a roulette bet (min 10 pts, limit 10 bets/day). Outcomes: Jackpot (4x profit), Double (1x profit), Skill Drop, Refund, Bust."""
         if wager < 10:
             raise RewardsError("Minimum bet amount is 10 Uno Points!")
+        if wager > 250:
+            raise RewardsError("Maximum bet amount is 250 Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -2187,39 +2207,113 @@ class RewardsDBService:
             current_time = current_time.astimezone(PHT)
         today_str = current_time.strftime("%Y-%m-%d")
 
-        # Determine outcome (Bunny pet gives +15% win rates!)
+        # Daily bet limit: 10 bets per day (PHT)
+        MAX_DAILY_BETS = 10
+        if user.last_bet_date == today_str:
+            current_daily_bets = user.daily_bets_count
+        else:
+            current_daily_bets = 0
+
+        if current_daily_bets >= MAX_DAILY_BETS:
+            raise MaxBetsReachedError(
+                f"You have reached your daily limit of {MAX_DAILY_BETS} bets! Return tomorrow after 00:00 (PHT) to test your luck again."
+            )
+
+        new_daily_bets = current_daily_bets + 1
+        bets_remaining = MAX_DAILY_BETS - new_daily_bets
+
+        # Track streak states
+        win_streak = user.bet_win_streak
+        rigged_losses = user.bet_rigged_loss_remaining
+        loss_streak = user.bet_loss_streak
+
         active_pet = self.get_active_pet(user_id)
+        is_bunny = active_pet and active_pet.species == "bunny"
+
+        # Determine outcome
         if fixed_outcome is not None:
             outcome = fixed_outcome
-        else:
+            if outcome in (BetOutcome.JACKPOT, BetOutcome.DOUBLE, BetOutcome.SKILL_DROP):
+                win_streak += 1
+                loss_streak = 0
+                if win_streak >= 5:
+                    rigged_losses = 7
+                    win_streak = 0
+            elif outcome == BetOutcome.BUST:
+                win_streak = 0
+                if rigged_losses > 0:
+                    rigged_losses -= 1
+                else:
+                    loss_streak += 1
+        elif rigged_losses > 0:
+            # Rigged House Edge: After 5 continuous wins, player suffers 7 forced losses
+            outcome = BetOutcome.BUST
+            rigged_losses -= 1
+            win_streak = 0
+            loss_streak += 1
+        elif loss_streak >= 5:
+            # Pity System: After 5 continuous losses, guarantee a pity win
             roll = random.random()
-            if active_pet and active_pet.species == "bunny":
-                if roll < 0.40:
+            if roll < 0.70:
+                outcome = BetOutcome.DOUBLE
+            elif roll < 0.90:
+                outcome = BetOutcome.SKILL_DROP
+            else:
+                outcome = BetOutcome.JACKPOT
+            loss_streak = 0
+            win_streak += 1
+            if win_streak >= 5:
+                rigged_losses = 7
+                win_streak = 0
+        else:
+            # Standard Probability Roll (Tuned with healthy House Edge: ~55% Bust)
+            roll = random.random()
+            if is_bunny:
+                # Bunny companion (+10% luck boost)
+                if roll < 0.08:
                     outcome = BetOutcome.JACKPOT
-                elif roll < 0.65:
+                elif roll < 0.24:
+                    outcome = BetOutcome.DOUBLE
+                elif roll < 0.42:
                     outcome = BetOutcome.SKILL_DROP
-                elif roll < 0.80:
+                elif roll < 0.55:
                     outcome = BetOutcome.REFUND
                 else:
                     outcome = BetOutcome.BUST
             else:
-                if roll < 0.25:
+                # Standard odds: 5% Jackpot, 12% Double, 15% Skill Drop, 13% Refund, 55% Bust
+                if roll < 0.05:
                     outcome = BetOutcome.JACKPOT
-                elif roll < 0.50:
+                elif roll < 0.17:
+                    outcome = BetOutcome.DOUBLE
+                elif roll < 0.32:
                     outcome = BetOutcome.SKILL_DROP
-                elif roll < 0.65:
+                elif roll < 0.45:
                     outcome = BetOutcome.REFUND
                 else:
                     outcome = BetOutcome.BUST
 
+            # Update win/loss streaks
+            if outcome in (BetOutcome.JACKPOT, BetOutcome.DOUBLE, BetOutcome.SKILL_DROP):
+                win_streak += 1
+                loss_streak = 0
+                if win_streak >= 5:
+                    # 5 Continuous Wins reached! House activates 7-loss rigged penalty
+                    rigged_losses = 7
+                    win_streak = 0
+            elif outcome == BetOutcome.BUST:
+                win_streak = 0
+                loss_streak += 1
+
+        # Calculate payouts
         points_delta = 0
         total_payout = 0
         reward_item_id = None
         reward_item_name = None
 
         if outcome == BetOutcome.JACKPOT:
-            points_delta = wager * 4  # Net gain: +4x wager (5x total return)
-            total_payout = wager * 5
+            points_delta = wager * 3  # Net gain: +3x wager (4x total return)
+            total_payout = wager * 4
             new_balance = user.points + points_delta
             new_lifetime = user.lifetime_points + points_delta
         elif outcome == BetOutcome.DOUBLE:
@@ -2263,14 +2357,17 @@ class RewardsDBService:
                 UPDATE users
                 SET points = ?,
                     lifetime_points = ?,
-                    daily_bets_count = daily_bets_count + 1,
-                    last_bet_date = ?
+                    daily_bets_count = ?,
+                    last_bet_date = ?,
+                    bet_win_streak = ?,
+                    bet_rigged_loss_remaining = ?,
+                    bet_loss_streak = ?
                 WHERE user_id = ?
                 """,
-                (new_balance, new_lifetime, today_str, user_id),
+                (new_balance, new_lifetime, new_daily_bets, today_str, win_streak, rigged_losses, loss_streak, user_id),
             )
             action_desc = f"Bet Outcome: {outcome.value} ({'+' if points_delta > 0 else ''}{points_delta} pts, wager: {wager} pts)"
-            if active_pet and active_pet.species == "bunny":
+            if is_bunny:
                 action_desc += " [🐰 Bunny Perk!]"
             if reward_item_name:
                 action_desc += f" + Won {reward_item_name}"
@@ -2291,6 +2388,9 @@ class RewardsDBService:
             new_balance=new_balance,
             reward_item_id=reward_item_id,
             reward_item_name=reward_item_name,
+            daily_bets_count=new_daily_bets,
+            max_daily_bets=MAX_DAILY_BETS,
+            bets_remaining=bets_remaining,
         )
 
     def play_slots(
@@ -2299,9 +2399,11 @@ class RewardsDBService:
         wager: int = 50,
         fixed_reels: Optional[list[str]] = None,
     ) -> SlotsResult:
-        """Spin 3 slot machine reels. Match 2 for consolation prize, match 3 for huge multipliers up to 50x!"""
+        """Spin 3 slot machine reels (max 200 pts). Match 2 for consolation prize, match 3 for huge multipliers up to 35x!"""
         if wager < 10:
             raise RewardsError("Minimum slots wager is 10 Uno Points!")
+        if wager > 200:
+            raise RewardsError("Maximum slots wager is 200 Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -2321,7 +2423,7 @@ class RewardsDBService:
                 symbols.append(s["emoji"])
                 w = s["weight"]
                 if is_bunny and s["emoji"] in ("💎", "👑", "🃏"):
-                    w += 5  # Bunny luck perk
+                    w += 4  # Bunny luck perk
                 weights.append(w)
             reels = random.choices(symbols, weights=weights, k=3)
 
@@ -2377,9 +2479,11 @@ class RewardsDBService:
         wager: int = 50,
         fixed_flip: Optional[str] = None,
     ) -> CoinflipResult:
-        """Fast 50/50 double-or-nothing coin toss."""
+        """Fast double-or-nothing coin toss (limit 200 pts max)."""
         if wager < 10:
             raise RewardsError("Minimum coinflip wager is 10 Uno Points!")
+        if wager > 200:
+            raise RewardsError("Maximum coinflip wager is 200 Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -2401,10 +2505,12 @@ class RewardsDBService:
         if fixed_flip is not None:
             result = fixed_flip.lower().strip()
         else:
-            if is_bunny:
-                result = picked if random.random() < 0.55 else ("tails" if picked == "heads" else "heads")
+            # 46% win rate (54% loss rate) to provide balanced house edge, 50% with Bunny
+            win_chance = 0.50 if is_bunny else 0.46
+            if random.random() < win_chance:
+                result = picked
             else:
-                result = random.choice(["heads", "tails"])
+                result = "tails" if picked == "heads" else "heads"
 
         won = (picked == result)
         points_delta = wager if won else -wager
@@ -2445,6 +2551,8 @@ class RewardsDBService:
         """Start a new blackjack game, dealing 2 cards each."""
         if wager < 10:
             raise RewardsError("Minimum blackjack wager is 10 Uno Points!")
+        if wager > 250:
+            raise RewardsError("Maximum blackjack wager is 250 Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -2608,9 +2716,11 @@ class RewardsDBService:
         wager: int = 50,
         fixed_card: Optional[BlackjackCard] = None,
     ) -> HighLowGame:
-        """Start a high-low streak game with a starting card."""
+        """Start a high-low streak game with a starting card (limit 200 pts max)."""
         if wager < 10:
             raise RewardsError("Minimum High-Low wager is 10 Uno Points!")
+        if wager > 200:
+            raise RewardsError("Maximum High-Low wager is 200 Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -2671,7 +2781,7 @@ class RewardsDBService:
             return game
 
         game.streak += 1
-        mult_ladder = [1.5, 2.5, 4.5, 8.0, 15.0, 30.0]
+        mult_ladder = [1.3, 1.8, 2.8, 5.0, 9.0, 16.0]
         idx = min(game.streak - 1, len(mult_ladder) - 1)
         game.current_multiplier = mult_ladder[idx]
         pot_payout = int(game.wager * game.current_multiplier)
@@ -2988,6 +3098,8 @@ class RewardsDBService:
 
         if wager < 10:
             raise RewardsError("Minimum duel wager is 10 Uno Points!")
+        if wager > 500:
+            raise RewardsError("Maximum duel wager is 500 Uno Points!")
 
         c_user = self.get_or_create_user(challenger_id)
         t_user = self.get_or_create_user(target_id)
@@ -3025,7 +3137,7 @@ class RewardsDBService:
             c_roll = random.randint(1, 100)
             t_roll = random.randint(1, 100)
 
-        total_pot = wager * 2
+        total_pot = int(wager * 1.95)  # 5% server burn to eliminate collusion / alt point farming
         is_tie = (c_roll == t_roll)
         bounty_won = 0
         siphoned_amount = 0
@@ -3416,8 +3528,8 @@ class RewardsDBService:
         if target_inv.get("uno_reverse", 0) > 0:
             self.remove_item(target_id, "uno_reverse", 1)
             thief = self.get_or_create_user(thief_id)
-            rev_pct = random.uniform(0.40, 0.60)
-            calc_counter = int(thief.points * rev_pct)
+            rev_pct = random.uniform(0.15, 0.30)
+            calc_counter = min(120, int(thief.points * rev_pct))
             counter_stolen = min(thief.points, max(10, calc_counter))
             if counter_stolen > 0:
                 thief_new = self.deduct_points(thief_id, counter_stolen, "UNO_REVERSE_LOST", f"Counter-stolen by user {target_id}")
@@ -3452,7 +3564,7 @@ class RewardsDBService:
         thief_pet = self.get_active_pet(thief_id)
         target_pet = self.get_active_pet(target_id)
 
-        success_rate = 0.65
+        success_rate = 0.60
         if thief_pet and thief_pet.species == "fox":
             success_rate += 0.15
 
@@ -3462,8 +3574,8 @@ class RewardsDBService:
         is_success = fixed_success if fixed_success is not None else (random.random() < success_rate)
 
         if is_success:
-            pct = random.uniform(0.40, 0.60)
-            calc_stolen = int(target.points * pct)
+            pct = random.uniform(0.15, 0.30)
+            calc_stolen = min(120, int(target.points * pct))
             stolen = fixed_amount if fixed_amount is not None else max(10, calc_stolen)
             stolen = min(stolen, target.points)
 
@@ -3700,7 +3812,7 @@ class RewardsDBService:
         """Process a trivia answer. If correct, awards +50 pts (or +75 pts and 4 attempts if Scholar Owl pet equipped)."""
         active_pet = self.get_active_pet(user_id)
         is_owl = bool(active_pet and active_pet.species == "owl")
-        TRIVIA_REWARD = 75 if is_owl else 50
+        TRIVIA_REWARD = 40 if is_owl else 25
         MAX_TRIVIA = 4 if is_owl else 3
 
         current_time = now or datetime.now(PHT)
