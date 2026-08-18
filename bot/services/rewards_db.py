@@ -523,9 +523,272 @@ SHOP_CATALOG = {
         "cost": 5500,
         "category": "physical",
         "subcategory": "prizes",
-        "description": "1-Month Discord Nitro subscription gift code.",
+        "description": "1 Month Discord Nitro subscription sent directly via Discord gift link.",
     },
 }
+
+PET_CATALOG: dict[str, dict] = {
+    "tuxedo_cat": {
+        "id": "tuxedo_cat",
+        "name": "🐱 Tuxedo Cat",
+        "species": "cat",
+        "cost": 500,
+        "image_file": "tuxedo-cat.jpg",
+        "title": "The Serene Feline",
+        "perk_title": "2x Daily Attendance Points",
+        "perk_desc": "Doubles points earned from daily attendance (/daily) permanently!",
+        "quotes": [
+            "Purring peacefully next to your reviewer notebooks~",
+            "Meow! Don't forget to take a study break!",
+            "Napping on your keyboard while you write code...",
+            "Slowly blinks with calm, soothing feline wisdom.",
+        ],
+    },
+    "calico_cat": {
+        "id": "calico_cat",
+        "name": "🐱 Fluffy Calico Cat",
+        "species": "cat",
+        "cost": 550,
+        "image_file": "talico-brown-cat.jpg",
+        "title": "The Cozy Companion",
+        "perk_title": "2x Daily Attendance Points",
+        "perk_desc": "Doubles points earned from daily attendance (/daily) permanently!",
+        "quotes": [
+            "Curled up in a warm fluffy ball beside your laptop.",
+            "Soft purrs echo across your study desk~",
+            "Paws gently at your notes, wishing you good luck!",
+        ],
+    },
+    "golden_dog": {
+        "id": "golden_dog",
+        "name": "🐶 Golden Retriever",
+        "species": "dog",
+        "cost": 550,
+        "image_file": "golden-retriever-dog.jpg",
+        "title": "The Faithful Guard Pup",
+        "perk_title": "Guard Dog Defense (+40% Thief Bust)",
+        "perk_desc": "Gives a 75% chance to catch thieves red-handed and bite them for a fine!",
+        "quotes": [
+            "Barking happily and guarding your points wallet!",
+            "Tail wagging at maximum speed! Ready for duty!",
+            "Sniffing around for sneaky pickpockets in the server...",
+            "Gives your hand a reassuring warm boop!",
+        ],
+    },
+    "shiba_dog": {
+        "id": "shiba_dog",
+        "name": "🐶 Shiba Inu",
+        "species": "dog",
+        "cost": 580,
+        "image_file": "shiba-inu-dog.jpg",
+        "title": "The Alert Scout",
+        "perk_title": "Guard Dog Defense (+40% Thief Bust)",
+        "perk_desc": "Gives a 75% chance to catch thieves red-handed and bite them for a fine!",
+        "quotes": [
+            "Standing at attention with sharp perked ears!",
+            "Much loyalty, very protection, wow!",
+            "Vigilantly watching over your hard-earned points.",
+        ],
+    },
+    "brown_bunny": {
+        "id": "brown_bunny",
+        "name": "🐰 Lop-Eared Bunny",
+        "species": "bunny",
+        "cost": 600,
+        "image_file": "brown-bunny.jpg",
+        "title": "The Lucky Rabbit",
+        "perk_title": "Lucky Gambler (+15% Bet Win Rates)",
+        "perk_desc": "Increases /bet Jackpot and Double chances, reducing Bust rate to 20%!",
+        "quotes": [
+            "Twitching its nose, bringing cosmic gambling luck!",
+            "Hopping around with a lucky four-leaf clover in its mouth~",
+            "Lady luck is smiling on your next roll!",
+            "Ears perked up, sensing a massive jackpot approaching!",
+        ],
+    },
+    "white_bunny": {
+        "id": "white_bunny",
+        "name": "🐰 Moon Rabbit",
+        "species": "bunny",
+        "cost": 650,
+        "image_file": "white-bunny.jpg",
+        "title": "The Celestial Lucky Charm",
+        "perk_title": "Lucky Gambler (+15% Bet Win Rates)",
+        "perk_desc": "Increases /bet Jackpot and Double chances, reducing Bust rate to 20%!",
+        "quotes": [
+            "Shining with lunar luck from celestial skies.",
+            "Blessing your bets with pure lunar fortune~",
+            "Softly thumping its feet in excitement!",
+        ],
+    },
+    "scholar_owl": {
+        "id": "scholar_owl",
+        "name": "🦉 Scholar Owl",
+        "species": "owl",
+        "cost": 500,
+        "image_file": "owl.jpg",
+        "title": "The Academic Owl",
+        "perk_title": "Quiz Master (+25 pts/quiz & 4th Attempt)",
+        "perk_desc": "Earns +75 pts per correct trivia quiz and unlocks a 4th daily trivia quiz attempt!",
+        "quotes": [
+            "Perched on your shoulder solving discrete math problems.",
+            "Hoot! Knowledge is the ultimate superpower!",
+            "Reviewing your algorithm notes with keen analytical eyes.",
+            "Adjusting tiny spectacles and nodding approvingly.",
+        ],
+    },
+    "ice_owl": {
+        "id": "ice_owl",
+        "name": "🦉 Frost Owl",
+        "species": "owl",
+        "cost": 550,
+        "image_file": "ice-owl.jpg",
+        "title": "The Glacial Scholar",
+        "perk_title": "Quiz Master (+25 pts/quiz & 4th Attempt)",
+        "perk_desc": "Earns +75 pts per correct trivia quiz and unlocks a 4th daily trivia quiz attempt!",
+        "quotes": [
+            "Radiating cool, calculated intellect and focus.",
+            "Wisdom sharper than winter frost.",
+            "Hoot! Stay cool and master your exams.",
+        ],
+    },
+    "oogway_turtle": {
+        "id": "oogway_turtle",
+        "name": "🐢 Master Oogway Turtle",
+        "species": "turtle",
+        "cost": 600,
+        "image_file": "master-oogway-turtle.jpg",
+        "title": "The Zen Grandmaster",
+        "perk_title": "Permanent Streak Freeze & +2d Shield",
+        "perk_desc": "Your daily attendance streak never resets on missed days, and shields last +2 extra days!",
+        "quotes": [
+            "Yesterday is history, tomorrow is a mystery, today is a gift~",
+            "Slow and steady wins the semester.",
+            "Meditating peacefully. Your streak is completely safe.",
+            "Never rushes, never worries. Total academic tranquility.",
+        ],
+    },
+    "orange_fox": {
+        "id": "orange_fox",
+        "name": "🦊 Trickster Fox",
+        "species": "fox",
+        "cost": 650,
+        "image_file": "orange-fox.jpg",
+        "title": "The Cunning Rogue",
+        "perk_title": "Master Pickpocket (+15% Steal & +10 Airdrop)",
+        "perk_desc": "Increases /steal success rate to 80% and gains +35 pts from channel airdrops!",
+        "quotes": [
+            "Grinning slyly with an eye on the rich kids' wallets...",
+            "Quick on its feet, ready for the next stealth heist!",
+            "Slinking through the shadows with scavenged loot.",
+            "Winks playfully and tosses a shiny gold coin.",
+        ],
+    },
+    "ice_fox": {
+        "id": "ice_fox",
+        "name": "🦊 Arctic Ice Fox",
+        "species": "fox",
+        "cost": 700,
+        "image_file": "ice-fox.jpg",
+        "title": "The Glacial Phantom",
+        "perk_title": "Master Pickpocket (+15% Steal & +10 Airdrop)",
+        "perk_desc": "Increases /steal success rate to 80% and gains +35 pts from channel airdrops!",
+        "quotes": [
+            "Gliding like a silent shadow across icy winds.",
+            "Leaving no tracks, taking only points.",
+            "A chillingly swift rogue companion.",
+        ],
+    },
+    "pink_axolotl": {
+        "id": "pink_axolotl",
+        "name": "🦎 Pastel Pink Axolotl",
+        "species": "axolotl",
+        "cost": 750,
+        "image_file": "pink-axolotl.jpg",
+        "title": "The Charming Mascot",
+        "perk_title": "Economy Titan (5% Shop Cashback)",
+        "perk_desc": "Automatically refunds 5% Uno Points cashback on all shop redemptions!",
+        "quotes": [
+            "Floating cheerfully with fluffy pink gills!",
+            "Bringing vibrant financial blessings to your wallet~",
+            "Smiles delightfully, splashing bubbles of good fortune!",
+        ],
+    },
+    "rainbow_axolotl": {
+        "id": "rainbow_axolotl",
+        "name": "🦎 Rainbow Axolotl",
+        "species": "axolotl",
+        "cost": 950,
+        "image_file": "rainbow-axolotl.jpg",
+        "title": "The Mythical Prismatic Mascot",
+        "perk_title": "Economy Titan (5% Shop Cashback)",
+        "perk_desc": "Automatically refunds 5% Uno Points cashback on all shop redemptions & rainbow aura!",
+        "quotes": [
+            "Shimmering with majestic iridescent colors!",
+            "Radiating a mythical aura of supreme prestige and wealth.",
+            "A rare legendary creature of pure computational prosperity!",
+        ],
+    },
+    "fiery_goldfish": {
+        "id": "fiery_goldfish",
+        "name": "🐠 Fiery Lucky Goldfish",
+        "species": "goldfish",
+        "cost": 800,
+        "image_file": "fiery-goldfish.jpg",
+        "title": "The Fortune Fish",
+        "perk_title": "Economy Titan (5% Shop Cashback)",
+        "perk_desc": "Automatically refunds 5% Uno Points cashback on all shop redemptions!",
+        "quotes": [
+            "Swimming in golden currents of endless good fortune!",
+            "Glowing brightly with blazing prosperity!",
+            "Splashing lucky droplets across your inventory.",
+        ],
+    },
+}
+
+# Integrate pets into the shop catalog
+for _pet_id, _p in PET_CATALOG.items():
+    SHOP_CATALOG[_pet_id] = {
+        "name": _p["name"],
+        "cost": _p["cost"],
+        "category": "pet",
+        "subcategory": "pets",
+        "description": f"[{_p['title']}] {_p['perk_desc']}",
+    }
+
+
+@dataclass(frozen=True)
+class PetRecord:
+    id: int
+    user_id: int
+    pet_id: str
+    species: str
+    nickname: str
+    happiness: int
+    last_interacted: Optional[str]
+    level: int
+    xp: int
+    is_active: bool
+    adopted_at: str
+    display_name: str
+    perk_title: str
+    perk_desc: str
+    image_file: str
+    quote: str
+
+
+@dataclass(frozen=True)
+class PetInteractResult:
+    pet_id: str
+    species: str
+    nickname: str
+    action: str
+    happiness: int
+    level: int
+    xp: int
+    leveled_up: bool
+    quote: str
+    message: str
 
 
 @dataclass(frozen=True)
@@ -608,6 +871,7 @@ class UserProfile:
     shield_until: Optional[datetime]
     inventory: dict[str, int]
     badges: list[str]
+    active_pet: Optional[PetRecord] = None
 
 
 class RewardsDBService:
@@ -682,6 +946,22 @@ class RewardsDBService:
                     question_id INTEGER,
                     PRIMARY KEY (user_id, question_id)
                 );
+
+                CREATE TABLE IF NOT EXISTS user_pets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    pet_id TEXT NOT NULL,
+                    species TEXT NOT NULL,
+                    nickname TEXT NOT NULL,
+                    happiness INTEGER DEFAULT 100,
+                    last_interacted TEXT,
+                    level INTEGER DEFAULT 1,
+                    xp INTEGER DEFAULT 0,
+                    is_active INTEGER DEFAULT 0,
+                    adopted_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_user_pets_user ON user_pets(user_id);
                 """
         )
         # Migration: ensure daily_trivia_count and last_trivia_date columns exist
@@ -723,8 +1003,190 @@ class RewardsDBService:
         user = self.get_or_create_user(user_id)
         return user.points
 
+    def _pet_row_to_record(self, r: sqlite3.Row) -> PetRecord:
+        pet_id = r["pet_id"]
+        cat_info = PET_CATALOG.get(pet_id, {})
+        quotes = cat_info.get("quotes", ["Looking at you with adoration~"])
+        random_quote = random.choice(quotes)
+        return PetRecord(
+            id=r["id"],
+            user_id=r["user_id"],
+            pet_id=pet_id,
+            species=r["species"],
+            nickname=r["nickname"],
+            happiness=r["happiness"],
+            last_interacted=r["last_interacted"],
+            level=r["level"],
+            xp=r["xp"],
+            is_active=bool(r["is_active"]),
+            adopted_at=r["adopted_at"],
+            display_name=cat_info.get("name", r["nickname"]),
+            perk_title=cat_info.get("perk_title", "Loyal Companion"),
+            perk_desc=cat_info.get("perk_desc", ""),
+            image_file=cat_info.get("image_file", "tuxedo-cat.jpg"),
+            quote=random_quote,
+        )
+
+    def adopt_pet(self, user_id: int, pet_id: str, nickname: Optional[str] = None) -> PetRecord:
+        """Adopt a pet companion from the pet catalog."""
+        if pet_id not in PET_CATALOG:
+            raise RewardsError(f"Pet '{pet_id}' is not found in the Pet Shelter catalog.")
+
+        info = PET_CATALOG[pet_id]
+        cost = info["cost"]
+        species = info["species"]
+        chosen_name = nickname.strip() if nickname and nickname.strip() else info["name"]
+
+        with self._get_connection() as conn:
+            existing = conn.execute(
+                "SELECT id FROM user_pets WHERE user_id = ? AND pet_id = ?",
+                (user_id, pet_id),
+            ).fetchone()
+            if existing:
+                raise RewardsError(f"You have already adopted **{info['name']}**!")
+
+            active_pet = conn.execute(
+                "SELECT id FROM user_pets WHERE user_id = ? AND is_active = 1",
+                (user_id,),
+            ).fetchone()
+            is_active = 1 if not active_pet else 0
+
+        self.deduct_points(user_id, cost, "PET_ADOPTION", f"Adopted {info['name']}")
+
+        now_str = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO user_pets (user_id, pet_id, species, nickname, happiness, level, xp, is_active, adopted_at)
+                VALUES (?, ?, ?, ?, 100, 1, 0, ?, ?)
+                """,
+                (user_id, pet_id, species, chosen_name, is_active, now_str),
+            )
+            pet_db_id = cursor.lastrowid
+            conn.commit()
+
+            row = conn.execute("SELECT * FROM user_pets WHERE id = ?", (pet_db_id,)).fetchone()
+            return self._pet_row_to_record(row)
+
+    def get_user_pets(self, user_id: int) -> list[PetRecord]:
+        """Fetch all pets owned by a user."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM user_pets WHERE user_id = ? ORDER BY is_active DESC, id ASC",
+                (user_id,),
+            ).fetchall()
+            return [self._pet_row_to_record(r) for r in rows]
+
+    def get_active_pet(self, user_id: int) -> Optional[PetRecord]:
+        """Fetch user's currently equipped active pet companion."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM user_pets WHERE user_id = ? AND is_active = 1 LIMIT 1",
+                (user_id,),
+            ).fetchone()
+            if not row:
+                return None
+            return self._pet_row_to_record(row)
+
+    def switch_active_pet(self, user_id: int, pet_id: str) -> PetRecord:
+        """Switch active companion to a specified owned pet."""
+        with self._get_connection() as conn:
+            target = conn.execute(
+                "SELECT id FROM user_pets WHERE user_id = ? AND pet_id = ?",
+                (user_id, pet_id),
+            ).fetchone()
+            if not target:
+                raise RewardsError(f"You do not own the pet '{pet_id}'! Adopt one from `/shop`.")
+
+            conn.execute("UPDATE user_pets SET is_active = 0 WHERE user_id = ?", (user_id,))
+            conn.execute("UPDATE user_pets SET is_active = 1 WHERE id = ?", (target["id"],))
+            conn.commit()
+
+            row = conn.execute("SELECT * FROM user_pets WHERE id = ?", (target["id"],)).fetchone()
+            return self._pet_row_to_record(row)
+
+    def interact_pet(self, user_id: int, action: str = "pet") -> PetInteractResult:
+        """Interact with active pet (feed or pet) to increase happiness and gain XP."""
+        active = self.get_active_pet(user_id)
+        if not active:
+            raise RewardsError("You don't have an active pet companion equipped! Adopt one from `/shop`.")
+
+        now = datetime.now(PHT)
+        today_str = now.strftime("%Y-%m-%d")
+
+        new_xp = active.xp + 15
+        new_level = active.level
+        leveled_up = False
+        xp_needed = new_level * 50
+
+        if new_xp >= xp_needed:
+            new_level += 1
+            new_xp -= xp_needed
+            leveled_up = True
+
+        new_happiness = min(100, active.happiness + 20)
+
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                UPDATE user_pets
+                SET happiness = ?, level = ?, xp = ?, last_interacted = ?
+                WHERE id = ?
+                """,
+                (new_happiness, new_level, new_xp, today_str, active.id),
+            )
+            conn.commit()
+
+        action_verbs = {
+            "feed": ("fed a delicious gourmet treat to", "nom nom nom! *happily eats the treat*"),
+            "pet": ("gently petted and cuddled", "purrs and leans happily into your hand!"),
+        }
+        verb, reaction = action_verbs.get(action, ("interacted with", "looks at you with love!"))
+
+        msg = f"You {verb} **{active.nickname}**!\n💖 Happiness: **{new_happiness}%** | ⭐ Level: **{new_level}** (XP: {new_xp}/{new_level * 50})"
+        if leveled_up:
+            msg += f"\n🎉 **LEVEL UP!** {active.nickname} reached **Level {new_level}**!"
+
+        return PetInteractResult(
+            pet_id=active.pet_id,
+            species=active.species,
+            nickname=active.nickname,
+            action=action,
+            happiness=new_happiness,
+            level=new_level,
+            xp=new_xp,
+            leveled_up=leveled_up,
+            quote=active.quote,
+            message=msg,
+        )
+
+    def rename_pet(self, user_id: int, pet_id: str, new_nickname: str) -> PetRecord:
+        """Rename an owned pet."""
+        clean_name = new_nickname.strip()
+        if not clean_name:
+            raise RewardsError("Nickname cannot be empty.")
+        if len(clean_name) > 32:
+            raise RewardsError("Nickname must be 32 characters or fewer.")
+
+        with self._get_connection() as conn:
+            target = conn.execute(
+                "SELECT id FROM user_pets WHERE user_id = ? AND pet_id = ?",
+                (user_id, pet_id),
+            ).fetchone()
+            if not target:
+                raise RewardsError(f"You do not own the pet '{pet_id}'.")
+
+            conn.execute(
+                "UPDATE user_pets SET nickname = ? WHERE id = ?",
+                (clean_name, target["id"]),
+            )
+            conn.commit()
+
+            row = conn.execute("SELECT * FROM user_pets WHERE id = ?", (target["id"],)).fetchone()
+            return self._pet_row_to_record(row)
+
     def claim_daily(self, user_id: int, now: Optional[datetime] = None) -> DailyClaimResult:
-        """Process daily point claim with streak multipliers and 3k milestone detection."""
+        """Process daily point claim with streak multipliers, pet buffs, and 3k milestone detection."""
         current_time = now or datetime.now(PHT)
         if current_time.tzinfo is None:
             current_time = current_time.replace(tzinfo=PHT)
@@ -737,7 +1199,6 @@ class RewardsDBService:
         user = self.get_or_create_user(user_id)
 
         if user.last_daily_claim == today_str:
-            # Calculate next midnight Manila time (PHT)
             tomorrow_midnight = (current_time + timedelta(days=1)).replace(
                 hour=0, minute=0, second=0, microsecond=0
             )
@@ -746,8 +1207,12 @@ class RewardsDBService:
                 next_claim_time=tomorrow_midnight,
             )
 
-        # Streak calculation
+        active_pet = self.get_active_pet(user_id)
+
+        # Streak calculation (Turtle freezes streak on missed days!)
         if user.last_daily_claim == yesterday_str:
+            new_streak = user.daily_streak + 1
+        elif active_pet and active_pet.species == "turtle" and user.daily_streak > 0:
             new_streak = user.daily_streak + 1
         else:
             new_streak = 1
@@ -755,6 +1220,12 @@ class RewardsDBService:
         base_points = 30
         streak_bonus = min((new_streak - 1) * 5, 35)
         total_points = base_points + streak_bonus
+
+        # Cat 2x Daily Perk!
+        if active_pet and active_pet.species == "cat":
+            base_points *= 2
+            streak_bonus *= 2
+            total_points *= 2
 
         new_balance = user.points + total_points
         new_lifetime = user.lifetime_points + total_points
@@ -772,12 +1243,15 @@ class RewardsDBService:
                 """,
                 (total_points, total_points, new_streak, today_str, user_id),
             )
+            desc = f"Daily Claim (Streak: {new_streak}d, Bonus: +{streak_bonus}pts)"
+            if active_pet and active_pet.species == "cat":
+                desc += " [🐱 2x Cat Perk!]"
             conn.execute(
                 """
                 INSERT INTO transactions (user_id, amount, action_type, description)
                 VALUES (?, ?, 'DAILY', ?)
                 """,
-                (user_id, total_points, f"Daily Claim (Streak: {new_streak}d, Bonus: +{streak_bonus}pts)"),
+                (user_id, total_points, desc),
             )
             conn.commit()
 
@@ -859,12 +1333,16 @@ class RewardsDBService:
             return False
 
     def activate_shield(self, user_id: int, duration_days: int = 7, now: Optional[datetime] = None) -> datetime:
-        """Activate Immunity Shield for specified duration (default 7 days)."""
+        """Activate Immunity Shield for specified duration (default 7 days + 2 days if Turtle pet)."""
         current_time = now or datetime.now(PHT)
         if current_time.tzinfo is None:
             current_time = current_time.replace(tzinfo=PHT)
         else:
             current_time = current_time.astimezone(PHT)
+
+        active_pet = self.get_active_pet(user_id)
+        if active_pet and active_pet.species == "turtle":
+            duration_days += 2
 
         shield_until = current_time + timedelta(days=duration_days)
         iso_str = shield_until.isoformat()
@@ -986,6 +1464,7 @@ class RewardsDBService:
             badges.append("🌟 Top 3 Elite")
 
         inv = self.get_inventory(user_id)
+        active_pet = self.get_active_pet(user_id)
 
         return UserProfile(
             user_id=user.user_id,
@@ -997,10 +1476,24 @@ class RewardsDBService:
             shield_until=shield_dt,
             inventory=inv,
             badges=badges,
+            active_pet=active_pet,
         )
 
     def record_redemption(self, user_id: int, item_id: str) -> dict:
-        """Deduct points and log a prize redemption or consumable purchase."""
+        """Deduct points and log a prize redemption, consumable purchase, or pet adoption."""
+        if item_id in PET_CATALOG:
+            pet_rec = self.adopt_pet(user_id, item_id)
+            return {
+                "id": pet_rec.id,
+                "user_id": user_id,
+                "item_id": item_id,
+                "item_name": pet_rec.display_name,
+                "points_spent": PET_CATALOG[item_id]["cost"],
+                "category": "pet",
+                "status": "DELIVERED",
+                "pet": pet_rec,
+            }
+
         if item_id not in SHOP_CATALOG:
             raise RewardsError(f"Item '{item_id}' is not available in the shop.")
 
@@ -1010,6 +1503,12 @@ class RewardsDBService:
 
         # Deduct points
         self.deduct_points(user_id, points_cost, "SHOP_PURCHASE", f"Purchased {item_name}")
+
+        # Check for 5% Cashback perk from Axolotl / Dragon / Goldfish
+        active_pet = self.get_active_pet(user_id)
+        if active_pet and active_pet.species in ("axolotl", "dragon", "goldfish"):
+            cashback = max(1, int(points_cost * 0.05))
+            self.add_points(user_id, cashback, "PET_CASHBACK", f"5% Cashback from {active_pet.nickname}")
 
         # If consumable item, automatically grant to inventory
         if item.get("category") == "consumable":
@@ -1118,19 +1617,30 @@ class RewardsDBService:
         new_bets_count = (user.daily_bets_count + 1) if user.last_bet_date == today_str else 1
         bets_remaining = MAX_BETS - new_bets_count
 
-        # Determine outcome
+        # Determine outcome (Bunny pet gives +15% win rates!)
+        active_pet = self.get_active_pet(user_id)
         if fixed_outcome is not None:
             outcome = fixed_outcome
         else:
             roll = random.random()
-            if roll < 0.25:
-                outcome = BetOutcome.JACKPOT
-            elif roll < 0.50:
-                outcome = BetOutcome.SKILL_DROP
-            elif roll < 0.65:
-                outcome = BetOutcome.REFUND
+            if active_pet and active_pet.species == "bunny":
+                if roll < 0.40:
+                    outcome = BetOutcome.JACKPOT
+                elif roll < 0.65:
+                    outcome = BetOutcome.SKILL_DROP
+                elif roll < 0.80:
+                    outcome = BetOutcome.REFUND
+                else:
+                    outcome = BetOutcome.BUST
             else:
-                outcome = BetOutcome.BUST
+                if roll < 0.25:
+                    outcome = BetOutcome.JACKPOT
+                elif roll < 0.50:
+                    outcome = BetOutcome.SKILL_DROP
+                elif roll < 0.65:
+                    outcome = BetOutcome.REFUND
+                else:
+                    outcome = BetOutcome.BUST
 
         points_delta = 0
         reward_item_id = None
@@ -1180,6 +1690,8 @@ class RewardsDBService:
                 (new_balance, new_lifetime, new_bets_count, today_str, user_id),
             )
             action_desc = f"Bet Outcome: {outcome.value} ({'+' if points_delta > 0 else ''}{points_delta} pts)"
+            if active_pet and active_pet.species == "bunny":
+                action_desc += " [🐰 Bunny Perk!]"
             if reward_item_name:
                 action_desc += f" + Won {reward_item_name}"
             conn.execute(
@@ -1208,7 +1720,7 @@ class RewardsDBService:
         fixed_success: Optional[bool] = None,
         fixed_amount: Optional[int] = None,
     ) -> StealResult:
-        """Attempt to steal 10-15% of target points using a Pickpocket Card (checked against target shield and Uno Reverse)."""
+        """Attempt to steal 40-60% of target points using a Pickpocket Card (checked against target shield, dog guard, and Uno Reverse)."""
         if thief_id == target_id:
             raise RewardsError("You cannot pickpocket yourself!")
 
@@ -1256,8 +1768,18 @@ class RewardsDBService:
                 reversed_by_uno=False,
             )
 
-        # Roll steal success (65% success, 35% caught)
-        is_success = fixed_success if fixed_success is not None else (random.random() < 0.65)
+        # Check pet perks: Fox increases steal success, Dog dramatically increases bust chance
+        thief_pet = self.get_active_pet(thief_id)
+        target_pet = self.get_active_pet(target_id)
+
+        success_rate = 0.65
+        if thief_pet and thief_pet.species == "fox":
+            success_rate += 0.15
+
+        if target_pet and target_pet.species == "dog":
+            success_rate = min(success_rate, 0.25)  # Dog guard catches thieves 75% of the time!
+
+        is_success = fixed_success if fixed_success is not None else (random.random() < success_rate)
 
         if is_success:
             pct = random.uniform(0.40, 0.60)
@@ -1280,7 +1802,10 @@ class RewardsDBService:
         else:
             # Thief caught red-handed!
             thief = self.get_or_create_user(thief_id)
-            fine = min(30, thief.points)
+            base_fine = 30
+            if target_pet and target_pet.species == "dog":
+                base_fine = 50  # Extra dog bite fine!
+            fine = min(base_fine, thief.points)
             if fine > 0:
                 thief_new = self.deduct_points(thief_id, fine, "STEAL_FINE", f"Caught stealing from user {target_id}")
                 target_new = self.add_points(target_id, fine, "STEAL_COMPENSATION", f"Compensation from caught thief {thief_id}")
@@ -1492,9 +2017,12 @@ class RewardsDBService:
         is_correct: bool,
         now: Optional[datetime] = None,
     ) -> TriviaResult:
-        """Process a trivia answer. If correct, awards +50 pts (max 3 quizzes/day with no cooldown)."""
-        TRIVIA_REWARD = 50
-        MAX_TRIVIA = 3
+        """Process a trivia answer. If correct, awards +50 pts (or +75 pts and 4 attempts if Scholar Owl pet equipped)."""
+        active_pet = self.get_active_pet(user_id)
+        is_owl = bool(active_pet and active_pet.species == "owl")
+        TRIVIA_REWARD = 75 if is_owl else 50
+        MAX_TRIVIA = 4 if is_owl else 3
+
         current_time = now or datetime.now(PHT)
         if current_time.tzinfo is None:
             current_time = current_time.replace(tzinfo=PHT)
@@ -1528,7 +2056,9 @@ class RewardsDBService:
                 """,
                 (new_balance, new_lifetime, new_trivia_count, today_str, user_id),
             )
-            action_desc = f"Trivia Quiz {'Correct (+50 pts)' if is_correct else 'Incorrect (0 pts)'}"
+            action_desc = f"Trivia Quiz {'Correct (+' + str(points_awarded) + ' pts)' if is_correct else 'Incorrect (0 pts)'}"
+            if is_owl and is_correct:
+                action_desc += " [🦉 Owl Perk!]"
             conn.execute(
                 """
                 INSERT INTO transactions (user_id, amount, action_type, description)

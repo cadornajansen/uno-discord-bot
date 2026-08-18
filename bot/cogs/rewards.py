@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import io
 import logging
 import math
+from pathlib import Path
 from typing import Any, Optional
 import discord
 from discord import app_commands
@@ -19,6 +20,8 @@ from bot.services.rewards_db import (
     ShieldActiveError,
     TriviaQuestion,
     TriviaResult,
+    PetRecord,
+    PET_CATALOG,
     ITEM_DEFINITIONS,
     SHOP_CATALOG,
     PHT,
@@ -277,8 +280,10 @@ class AirdropCatchButton(discord.ui.Button):
             return
 
         view.claimers.append(user_id)
+        active_pet = view.rewards_service.get_active_pet(user_id)
+        pts_per_claim = 35 if (active_pet and active_pet.species == "fox") else 25
+        view.claimers.append(user_id)
         view.claimer_names.append(interaction.user.display_name)
-        pts_per_claim = 25
         new_bal = view.rewards_service.add_points(
             user_id, pts_per_claim, "AIRDROP_CATCH", f"Caught airdrop from user {view.launcher_id}"
         )
@@ -299,8 +304,9 @@ class AirdropCatchButton(discord.ui.Button):
         else:
             self.label = f"🎁 Catch Points! ({remaining}/{view.max_claims} Left)"
             await interaction.response.edit_message(embed=view.embed, view=view)
+            fox_tag = " [🦊 Fox Scavenger Bonus!]" if pts_per_claim == 35 else ""
             await interaction.followup.send(
-                f"🎉 You caught **+25 Uno Points** from the airdrop! Your new balance: **{new_bal:,} pts**.",
+                f"🎉 You caught **+{pts_per_claim} Uno Points**{fox_tag} from the airdrop! Your new balance: **{new_bal:,} pts**.",
                 ephemeral=True,
             )
 
@@ -324,6 +330,145 @@ class AirdropCatchView(discord.ui.View):
         self.add_item(AirdropCatchButton())
 
 
+def build_pet_embed(pet: Optional[PetRecord], owner_name: str, all_pets: list[PetRecord]) -> tuple[discord.Embed, Optional[discord.File]]:
+    """Build a rich embed showcasing the user's active pet companion with attached pixel art sprite."""
+    if not pet:
+        embed = discord.Embed(
+            title=f"🐾 Pet Shelter — {owner_name}'s Companions",
+            description=(
+                f"**{owner_name}** does not have an active pet companion equipped yet!\n\n"
+                "Adopt a loyal companion from the **`/shop`** (🐾 Pet Shelter tab) or with **`/pet adopt`**!\n"
+                "Companions grant permanent passive economic perks, daily care rewards, and custom profile aesthetics!"
+            ),
+            color=discord.Color.gold(),
+        )
+        embed.set_footer(text="Browse companions with /shop or adopt with /pet adopt <species>")
+        return embed, None
+
+    embed = discord.Embed(
+        title=f"🐾 {pet.nickname} — {owner_name}'s Companion",
+        description=(
+            f"**Species:** {pet.display_name}\n"
+            f"🌟 **Perk:** **{pet.perk_title}**\n"
+            f"*{pet.perk_desc}*\n\n"
+            f"💬 *\"{pet.quote}\"*"
+        ),
+        color=discord.Color.teal(),
+    )
+
+    bar_len = 10
+    filled = max(1, int(pet.happiness / 100 * bar_len))
+    hp_bar = "💖" * filled + "🖤" * (bar_len - filled)
+    embed.add_field(name=f"Happiness ({pet.happiness}%)", value=hp_bar, inline=True)
+
+    xp_needed = pet.level * 50
+    embed.add_field(name="Level & XP", value=f"⭐ **Level {pet.level}**\n({pet.xp}/{xp_needed} XP)", inline=True)
+    embed.add_field(name="Collection", value=f"🏠 **{len(all_pets)}** Pet(s) Owned", inline=True)
+
+    file_attachment = None
+    pet_img_path = Path("data/pets") / pet.image_file
+    if pet_img_path.exists():
+        file_attachment = discord.File(str(pet_img_path), filename=pet.image_file)
+        embed.set_thumbnail(url=f"attachment://{pet.image_file}")
+
+    embed.set_footer(text="Use buttons below to feed or pet • Switch companion with dropdown")
+    return embed, file_attachment
+
+
+class PetCareButton(discord.ui.Button):
+    """Button to feed or cuddle active companion."""
+
+    def __init__(self, action: str, label: str, emoji: str, style: discord.ButtonStyle = discord.ButtonStyle.primary):
+        super().__init__(label=label, emoji=emoji, style=style, custom_id=f"pet_care_{action}")
+        self.action = action
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: "PetView" = self.view  # type: ignore
+        if interaction.user.id != view.user_id:
+            await interaction.response.send_message("❌ This is not your pet companion!", ephemeral=True)
+            return
+
+        try:
+            res = view.rewards_service.interact_pet(interaction.user.id, action=self.action)
+            updated_pet = view.rewards_service.get_active_pet(interaction.user.id)
+            all_pets = view.rewards_service.get_user_pets(interaction.user.id)
+            embed, _ = build_pet_embed(updated_pet, interaction.user.display_name, all_pets)
+            view.update_components(all_pets)
+
+            await interaction.response.edit_message(embed=embed, view=view)
+            await interaction.followup.send(res.message, ephemeral=True)
+
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+
+class PetSwitchSelect(discord.ui.Select):
+    """Dropdown to switch between owned companions."""
+
+    def __init__(self, user_pets: list[PetRecord]):
+        options = [
+            discord.SelectOption(
+                label=f"{p.nickname} ({p.display_name})",
+                value=p.pet_id,
+                description=f"Level {p.level} • {p.perk_title}"[:95],
+                default=p.is_active,
+            )
+            for p in user_pets
+        ]
+        super().__init__(
+            placeholder="🔄 Switch active companion...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="pet_switch_select",
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: "PetView" = self.view  # type: ignore
+        if interaction.user.id != view.user_id:
+            await interaction.response.send_message("❌ This is not your pet companion!", ephemeral=True)
+            return
+
+        pet_id = self.values[0]
+        try:
+            switched = view.rewards_service.switch_active_pet(interaction.user.id, pet_id)
+            all_pets = view.rewards_service.get_user_pets(interaction.user.id)
+            embed, _ = build_pet_embed(switched, interaction.user.display_name, all_pets)
+            view.update_components(all_pets)
+
+            await interaction.response.edit_message(embed=embed, view=view)
+            await interaction.followup.send(
+                f"✨ Switched active companion to **{switched.nickname}** ({switched.display_name})!\n"
+                f"Active Perk: **{switched.perk_title}**",
+                ephemeral=True,
+            )
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+
+class PetView(discord.ui.View):
+    """Interactive pet companion dashboard."""
+
+    def __init__(
+        self,
+        rewards_service: RewardsDBService,
+        user_id: int,
+        user_pets: list[PetRecord],
+    ):
+        super().__init__(timeout=180.0)
+        self.rewards_service = rewards_service
+        self.user_id = user_id
+        self.update_components(user_pets)
+
+    def update_components(self, user_pets: list[PetRecord]) -> None:
+        self.clear_items()
+        self.add_item(PetCareButton("feed", "Feed Snack", "🍖", discord.ButtonStyle.success))
+        self.add_item(PetCareButton("pet", "Cuddle & Pet", "💖", discord.ButtonStyle.primary))
+
+        if len(user_pets) > 1:
+            self.add_item(PetSwitchSelect(user_pets))
+
+
 def build_shop_embed(rewards_service: RewardsDBService, user_id: int, category: str = "home") -> discord.Embed:
     """Build a clean, structured, and interactive embed for the Uno Rewards Shop."""
     user_points = rewards_service.get_balance(user_id)
@@ -340,6 +485,7 @@ def build_shop_embed(rewards_service: RewardsDBService, user_id: int, category: 
         )
 
         featured_text = (
+            "• **🐾 Pet Shelter Companions** (`500–950 pts`) — *Permanent passive buffs & cute profile badges!*\n"
             "• **🔄 Uno Reverse Card** (`180 pts`) — *Passive trap! Counter-steals 40%–60% from pickpockets!*\n"
             "• **📦 Mystery Gacha Box** (`150 pts`) — *Win up to 1,000 pts & exclusive High Roller badge!*\n"
             "• **☕ Intramuros Coffee Treat** (`1,200 pts`) — *₱50–₱80 Lawson/7-Eleven drink treat around PLM!*"
@@ -347,6 +493,7 @@ def build_shop_embed(rewards_service: RewardsDBService, user_id: int, category: 
         embed.add_field(name="⭐ Featured Items Today", value=featured_text, inline=False)
 
         dept_text = (
+            "• 🐾 **Pet Shelter** (14 pets) — Cats (2x Daily), Dogs (Guard), Bunnies (Bet Win), Owls (Trivia), Turtles, Foxes, Axolotls\n"
             "• ⚔️ **Offense & Traps** — Pickpocket, Uno Reverse, EMP Breaker, Tax Audit\n"
             "• 🛡️ **Defense & Boosters** — 1-Week Shield, 2x Daily Booster, Coffee Bribe\n"
             "• 🎲 **Events & Gacha** — Point Airdrop, Mystery Gacha Box\n"
@@ -363,6 +510,11 @@ def build_shop_embed(rewards_service: RewardsDBService, user_id: int, category: 
         return embed
 
     categories_meta = {
+        "pets": {
+            "title": "🐾 Uno Shop — Pet Shelter & Companions",
+            "desc": "Adopt loyal companions for permanent passive economic buffs and profile vibes!",
+            "color": discord.Color.teal(),
+        },
         "offense": {
             "title": "⚔️ Uno Shop — Offense & Trap Cards",
             "desc": "High-stakes cards to steal, counter-attack, and audit wealthy classmates!",
@@ -438,7 +590,7 @@ class ShopQuickBuySelect(discord.ui.Select):
     def __init__(self, category: str = "home", row: int = 2):
         options = []
         if category == "home":
-            featured_keys = ["uno_reverse", "gacha_box", "shield_1w", "airdrop", "coffee", "nitro_1m"]
+            featured_keys = ["tuxedo_cat", "golden_dog", "brown_bunny", "uno_reverse", "gacha_box", "coffee", "nitro_1m"]
             for k in featured_keys:
                 if k in SHOP_CATALOG:
                     item = SHOP_CATALOG[k]
@@ -485,6 +637,17 @@ class ShopQuickBuySelect(discord.ui.Select):
                 )
                 confirm_embed.add_field(name="Remaining Balance", value=f"**{new_bal:,} pts**", inline=True)
                 await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
+            elif res["category"] == "pet":
+                confirm_embed = discord.Embed(
+                    title="🎉 Pet Companion Adopted!",
+                    description=(
+                        f"You adopted **{res['item_name']}** for **{res['points_spent']:,} pts**!\n"
+                        "Your new companion has been equipped! View and care for them using `/pet`."
+                    ),
+                    color=discord.Color.teal(),
+                )
+                confirm_embed.add_field(name="Remaining Balance", value=f"**{new_bal:,} pts**", inline=True)
+                await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
             else:
                 confirm_embed = discord.Embed(
                     title="🎉 Prize Redemption Submitted!",
@@ -504,7 +667,6 @@ class ShopQuickBuySelect(discord.ui.Select):
                         color=discord.Color.gold(),
                     )
 
-            # Update the main shop view with updated points
             embed = build_shop_embed(view.rewards_service, user_id, view.current_category)
             await interaction.message.edit(embed=embed, view=view)
 
@@ -534,8 +696,9 @@ class ShopView(discord.ui.View):
         self.clear_items()
         buttons_data = [
             ("home", "Featured", "🏠", 0),
+            ("pets", "Pet Shelter", "🐾", 0),
             ("offense", "Offense & Traps", "⚔️", 0),
-            ("defense", "Defense & Boosters", "🛡️", 0),
+            ("defense", "Defense & Boosters", "🛡️", 1),
             ("events", "Events & Gacha", "🎲", 1),
             ("prizes", "Real Prizes & Nitro", "🎁", 1),
         ]
@@ -683,14 +846,14 @@ class RewardsCog(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name="profile", description="View a student's full Uno profile, rank, badges, and inventory.")
+    @app_commands.command(name="profile", description="View a student's full Uno profile, companion, rank, badges, and inventory.")
     @app_commands.describe(member="The classmate to view (defaults to you).")
     async def profile(
         self,
         interaction: discord.Interaction,
         member: Optional[discord.Member] = None,
     ) -> None:
-        """Display rich profile card with points, badges, and inventory."""
+        """Display rich profile card with points, active companion, badges, and inventory."""
         target = member or interaction.user
         profile = self.rewards_service.get_profile(target.id)
 
@@ -711,6 +874,23 @@ class RewardsCog(commands.Cog):
         embed.add_field(name="Server Rank", value=f"**#{profile.rank}** 🏆", inline=True)
         embed.add_field(name="1-Week Shield", value=shield_status, inline=True)
 
+        file_attachment = None
+        if profile.active_pet:
+            pet = profile.active_pet
+            embed.add_field(
+                name=f"🐾 Companion — {pet.nickname} ({pet.display_name})",
+                value=(
+                    f"⭐ **Level {pet.level}** (💖 {pet.happiness}% Happiness)\n"
+                    f"🌟 **Perk:** {pet.perk_title}\n"
+                    f"💬 *\"{pet.quote}\"*"
+                ),
+                inline=False,
+            )
+            pet_img_path = Path("data/pets") / pet.image_file
+            if pet_img_path.exists():
+                file_attachment = discord.File(str(pet_img_path), filename=pet.image_file)
+                embed.set_thumbnail(url=f"attachment://{pet.image_file}")
+
         badges_str = " · ".join(profile.badges) if profile.badges else "No badges unlocked yet."
         embed.add_field(name="🏅 Badges & Milestones", value=badges_str, inline=False)
 
@@ -720,7 +900,135 @@ class RewardsCog(commands.Cog):
         else:
             embed.add_field(name="🎒 Inventory", value="Bag is empty.", inline=False)
 
+        if file_attachment:
+            await interaction.response.send_message(embed=embed, file=file_attachment)
+        else:
+            await interaction.response.send_message(embed=embed)
+
+    pet_group = app_commands.Group(name="pet", description="Manage, care for, and adopt pet companions.")
+
+    @pet_group.command(name="view", description="View and care for your active pet companion.")
+    async def pet_view(self, interaction: discord.Interaction) -> None:
+        """Display pet companion dashboard."""
+        active = self.rewards_service.get_active_pet(interaction.user.id)
+        all_pets = self.rewards_service.get_user_pets(interaction.user.id)
+        embed, file_att = build_pet_embed(active, interaction.user.display_name, all_pets)
+        view = PetView(self.rewards_service, interaction.user.id, all_pets)
+        if file_att:
+            await interaction.response.send_message(embed=embed, file=file_att, view=view)
+        else:
+            await interaction.response.send_message(embed=embed, view=view)
+
+    @pet_group.command(name="adopt", description="Adopt a new pet companion from the shelter.")
+    @app_commands.describe(
+        pet="The species/variant of pet you want to adopt.",
+        nickname="Optional custom nickname for your pet.",
+    )
+    @app_commands.choices(pet=[
+        app_commands.Choice(name="🐱 Tuxedo Cat (500 pts)", value="tuxedo_cat"),
+        app_commands.Choice(name="🐱 Fluffy Calico Cat (550 pts)", value="calico_cat"),
+        app_commands.Choice(name="🐶 Golden Retriever (550 pts)", value="golden_dog"),
+        app_commands.Choice(name="🐶 Shiba Inu (580 pts)", value="shiba_dog"),
+        app_commands.Choice(name="🐰 Lop-Eared Bunny (600 pts)", value="brown_bunny"),
+        app_commands.Choice(name="🐰 Moon Rabbit (650 pts)", value="white_bunny"),
+        app_commands.Choice(name="🦉 Scholar Owl (500 pts)", value="scholar_owl"),
+        app_commands.Choice(name="🦉 Frost Owl (550 pts)", value="ice_owl"),
+        app_commands.Choice(name="🐢 Master Oogway Turtle (600 pts)", value="oogway_turtle"),
+        app_commands.Choice(name="🦊 Trickster Fox (650 pts)", value="orange_fox"),
+        app_commands.Choice(name="🦊 Arctic Ice Fox (700 pts)", value="ice_fox"),
+        app_commands.Choice(name="🦎 Pastel Pink Axolotl (750 pts)", value="pink_axolotl"),
+        app_commands.Choice(name="🦎 Rainbow Axolotl (950 pts)", value="rainbow_axolotl"),
+        app_commands.Choice(name="🐠 Fiery Lucky Goldfish (800 pts)", value="fiery_goldfish"),
+    ])
+    async def pet_adopt(
+        self,
+        interaction: discord.Interaction,
+        pet: app_commands.Choice[str],
+        nickname: Optional[str] = None,
+    ) -> None:
+        """Adopt a pet companion."""
+        try:
+            res = self.rewards_service.adopt_pet(interaction.user.id, pet.value, nickname=nickname)
+            new_bal = self.rewards_service.get_balance(interaction.user.id)
+            embed = discord.Embed(
+                title="🎉 Pet Companion Adopted!",
+                description=(
+                    f"Congratulations! You adopted **{res.nickname}** ({res.display_name})!\n\n"
+                    f"🌟 **Active Perk:** **{res.perk_title}**\n"
+                    f"*{res.perk_desc}*\n\n"
+                    f"💬 *\"{res.quote}\"*"
+                ),
+                color=discord.Color.green(),
+            )
+            embed.add_field(name="Remaining Balance", value=f"**{new_bal:,} Uno Points**", inline=True)
+
+            pet_img_path = Path("data/pets") / res.image_file
+            if pet_img_path.exists():
+                file_att = discord.File(str(pet_img_path), filename=res.image_file)
+                embed.set_thumbnail(url=f"attachment://{res.image_file}")
+                await interaction.response.send_message(embed=embed, file=file_att)
+            else:
+                await interaction.response.send_message(embed=embed)
+
+            await self._log_activity(
+                title="🐾 Pet Adopted",
+                description=f"**{interaction.user.display_name}** adopted **{res.nickname}** ({res.display_name}) for **{PET_CATALOG[pet.value]['cost']:,} pts**.",
+                color=discord.Color.green(),
+            )
+        except InsufficientPointsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @pet_group.command(name="switch", description="Switch your currently active equipped companion.")
+    @app_commands.describe(pet="The owned pet you want to equip.")
+    async def pet_switch(self, interaction: discord.Interaction, pet: str) -> None:
+        """Switch active pet companion."""
+        try:
+            switched = self.rewards_service.switch_active_pet(interaction.user.id, pet)
+            await interaction.response.send_message(
+                f"✨ Switched active companion to **{switched.nickname}** ({switched.display_name})!\n"
+                f"Active Perk: **{switched.perk_title}**",
+            )
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @pet_group.command(name="list", description="View all pets in your collection.")
+    async def pet_list(self, interaction: discord.Interaction) -> None:
+        """List all owned pets."""
+        pets = self.rewards_service.get_user_pets(interaction.user.id)
+        if not pets:
+            await interaction.response.send_message(
+                "🏠 You haven't adopted any pet companions yet! Adopt one with `/pet adopt` or in `/shop`.",
+                ephemeral=True,
+            )
+            return
+
+        embed = discord.Embed(
+            title=f"🏠 {interaction.user.display_name}'s Pet Collection",
+            description=f"Total Companions: **{len(pets)}**",
+            color=discord.Color.blue(),
+        )
+        for p in pets:
+            status = "🌟 **ACTIVE**" if p.is_active else "💤 In Kennel"
+            embed.add_field(
+                name=f"{p.nickname} ({p.display_name}) — Level {p.level} [{status}]",
+                value=f"Perk: *{p.perk_title}*\nHappiness: 💖 {p.happiness}%\n`/pet switch {p.pet_id}`",
+                inline=False,
+            )
         await interaction.response.send_message(embed=embed)
+
+    @pet_group.command(name="rename", description="Give your pet companion a custom nickname.")
+    @app_commands.describe(pet="The pet ID you want to rename.", name="The new nickname.")
+    async def pet_rename(self, interaction: discord.Interaction, pet: str, name: str) -> None:
+        """Rename an owned pet."""
+        try:
+            res = self.rewards_service.rename_pet(interaction.user.id, pet, name)
+            await interaction.response.send_message(
+                f"🏷️ Renamed your {res.display_name} to **{res.nickname}**!",
+            )
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
     @app_commands.command(name="rank", description="View the top 10 highest-ranked BSCS 1-4 members.")
     async def rank(self, interaction: discord.Interaction) -> None:

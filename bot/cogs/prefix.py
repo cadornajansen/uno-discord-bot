@@ -255,6 +255,38 @@ class PrefixCommandsCog(commands.Cog):
         choice = app_commands.Choice(name=item.strip(), value=item.strip().lower())
         await self._invoke_app_command(context, "RewardsCog", "redeem", choice)
 
+    @commands.group(name="pet", invoke_without_command=True)
+    async def pet_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /pet view."""
+        await self._invoke_app_command(context, "RewardsCog", "pet_view")
+
+    @pet_prefix.command(name="adopt")
+    async def pet_adopt_prefix(self, context: commands.Context, species: str, *, nickname: Optional[str] = None) -> None:
+        """Prefix alias for /pet adopt."""
+        from bot.services.rewards_db import PET_CATALOG
+        choice_val = species.strip().lower()
+        if choice_val not in PET_CATALOG:
+            valid = ", ".join(f"`{k}`" for k in PET_CATALOG.keys())
+            await context.reply(f"❌ Unknown pet `{species}`. Available pets: {valid}")
+            return
+        choice = app_commands.Choice(name=PET_CATALOG[choice_val]["name"], value=choice_val)
+        await self._invoke_app_command(context, "RewardsCog", "pet_adopt", choice, nickname)
+
+    @pet_prefix.command(name="switch")
+    async def pet_switch_prefix(self, context: commands.Context, species: str) -> None:
+        """Prefix alias for /pet switch."""
+        await self._invoke_app_command(context, "RewardsCog", "pet_switch", species.strip().lower())
+
+    @pet_prefix.command(name="list")
+    async def pet_list_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /pet list."""
+        await self._invoke_app_command(context, "RewardsCog", "pet_list")
+
+    @pet_prefix.command(name="rename")
+    async def pet_rename_prefix(self, context: commands.Context, species: str, *, name: str) -> None:
+        """Prefix alias for /pet rename."""
+        await self._invoke_app_command(context, "RewardsCog", "pet_rename", species.strip().lower(), name)
+
     @commands.command(name="admin-inspect", aliases=["inspect"])
     @commands.has_permissions(administrator=True)
     async def admin_inspect_prefix(self, context: commands.Context, member: discord.Member) -> None:

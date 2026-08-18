@@ -536,3 +536,67 @@ def test_interactive_shop_view():
 
     asyncio.run(_test())
 
+
+def test_pet_slash_commands_and_profile():
+    """Test /pet adopt, /pet view, /pet switch, /pet rename, and pet in /profile."""
+    async def _test():
+        from bot.cogs.rewards import PetView, PetCareButton
+        cog, service, _ = _make_rewards_cog()
+        service.add_points(777, 2000, "TEST")
+
+        # 1. /pet adopt
+        interaction_adopt = MagicMock()
+        interaction_adopt.user.id = 777
+        interaction_adopt.user.display_name = "PetLover"
+        interaction_adopt.response.send_message = AsyncMock()
+
+        pet_choice = MagicMock()
+        pet_choice.name = "🐱 Tuxedo Cat (500 pts)"
+        pet_choice.value = "tuxedo_cat"
+
+        await cog.pet_adopt.callback(cog, interaction_adopt, pet=pet_choice, nickname="Mittens")
+        interaction_adopt.response.send_message.assert_awaited_once()
+        adopt_embed = interaction_adopt.response.send_message.call_args.kwargs["embed"]
+        assert "Adopted" in adopt_embed.title
+        assert "Mittens" in adopt_embed.description
+
+        # 2. /pet view
+        interaction_view = MagicMock()
+        interaction_view.user.id = 777
+        interaction_view.user.display_name = "PetLover"
+        interaction_view.response.send_message = AsyncMock()
+
+        await cog.pet_view.callback(cog, interaction_view)
+        interaction_view.response.send_message.assert_awaited_once()
+        view_embed = interaction_view.response.send_message.call_args.kwargs["embed"]
+        assert "Mittens" in view_embed.title
+
+        # 3. Test Pet Care Buttons (Feed)
+        all_pets = service.get_user_pets(777)
+        pet_view = PetView(service, 777, all_pets)
+        feed_btn = next(b for b in pet_view.children if isinstance(b, PetCareButton) and b.action == "feed")
+
+        interaction_feed = MagicMock()
+        interaction_feed.user.id = 777
+        interaction_feed.user.display_name = "PetLover"
+        interaction_feed.response.edit_message = AsyncMock()
+        interaction_feed.followup.send = AsyncMock()
+
+        await feed_btn.callback(interaction_feed)
+        interaction_feed.response.edit_message.assert_awaited_once()
+        interaction_feed.followup.send.assert_awaited_once()
+
+        # 4. /profile with active companion
+        interaction_prof = MagicMock()
+        interaction_prof.user.id = 777
+        interaction_prof.user.display_name = "PetLover"
+        interaction_prof.response.send_message = AsyncMock()
+
+        await cog.profile.callback(cog, interaction_prof)
+        interaction_prof.response.send_message.assert_awaited_once()
+        prof_embed = interaction_prof.response.send_message.call_args.kwargs["embed"]
+        companion_field = next(f for f in prof_embed.fields if "Companion" in f.name)
+        assert "Mittens" in companion_field.name
+
+    asyncio.run(_test())
+

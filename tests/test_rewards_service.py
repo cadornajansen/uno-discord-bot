@@ -431,3 +431,125 @@ def test_coffee_bribe_and_gacha_box(rewards_service: RewardsDBService):
     assert res_gacha.points_awarded >= 50
     assert res_gacha.bonus_item_name is not None
 
+
+def test_pet_adoption_and_switching(rewards_service: RewardsDBService):
+    """Test adopting multiple pets, listing collection, switching active pet, and renaming."""
+    rewards_service.add_points(1001, 2000, "START")
+
+    # 1. Adopt Tuxedo Cat
+    pet1 = rewards_service.adopt_pet(1001, "tuxedo_cat", nickname="Oreo")
+    assert pet1.nickname == "Oreo"
+    assert pet1.is_active is True
+    assert rewards_service.get_balance(1001) == 2000 - 500
+
+    # 2. Adopt Golden Retriever
+    pet2 = rewards_service.adopt_pet(1001, "golden_dog", nickname="Buddy")
+    assert pet2.nickname == "Buddy"
+    assert pet2.is_active is False  # First adopted stays active by default
+
+    # 3. List pets
+    all_pets = rewards_service.get_user_pets(1001)
+    assert len(all_pets) == 2
+
+    # 4. Switch active pet to Golden Retriever
+    switched = rewards_service.switch_active_pet(1001, "golden_dog")
+    assert switched.pet_id == "golden_dog"
+    active = rewards_service.get_active_pet(1001)
+    assert active is not None
+    assert active.pet_id == "golden_dog"
+
+    # 5. Rename pet
+    renamed = rewards_service.rename_pet(1001, "golden_dog", "Barkley")
+    assert renamed.nickname == "Barkley"
+
+
+def test_pet_cat_perk_daily(rewards_service: RewardsDBService):
+    """Test Cat 2x daily claim perk."""
+    rewards_service.add_points(1001, 1000, "START")
+    rewards_service.adopt_pet(1001, "tuxedo_cat")
+
+    now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+    res = rewards_service.claim_daily(1001, now=now)
+    # Day 1 base: 30 pts, with 2x cat perk: 60 pts
+    assert res.points_awarded == 60
+
+
+def test_pet_turtle_perk(rewards_service: RewardsDBService):
+    """Test Turtle streak freeze on missed days and +2d shield extension."""
+    rewards_service.add_points(1001, 1000, "START")
+    rewards_service.adopt_pet(1001, "oogway_turtle")
+
+    # Day 1
+    d1 = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+    res1 = rewards_service.claim_daily(1001, now=d1)
+    assert res1.streak == 1
+
+    # Miss 2 days (jump to Day 4) -> Turtle protects streak!
+    d4 = datetime(2026, 8, 4, 12, 0, tzinfo=timezone.utc)
+    res4 = rewards_service.claim_daily(1001, now=d4)
+    assert res4.streak == 2  # Streak was frozen, not reset to 1!
+
+    # Shield duration + 2 days
+    shield_until = rewards_service.activate_shield(1001, duration_days=7, now=d4)
+    assert (shield_until - d4).days == 9  # 7 + 2 = 9 days
+
+
+def test_pet_dog_guard_and_bite(rewards_service: RewardsDBService):
+    """Test Dog companion guarding against thieves and inflicting bite fine."""
+    rewards_service.add_points(1001, 500, "THIEF")
+    rewards_service.add_points(1002, 1000, "TARGET")
+    rewards_service.adopt_pet(1002, "golden_dog")  # Target owns Guard Dog
+
+    rewards_service.add_item(1001, "pickpocket", 1)
+    res = rewards_service.execute_steal(1001, 1002, fixed_success=False)
+    assert res.success is False
+    assert res.fine_paid == 50  # 50 pt dog bite fine instead of 30 pt standard fine
+
+
+def test_pet_owl_trivia_perk(rewards_service: RewardsDBService):
+    """Test Scholar Owl granting +75 pts per quiz and 4 daily attempts."""
+    rewards_service.add_points(1001, 1000, "START")
+    rewards_service.adopt_pet(1001, "scholar_owl")
+
+    now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+    # Attempt 1
+    r1 = rewards_service.record_trivia_attempt(1001, is_correct=True, now=now)
+    assert r1.points_awarded == 75
+    # Attempt 2
+    rewards_service.record_trivia_attempt(1001, is_correct=True, now=now)
+    # Attempt 3
+    rewards_service.record_trivia_attempt(1001, is_correct=True, now=now)
+    # Attempt 4 (Unlocked by Owl!)
+    r4 = rewards_service.record_trivia_attempt(1001, is_correct=True, now=now)
+    assert r4.trivia_remaining == 0
+
+    # Attempt 5 -> Max reached
+    with pytest.raises(MaxTriviaReachedError):
+        rewards_service.record_trivia_attempt(1001, is_correct=True, now=now)
+
+
+def test_pet_axolotl_cashback(rewards_service: RewardsDBService):
+    """Test Axolotl granting 5% cashback on shop purchases."""
+    rewards_service.add_points(1001, 2000, "START")
+    rewards_service.adopt_pet(1001, "pink_axolotl")
+    # Cost was 750, balance is 1250
+
+    # Buy 1-week shield (150 pts) -> 5% cashback = 7 pts refund
+    res = rewards_service.record_redemption(1001, "shield_1w")
+    assert res["status"] == "DELIVERED"
+    # 1250 - 150 + 7 = 1107 pts
+    assert rewards_service.get_balance(1001) == 1107
+
+
+def test_pet_interactions(rewards_service: RewardsDBService):
+    """Test feeding snacks and petting companion."""
+    rewards_service.add_points(1001, 1000, "START")
+    rewards_service.adopt_pet(1001, "tuxedo_cat")
+
+    feed_res = rewards_service.interact_pet(1001, action="feed")
+    assert feed_res.happiness > 0
+    assert feed_res.xp > 0
+
+    pet_res = rewards_service.interact_pet(1001, action="pet")
+    assert "petted" in pet_res.message.lower() or "cuddled" in pet_res.message.lower()
+
