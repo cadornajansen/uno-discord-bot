@@ -1693,9 +1693,16 @@ class RewardsCog(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.rewards_service: RewardsDBService = getattr(
-            bot, "rewards_service", RewardsDBService(getattr(bot.settings, "rewards_db_path", "data/rewards.db"))
-        )
+        service = getattr(bot, "rewards_service", None)
+        if isinstance(service, RewardsDBService):
+            self.rewards_service = service
+        else:
+            db_path = "data/rewards.db"
+            if hasattr(bot, "settings") and hasattr(bot.settings, "rewards_db_path"):
+                p = bot.settings.rewards_db_path
+                if isinstance(p, (str, Path)):
+                    db_path = str(p)
+            self.rewards_service = RewardsDBService(db_path)
 
     def _check_admin_permissions(self, interaction: discord.Interaction) -> bool:
         """Verify whether caller is a server administrator or guild owner."""
