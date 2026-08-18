@@ -806,3 +806,54 @@ def test_casino_and_earning_commands():
     asyncio.run(_test())
 
 
+def test_bounty_commands_and_duel_modes_cog():
+    """Test /bounty place, /bounty list, and /duel with RPS/Roulette/RPG modes."""
+    async def _test():
+        from discord import app_commands
+        cog, service, _ = _make_rewards_cog()
+        service.add_points(111, 1000, "START")
+        service.add_points(222, 1000, "START")
+
+        # 1. /bounty place
+        i_bounty = MagicMock()
+        i_bounty.user.id = 111
+        i_bounty.user.mention = "<@111>"
+        i_bounty.response.send_message = AsyncMock()
+
+        target_m = MagicMock()
+        target_m.id = 222
+        target_m.bot = False
+        target_m.display_name = "WantedTarget"
+        target_m.mention = "<@222>"
+        target_m.display_avatar.url = "https://example.com/target.png"
+
+        await cog.bounty_place.callback(cog, i_bounty, target=target_m, amount=100)
+        i_bounty.response.send_message.assert_awaited_once()
+        b_embed = i_bounty.response.send_message.call_args.kwargs["embed"]
+        assert "WANTED" in b_embed.title
+
+        # 2. /bounty list
+        i_list = MagicMock()
+        i_list.guild = None
+        i_list.response.send_message = AsyncMock()
+        await cog.bounty_list.callback(cog, i_list)
+        i_list.response.send_message.assert_awaited_once()
+        list_embed = i_list.response.send_message.call_args.kwargs["embed"]
+        assert "Wanted" in list_embed.title
+
+        # 3. /duel with RPS mode
+        i_duel_rps = MagicMock()
+        i_duel_rps.user.id = 111
+        i_duel_rps.user.mention = "<@111>"
+        i_duel_rps.response.send_message = AsyncMock()
+        rps_choice = app_commands.Choice(name="RPS", value="rps")
+
+        await cog.duel.callback(cog, i_duel_rps, target=target_m, amount=50, mode=rps_choice)
+        i_duel_rps.response.send_message.assert_awaited_once()
+        view_arg = i_duel_rps.response.send_message.call_args.kwargs.get("view")
+        assert view_arg is not None
+        assert view_arg.mode == "rps"
+
+    asyncio.run(_test())
+
+

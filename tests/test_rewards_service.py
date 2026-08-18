@@ -777,6 +777,101 @@ def test_duel_resolution(rewards_service: RewardsDBService):
     assert duel_res.pot_won == 200
     assert rewards_service.get_balance(1001) == 600
     assert rewards_service.get_balance(1002) == 400
+    assert rewards_service.get_profile(1001).duel_wins == 1
+    assert rewards_service.get_profile(1002).duel_losses == 1
+
+
+def test_bounty_placement_and_claim_on_duel_win(rewards_service: RewardsDBService):
+    """Test placing a bounty and claiming it upon winning a duel against the target."""
+    rewards_service.add_points(1001, 500, "START")
+    rewards_service.add_points(1002, 500, "START")
+    rewards_service.add_points(1003, 500, "START")
+
+    # User 1003 places 150 pts bounty on User 1002
+    b_res = rewards_service.place_bounty(1003, 1002, 150)
+    assert b_res["total_pool"] == 150
+    assert rewards_service.get_balance(1003) == 350
+
+    # Check active bounty board
+    board = rewards_service.get_bounty_board()
+    assert len(board) == 1
+    assert board[0]["target_id"] == 1002
+    assert board[0]["total_bounty"] == 150
+
+    # User 1001 duels 1002 and wins!
+    duel_res = rewards_service.resolve_duel(1001, 1002, wager=100, fixed_c_roll=99, fixed_t_roll=12)
+    assert duel_res.winner_id == 1001
+    assert duel_res.bounty_won == 150
+    # Winner receives 200 pot + 150 bounty = 350 pts gain. Starting 500 - 100 + 350 = 750
+    assert rewards_service.get_balance(1001) == 750
+    assert rewards_service.get_profile(1001).bounties_claimed == 1
+
+    # Bounty is now cleared
+    assert len(rewards_service.get_bounty_board()) == 0
+
+
+def test_rps_duel_game_logic(rewards_service: RewardsDBService):
+    """Test Rock-Paper-Scissors clash resolution."""
+    rewards_service.add_points(1001, 300, "START")
+    rewards_service.add_points(1002, 300, "START")
+
+    # Rock beats Scissors
+    res_rock = rewards_service.resolve_rps_duel(1001, 1002, "rock", "scissors", wager=50)
+    assert res_rock.winner_id == 1001
+    assert res_rock.pot_won == 100
+    assert rewards_service.get_balance(1001) == 350
+    assert rewards_service.get_balance(1002) == 250
+
+    # Tie refunds wagers
+    res_tie = rewards_service.resolve_rps_duel(1001, 1002, "paper", "paper", wager=50)
+    assert res_tie.is_tie is True
+    assert rewards_service.get_balance(1001) == 350
+    assert rewards_service.get_balance(1002) == 250
+
+
+def test_roulette_duel_game_logic(rewards_service: RewardsDBService):
+    """Test Uno Russian Roulette chamber mechanics."""
+    rewards_service.add_points(1001, 400, "START")
+    rewards_service.add_points(1002, 400, "START")
+
+    game = rewards_service.start_roulette_game(1001, 1002, wager=100)
+    assert len(game.chamber) == 6
+    assert sum(game.chamber) == 1  # Exactly 1 bomb
+
+    # Manually place bomb in slot 1 (second draw)
+    game.chamber = [False, True, False, False, False, False]
+
+    # Turn 1: Player 1001 pulls trigger -> Safe (slot 0)
+    step1 = rewards_service.pull_roulette_trigger(1001, 1002)
+    assert step1.is_over is False
+    assert step1.current_turn_id == 1002
+
+    # Turn 2: Player 1002 pulls trigger -> Bomb explodes (slot 1)!
+    step2 = rewards_service.pull_roulette_trigger(1002, 1001)
+    assert step2.is_over is True
+    assert step2.exploded is True
+    assert step2.winner_id == 1001
+    assert step2.loser_id == 1002
+    assert rewards_service.get_balance(1001) == 500  # 400 - 100 + 200 = 500
+    assert rewards_service.get_balance(1002) == 300
+
+
+def test_rpg_duel_combat_logic(rewards_service: RewardsDBService):
+    """Test Turn-Based RPG combat rounds, damage, and parries."""
+    rewards_service.add_points(1001, 500, "START")
+    rewards_service.add_points(1002, 500, "START")
+
+    game = rewards_service.start_rpg_game(1001, 1002, wager=100)
+    assert game.c_hp == 100
+    assert game.t_hp == 100
+
+    # Round 1: Challenger strikes, Target blocks
+    rewards_service.submit_rpg_action(1001, 1002, "strike")
+    res_r1 = rewards_service.submit_rpg_action(1002, 1001, "block")
+    assert res_r1.turn_number == 2
+    # Target parried: challenger took 10 counter DMG, target took reduced DMG
+    assert res_r1.c_hp == 90
+    assert res_r1.t_hp < 100
 
 
 def test_bank_deposit_and_withdraw(rewards_service: RewardsDBService):

@@ -255,9 +255,32 @@ class PrefixCommandsCog(commands.Cog):
         await self._invoke_app_command(context, "RewardsCog", "beg")
 
     @commands.command(name="duel", aliases=["challenge", "pvp"])
-    async def duel_prefix(self, context: commands.Context, member: discord.Member, amount: int) -> None:
+    async def duel_prefix(
+        self,
+        context: commands.Context,
+        member: discord.Member,
+        amount: int = 50,
+        mode: str = "dice",
+    ) -> None:
         """Prefix alias for /duel."""
-        await self._invoke_app_command(context, "RewardsCog", "duel", member, amount)
+        mode_clean = mode.lower().strip()
+        mode_choice = app_commands.Choice(name=mode_clean.upper(), value=mode_clean) if mode_clean in ("dice", "rps", "roulette", "rpg") else None
+        await self._invoke_app_command(context, "RewardsCog", "duel", member, amount, mode_choice)
+
+    @commands.group(name="bounty", invoke_without_command=True)
+    async def bounty_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /bounty list."""
+        await self._invoke_app_command(context, "RewardsCog", "bounty_list")
+
+    @bounty_prefix.command(name="place")
+    async def bounty_place_prefix(self, context: commands.Context, member: discord.Member, amount: int) -> None:
+        """Prefix alias for /bounty place."""
+        await self._invoke_app_command(context, "RewardsCog", "bounty_place", member, amount)
+
+    @bounty_prefix.command(name="list")
+    async def bounty_list_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /bounty list."""
+        await self._invoke_app_command(context, "RewardsCog", "bounty_list")
 
     @commands.command(name="bank")
     async def bank_prefix(self, context: commands.Context, action: str = "view", amount: Optional[int] = None) -> None:

@@ -33,6 +33,10 @@ from bot.services.rewards_db import (
     ScavengeResult,
     DuelResult,
     STARTER_PET_CHOICES,
+    BountyRecord,
+    RPSDuelGame,
+    RouletteDuelGame,
+    RPGCombatGame,
 )
 
 logger = logging.getLogger(__name__)
@@ -815,15 +819,338 @@ class HighLowView(discord.ui.View):
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
 
-class DuelAcceptView(discord.ui.View):
-    """Interactive confirmation view for 1v1 PvP Wager Duels."""
+class DoubleOrNothingView(discord.ui.View):
+    """Instant rematch button for loser of a duel."""
 
-    def __init__(self, rewards_service: RewardsDBService, challenger: discord.Member | discord.User, target: discord.Member | discord.User, wager: int):
+    def __init__(
+        self,
+        rewards_service: RewardsDBService,
+        loser: discord.Member | discord.User,
+        winner: discord.Member | discord.User,
+        previous_wager: int,
+        mode: str = "dice",
+    ):
+        super().__init__(timeout=20.0)
+        self.rewards_service = rewards_service
+        self.loser = loser
+        self.winner = winner
+        self.new_wager = previous_wager * 2
+        self.mode = mode
+
+    @discord.ui.button(label="🔁 Double or Nothing Rematch!", style=discord.ButtonStyle.danger, custom_id="rematch_btn")
+    async def rematch(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if interaction.user.id != self.loser.id:
+            await interaction.response.send_message("❌ Only the defeated duelist can request a Double-or-Nothing rematch!", ephemeral=True)
+            return
+
+        l_bal = self.rewards_service.get_balance(self.loser.id)
+        w_bal = self.rewards_service.get_balance(self.winner.id)
+        if l_bal < self.new_wager:
+            await interaction.response.send_message(f"❌ You need at least `{self.new_wager:,} pts` for a double-or-nothing rematch (you have `{l_bal:,} pts`)!", ephemeral=True)
+            return
+        if w_bal < self.new_wager:
+            await interaction.response.send_message(f"❌ {self.winner.display_name} does not have `{self.new_wager:,} pts` in their wallet!", ephemeral=True)
+            return
+
+        self.stop()
+        embed = discord.Embed(
+            title="⚔️ DOUBLE OR NOTHING DUEL REMATCH!",
+            description=(
+                f"**{self.loser.mention}** has doubled the stakes against **{self.winner.mention}**!\n\n"
+                f"💰 **New Wager per Player:** `{self.new_wager:,} Uno Points`\n"
+                f"🏆 **Total Rematch Pot:** `{self.new_wager * 2:,} Uno Points`\n"
+                f"🎮 **Game Mode:** `{self.mode.upper()}`\n\n"
+                f"{self.winner.mention}, click **[ Accept Duel ]** to clash again!"
+            ),
+            color=discord.Color.red(),
+        )
+        view = DuelAcceptView(self.rewards_service, self.loser, self.winner, self.new_wager, mode=self.mode)
+        await interaction.response.send_message(content=f"{self.winner.mention}", embed=embed, view=view)
+
+
+class RPSDuelView(discord.ui.View):
+    """Interactive simultaneous Rock-Paper-Scissors selection UI."""
+
+    def __init__(
+        self,
+        rewards_service: RewardsDBService,
+        challenger: discord.Member | discord.User,
+        target: discord.Member | discord.User,
+        wager: int,
+    ):
         super().__init__(timeout=60.0)
         self.rewards_service = rewards_service
         self.challenger = challenger
         self.target = target
         self.wager = wager
+        self.c_choice: Optional[str] = None
+        self.t_choice: Optional[str] = None
+
+    async def _handle_choice(self, interaction: discord.Interaction, choice: str) -> None:
+        user_id = interaction.user.id
+        if user_id not in (self.challenger.id, self.target.id):
+            await interaction.response.send_message("❌ You are not part of this duel!", ephemeral=True)
+            return
+
+        choice_names = {"rock": "🪨 Rock", "paper": "📄 Paper", "scissors": "✂️ Scissors"}
+
+        if user_id == self.challenger.id:
+            if self.c_choice is not None:
+                await interaction.response.send_message("❌ You have already submitted your move!", ephemeral=True)
+                return
+            self.c_choice = choice
+        elif user_id == self.target.id:
+            if self.t_choice is not None:
+                await interaction.response.send_message("❌ You have already submitted your move!", ephemeral=True)
+                return
+            self.t_choice = choice
+
+        await interaction.response.send_message(f"✅ You chose **{choice_names[choice]}**! Waiting for your opponent...", ephemeral=True)
+
+        if self.c_choice is not None and self.t_choice is not None:
+            self.stop()
+            try:
+                res = self.rewards_service.resolve_rps_duel(
+                    self.challenger.id, self.target.id, self.c_choice, self.t_choice, self.wager
+                )
+                if res.is_tie:
+                    embed = discord.Embed(
+                        title="🤝 Rock-Paper-Scissors — It's a Tie!",
+                        description=(
+                            f"**{self.challenger.display_name}**: {res.challenger_choice}\n"
+                            f"**{self.target.display_name}**: {res.target_choice}\n\n"
+                            f"Both players chose the same move! Wagers of `{self.wager:,} pts` refunded."
+                        ),
+                        color=discord.Color.gold(),
+                    )
+                    await interaction.message.edit(embed=embed, view=None)
+                else:
+                    winner = self.challenger if res.winner_id == self.challenger.id else self.target
+                    loser = self.target if res.winner_id == self.challenger.id else self.challenger
+                    w_choice = res.challenger_choice if res.winner_id == self.challenger.id else res.target_choice
+                    l_choice = res.target_choice if res.winner_id == self.challenger.id else res.challenger_choice
+
+                    desc = (
+                        f"👑 **{winner.display_name}** ({w_choice}) defeated **{loser.display_name}** ({l_choice})!\n\n"
+                        f"🏆 **{winner.mention} won the pot of `{res.pot_won:,} Uno Points`!**\n"
+                    )
+                    if res.bounty_won > 0:
+                        desc += f"\n🎯 **BOUNTY CLAIMED!** Claimed an additional **+{res.bounty_won:,} pts** bounty on {loser.display_name}!"
+                    if res.perk_msg:
+                        desc += f"\n{res.perk_msg}"
+
+                    embed = discord.Embed(
+                        title=f"👑 {winner.display_name} WON THE RPS DUEL!",
+                        description=desc,
+                        color=discord.Color.green(),
+                    )
+                    rematch_view = DoubleOrNothingView(self.rewards_service, loser, winner, self.wager, mode="rps")
+                    await interaction.message.edit(embed=embed, view=rematch_view)
+            except RewardsError as e:
+                await interaction.message.edit(content=f"❌ Error resolving duel: {e}", embed=None, view=None)
+
+    @discord.ui.button(label="Rock", emoji="🪨", style=discord.ButtonStyle.primary, custom_id="rps_rock")
+    async def btn_rock(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._handle_choice(interaction, "rock")
+
+    @discord.ui.button(label="Paper", emoji="📄", style=discord.ButtonStyle.success, custom_id="rps_paper")
+    async def btn_paper(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._handle_choice(interaction, "paper")
+
+    @discord.ui.button(label="Scissors", emoji="✂️", style=discord.ButtonStyle.danger, custom_id="rps_scissors")
+    async def btn_scissors(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._handle_choice(interaction, "scissors")
+
+
+class RouletteDuelView(discord.ui.View):
+    """Interactive Uno Russian Roulette chamber UI."""
+
+    def __init__(
+        self,
+        rewards_service: RewardsDBService,
+        challenger: discord.Member | discord.User,
+        target: discord.Member | discord.User,
+        wager: int,
+    ):
+        super().__init__(timeout=60.0)
+        self.rewards_service = rewards_service
+        self.challenger = challenger
+        self.target = target
+        self.wager = wager
+        self.game = self.rewards_service.start_roulette_game(challenger.id, target.id, wager)
+
+    def _render_embed(self) -> discord.Embed:
+        curr_player = self.challenger if self.game.current_turn_id == self.challenger.id else self.target
+        chamber_display = " ".join("🎴" if i < self.game.current_index else "⚪" for i in range(6))
+
+        embed = discord.Embed(
+            title="🃏 Uno Russian Roulette — Chamber Deck",
+            description=(
+                f"**Challenger:** {self.challenger.mention}\n"
+                f"**Target:** {self.target.mention}\n"
+                f"💰 **Total Pot:** `{self.wager * 2:,} Uno Points`\n\n"
+                f"Deck Chamber: `{chamber_display}` (Card {self.game.current_index + 1}/6)\n\n"
+                f"👉 **It is {curr_player.mention}'s turn to draw a card!**"
+            ),
+            color=discord.Color.purple(),
+        )
+        embed.set_footer(text="5 Safe Cards • 1 Wild Draw 4 Bomb 💥 • Click below to draw")
+        return embed
+
+    @discord.ui.button(label="Draw Card / Pull Trigger", emoji="🎴", style=discord.ButtonStyle.danger, custom_id="roulette_draw")
+    async def draw_card(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if interaction.user.id != self.game.current_turn_id:
+            await interaction.response.send_message("❌ It is not your turn to draw!", ephemeral=True)
+            return
+
+        opp_id = self.target.id if self.game.current_turn_id == self.challenger.id else self.challenger.id
+        try:
+            game = self.rewards_service.pull_roulette_trigger(interaction.user.id, opp_id)
+            if game.is_over:
+                self.stop()
+                winner = self.challenger if game.winner_id == self.challenger.id else self.target
+                loser = self.target if game.winner_id == self.challenger.id else self.challenger
+
+                desc = (
+                    f"💥 **BOOM! {loser.mention} drew the Wild Draw 4 Bomb!**\n\n"
+                    f"🏆 **{winner.mention} survived and won the pot of `{game.pot_won:,} Uno Points`!**\n"
+                )
+                if game.bounty_won > 0:
+                    desc += f"\n🎯 **BOUNTY CLAIMED!** Claimed an additional **+{game.bounty_won:,} pts** bounty on {loser.display_name}!"
+                if game.perk_msg:
+                    desc += f"\n{game.perk_msg}"
+
+                embed = discord.Embed(
+                    title=f"💥 EXPLOSION! {winner.display_name} WINS ROULETTE!",
+                    description=desc,
+                    color=discord.Color.dark_red(),
+                )
+                rematch_view = DoubleOrNothingView(self.rewards_service, loser, winner, self.wager, mode="roulette")
+                await interaction.response.edit_message(embed=embed, view=rematch_view)
+            else:
+                embed = self._render_embed()
+                await interaction.response.edit_message(embed=embed, view=self)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+
+class RPGDuelView(discord.ui.View):
+    """Interactive Turn-Based 100 HP RPG Combat View."""
+
+    def __init__(
+        self,
+        rewards_service: RewardsDBService,
+        challenger: discord.Member | discord.User,
+        target: discord.Member | discord.User,
+        wager: int,
+    ):
+        super().__init__(timeout=90.0)
+        self.rewards_service = rewards_service
+        self.challenger = challenger
+        self.target = target
+        self.wager = wager
+        self.game = self.rewards_service.start_rpg_game(challenger.id, target.id, wager)
+
+    def _render_embed(self) -> discord.Embed:
+        c_bars = int(self.game.c_hp / 10)
+        t_bars = int(self.game.t_hp / 10)
+        c_bar_str = "█" * c_bars + "░" * (10 - c_bars)
+        t_bar_str = "█" * t_bars + "░" * (10 - t_bars)
+
+        log_str = "\n".join(self.game.last_round_log) if self.game.last_round_log else "⚔️ *Round 1 has commenced! Select your combat action below.*"
+
+        embed = discord.Embed(
+            title=f"⚔️ RPG Arena Duel — Round {self.game.turn_number}",
+            description=(
+                f"**{self.challenger.display_name}**: `[{c_bar_str}]` **{self.game.c_hp}/100 HP**\n"
+                f"**{self.target.display_name}**: `[{t_bar_str}]` **{self.game.t_hp}/100 HP**\n\n"
+                f"💰 **Total Pot:** `{self.wager * 2:,} Uno Points`\n\n"
+                f"📜 **Combat Log:**\n{log_str}\n\n"
+                "👉 Both combatants must pick an action below!"
+            ),
+            color=discord.Color.red(),
+        )
+        return embed
+
+    async def _handle_action(self, interaction: discord.Interaction, action: str) -> None:
+        user_id = interaction.user.id
+        if user_id not in (self.challenger.id, self.target.id):
+            await interaction.response.send_message("❌ You are not a combatant in this RPG duel!", ephemeral=True)
+            return
+
+        opp_id = self.target.id if user_id == self.challenger.id else self.challenger.id
+        try:
+            game = self.rewards_service.submit_rpg_action(user_id, opp_id, action)
+            act_names = {"strike": "⚔️ Strike", "block": "🛡️ Parry/Block", "ultimate": "⚡ Ultimate"}
+            await interaction.response.send_message(f"✅ You selected **{act_names[action]}**! Waiting for opponent...", ephemeral=True)
+
+            if game.is_over:
+                self.stop()
+                if game.winner_id is None:
+                    embed = discord.Embed(
+                        title="🤝 Mutual KO — RPG Duel Tie!",
+                        description=f"Both combatants collapsed simultaneously! Wagers of `{self.wager:,} pts` refunded.",
+                        color=discord.Color.gold(),
+                    )
+                    await interaction.message.edit(embed=embed, view=None)
+                else:
+                    winner = self.challenger if game.winner_id == self.challenger.id else self.target
+                    loser = self.target if game.winner_id == self.challenger.id else self.challenger
+
+                    desc = (
+                        f"👑 **{winner.mention} emerged victorious in the RPG Arena!**\n\n"
+                        f"🏆 **Winner takes the entire pot of `{game.pot_won:,} Uno Points`!**\n"
+                    )
+                    if game.bounty_won > 0:
+                        desc += f"\n🎯 **BOUNTY CLAIMED!** Claimed an additional **+{game.bounty_won:,} pts** bounty on {loser.display_name}!"
+                    if game.perk_msg:
+                        desc += f"\n{game.perk_msg}"
+
+                    embed = discord.Embed(
+                        title=f"👑 {winner.display_name} WON THE RPG ARENA!",
+                        description=desc,
+                        color=discord.Color.green(),
+                    )
+                    rematch_view = DoubleOrNothingView(self.rewards_service, loser, winner, self.wager, mode="rpg")
+                    await interaction.message.edit(embed=embed, view=rematch_view)
+
+            elif len(game.last_round_log) > 0:
+                embed = self._render_embed()
+                await interaction.message.edit(embed=embed, view=self)
+
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @discord.ui.button(label="Strike (20-35 DMG)", emoji="⚔️", style=discord.ButtonStyle.primary, custom_id="rpg_strike")
+    async def btn_strike(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._handle_action(interaction, "strike")
+
+    @discord.ui.button(label="Parry/Block", emoji="🛡️", style=discord.ButtonStyle.secondary, custom_id="rpg_block")
+    async def btn_block(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._handle_action(interaction, "block")
+
+    @discord.ui.button(label="Ultimate (55 DMG / 50% Hit)", emoji="⚡", style=discord.ButtonStyle.danger, custom_id="rpg_ultimate")
+    async def btn_ultimate(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._handle_action(interaction, "ultimate")
+
+
+class DuelAcceptView(discord.ui.View):
+    """Interactive confirmation view for 1v1 PvP Wager Duels."""
+
+    def __init__(
+        self,
+        rewards_service: RewardsDBService,
+        challenger: discord.Member | discord.User,
+        target: discord.Member | discord.User,
+        wager: int,
+        mode: str = "dice",
+    ):
+        super().__init__(timeout=60.0)
+        self.rewards_service = rewards_service
+        self.challenger = challenger
+        self.target = target
+        self.wager = wager
+        self.mode = mode.lower().strip()
 
     @discord.ui.button(label="Accept Duel", emoji="⚔️", style=discord.ButtonStyle.danger, custom_id="duel_accept")
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -831,38 +1158,70 @@ class DuelAcceptView(discord.ui.View):
             await interaction.response.send_message(f"❌ Only {self.target.mention} can accept this duel!", ephemeral=True)
             return
 
-        try:
-            res = self.rewards_service.resolve_duel(self.challenger.id, self.target.id, self.wager)
-            self.stop()
+        self.stop()
+        if self.mode == "rps":
+            rps_view = RPSDuelView(self.rewards_service, self.challenger, self.target, self.wager)
+            embed = discord.Embed(
+                title="✂️ Rock-Paper-Scissors Duel — Clash of Minds!",
+                description=(
+                    f"**Challenger:** {self.challenger.mention}\n"
+                    f"**Target:** {self.target.mention}\n"
+                    f"💰 **Wager per Player:** `{self.wager:,} Uno Points`\n\n"
+                    "Both combatants, click your secret move button below! Moves remain hidden until both have submitted."
+                ),
+                color=discord.Color.blue(),
+            )
+            embed.set_footer(text="Rock beats Scissors • Scissors beats Paper • Paper beats Rock")
+            await interaction.response.edit_message(embed=embed, view=rps_view)
 
-            if res.is_tie:
-                title = "🤝 1v1 Duel — Draw / Tie!"
-                desc = (
-                    f"**{self.challenger.display_name}** rolled `{res.challenger_roll}`\n"
-                    f"**{self.target.display_name}** rolled `{res.target_roll}`\n\n"
-                    f"It's a dead heat! Both wagers of `{self.wager:,} pts` were refunded."
-                )
-                color = discord.Color.gold()
-            else:
-                winner = self.challenger if res.winner_id == self.challenger.id else self.target
-                loser = self.target if res.winner_id == self.challenger.id else self.challenger
-                w_roll = res.challenger_roll if res.winner_id == self.challenger.id else res.target_roll
-                l_roll = res.target_roll if res.winner_id == self.challenger.id else res.challenger_roll
+        elif self.mode == "roulette":
+            roulette_view = RouletteDuelView(self.rewards_service, self.challenger, self.target, self.wager)
+            embed = roulette_view._render_embed()
+            await interaction.response.edit_message(embed=embed, view=roulette_view)
 
-                title = f"👑 {winner.display_name} WON THE DUEL!"
-                desc = (
-                    f"⚔️ **{winner.display_name}** rolled 🎲 **`{w_roll}`**\n"
-                    f"💀 **{loser.display_name}** rolled 🎲 `{l_roll}`\n\n"
-                    f"🏆 **{winner.mention} took the entire pot of `{res.pot_won:,} Uno Points`!**"
-                )
-                color = discord.Color.green()
+        elif self.mode == "rpg":
+            rpg_view = RPGDuelView(self.rewards_service, self.challenger, self.target, self.wager)
+            embed = rpg_view._render_embed()
+            await interaction.response.edit_message(embed=embed, view=rpg_view)
 
-            embed = discord.Embed(title=title, description=desc, color=color)
-            embed.set_footer(text="1v1 High-Stakes Duel • Roll range 1-100")
-            await interaction.response.edit_message(embed=embed, view=None)
+        else:
+            try:
+                res = self.rewards_service.resolve_duel(self.challenger.id, self.target.id, self.wager)
+                if res.is_tie:
+                    title = "🤝 1v1 Duel — Draw / Tie!"
+                    desc = (
+                        f"**{self.challenger.display_name}** rolled `{res.challenger_roll}`\n"
+                        f"**{self.target.display_name}** rolled `{res.target_roll}`\n\n"
+                        f"It's a dead heat! Both wagers of `{self.wager:,} pts` were refunded."
+                    )
+                    color = discord.Color.gold()
+                    embed = discord.Embed(title=title, description=desc, color=color)
+                    await interaction.response.edit_message(embed=embed, view=None)
+                else:
+                    winner = self.challenger if res.winner_id == self.challenger.id else self.target
+                    loser = self.target if res.winner_id == self.challenger.id else self.challenger
+                    w_roll = res.challenger_roll if res.winner_id == self.challenger.id else res.target_roll
+                    l_roll = res.target_roll if res.winner_id == self.challenger.id else res.challenger_roll
 
-        except RewardsError as e:
-            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+                    title = f"👑 {winner.display_name} WON THE DUEL!"
+                    desc = (
+                        f"⚔️ **{winner.display_name}** rolled 🎲 **`{w_roll}`**\n"
+                        f"💀 **{loser.display_name}** rolled 🎲 `{l_roll}`\n\n"
+                        f"🏆 **{winner.mention} took the entire pot of `{res.pot_won:,} Uno Points`!**"
+                    )
+                    if res.bounty_won > 0:
+                        desc += f"\n\n🎯 **BOUNTY CLAIMED!** Claimed an additional **+{res.bounty_won:,} pts** bounty on {loser.display_name}!"
+                    if res.pet_perk_activated:
+                        desc += f"\n\n🐾 {res.pet_perk_activated}"
+
+                    color = discord.Color.green()
+                    embed = discord.Embed(title=title, description=desc, color=color)
+                    embed.set_footer(text="1v1 High-Stakes Duel • Roll range 1-100")
+                    rematch_view = DoubleOrNothingView(self.rewards_service, loser, winner, self.wager, mode="dice")
+                    await interaction.response.edit_message(embed=embed, view=rematch_view)
+
+            except RewardsError as e:
+                await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
     @discord.ui.button(label="Decline", emoji="❌", style=discord.ButtonStyle.secondary, custom_id="duel_decline")
     async def decline(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -1466,6 +1825,15 @@ class RewardsCog(commands.Cog):
                 file_attachment = discord.File(str(pet_img_path), filename=pet.image_file)
                 embed.set_thumbnail(url=f"attachment://{pet.image_file}")
 
+        total_duels = profile.duel_wins + profile.duel_losses
+        win_rate = (profile.duel_wins / total_duels * 100) if total_duels > 0 else 0.0
+        pvp_str = f"⚔️ **{profile.duel_wins}W - {profile.duel_losses}L** ({win_rate:.1f}%)"
+        if profile.duel_streak > 0:
+            pvp_str += f" | 🔥 {profile.duel_streak} streak"
+        if profile.bounties_claimed > 0:
+            pvp_str += f" | 🎯 {profile.bounties_claimed} Bounties Claimed"
+        embed.add_field(name="⚔️ PvP Combat Record", value=pvp_str, inline=False)
+
         badges_str = " · ".join(profile.badges) if profile.badges else "No badges unlocked yet."
         embed.add_field(name="🏅 Badges & Milestones", value=badges_str, inline=False)
 
@@ -1986,9 +2354,27 @@ class RewardsCog(commands.Cog):
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
-    @app_commands.command(name="duel", description="Challenge a classmate to a 1v1 PvP dice roll wager! Winner takes all.")
-    @app_commands.describe(target="The classmate you want to challenge.", amount="The amount of Uno Points to wager.")
-    async def duel(self, interaction: discord.Interaction, target: discord.Member, amount: int) -> None:
+    @app_commands.command(name="duel", description="Challenge a classmate to a 1v1 wager duel with selectable game modes!")
+    @app_commands.describe(
+        target="The classmate to duel against.",
+        amount="Wager amount in Uno Points (min 10 pts, winner takes double).",
+        mode="Game mode: Dice Roll (default), Rock-Paper-Scissors, Uno Russian Roulette, or RPG Arena Combat.",
+    )
+    @app_commands.choices(
+        mode=[
+            app_commands.Choice(name="🎲 Dice High-Roll Showdown", value="dice"),
+            app_commands.Choice(name="✂️ Rock-Paper-Scissors (RPS)", value="rps"),
+            app_commands.Choice(name="🃏 Uno Russian Roulette (6-Card Chamber)", value="roulette"),
+            app_commands.Choice(name="⚔️ Turn-Based RPG Combat (100 HP)", value="rpg"),
+        ]
+    )
+    async def duel(
+        self,
+        interaction: discord.Interaction,
+        target: discord.Member,
+        amount: int = 50,
+        mode: Optional[app_commands.Choice[str]] = None,
+    ) -> None:
         """Challenge a classmate to a 1v1 wager duel."""
         if target.bot:
             await interaction.response.send_message("❌ You cannot duel a bot!", ephemeral=True)
@@ -2010,18 +2396,27 @@ class RewardsCog(commands.Cog):
             await interaction.response.send_message(f"❌ {target.display_name} doesn't have enough points for this duel! (Wallet: `{t_bal:,} pts`)", ephemeral=True)
             return
 
+        chosen_mode = mode.value if mode else "dice"
+        mode_titles = {
+            "dice": "🎲 Dice High-Roll Clash",
+            "rps": "✂️ Rock-Paper-Scissors",
+            "roulette": "🃏 Uno Russian Roulette",
+            "rpg": "⚔️ RPG Arena Combat",
+        }
+
         embed = discord.Embed(
             title="⚔️ 1v1 PvP DUEL CHALLENGE!",
             description=(
-                f"**{interaction.user.mention}** has challenged **{target.mention}** to a high-stakes dice duel!\n\n"
+                f"**{interaction.user.mention}** has challenged **{target.mention}** to a high-stakes duel!\n\n"
+                f"🎮 **Game Mode:** `{mode_titles.get(chosen_mode, chosen_mode.upper())}`\n"
                 f"💰 **Wager per Player:** `{amount:,} Uno Points`\n"
                 f"🏆 **Total Winner's Pot:** `{amount * 2:,} Uno Points`\n\n"
                 f"{target.mention}, click **[ Accept Duel ]** below to roll the dice!"
             ),
             color=discord.Color.red(),
         )
-        embed.set_footer(text="Roll range 1-100 • Highest roll takes the whole pot • 60s timeout")
-        view = DuelAcceptView(self.rewards_service, interaction.user, target, amount)
+        embed.set_footer(text="Winner takes all • 60s timeout to accept")
+        view = DuelAcceptView(self.rewards_service, interaction.user, target, amount, mode=chosen_mode)
         await interaction.response.send_message(content=f"{target.mention}", embed=embed, view=view)
 
     @app_commands.command(name="bank", description="Manage your campus Piggy Bank to protect points from thieves and audits!")
@@ -2087,6 +2482,66 @@ class RewardsCog(commands.Cog):
 
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    bounty_group = app_commands.Group(name="bounty", description="Place and view classroom wanted bounties.")
+
+    @bounty_group.command(name="place", description="Place a wanted bounty on a classmate (awarded to whoever defeats them in a duel)!")
+    @app_commands.describe(
+        target="The classmate to place a bounty on.",
+        amount="Amount of Uno Points to put on their head (min 50 pts).",
+    )
+    async def bounty_place(self, interaction: discord.Interaction, target: discord.Member, amount: int) -> None:
+        """Place a bounty on a student."""
+        if target.bot:
+            await interaction.response.send_message("❌ You cannot place a bounty on a bot!", ephemeral=True)
+            return
+        if target.id == interaction.user.id:
+            await interaction.response.send_message("❌ You cannot place a bounty on yourself!", ephemeral=True)
+            return
+
+        try:
+            res = self.rewards_service.place_bounty(interaction.user.id, target.id, amount)
+            embed = discord.Embed(
+                title=f"🎯 WANTED: {target.display_name}!",
+                description=(
+                    f"**{interaction.user.mention}** placed a **`{amount:,} Uno Points`** bounty on **{target.mention}**!\n\n"
+                    f"💰 **Total Bounty Pool on {target.display_name}:** **`{res['total_pool']:,} pts`**\n\n"
+                    f"⚔️ Defeat {target.mention} in any `/duel` to claim this bounty pot!"
+                ),
+                color=discord.Color.dark_gold(),
+            )
+            embed.set_thumbnail(url=target.display_avatar.url)
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @bounty_group.command(name="list", description="View the classroom Most Wanted bounty board.")
+    async def bounty_list(self, interaction: discord.Interaction) -> None:
+        """Display active wanted bounties."""
+        board = self.rewards_service.get_bounty_board()
+        if not board:
+            embed = discord.Embed(
+                title="🎯 Classroom Wanted Board",
+                description="There are currently no active bounties! Place one with `/bounty place @classmate <amount>`.",
+                color=discord.Color.blue(),
+            )
+            await interaction.response.send_message(embed=embed)
+            return
+
+        embed = discord.Embed(
+            title="🎯 Classroom Most Wanted Bounty Board",
+            description="Defeat these targets in any `/duel` to claim their bounty pool!\n",
+            color=discord.Color.gold(),
+        )
+        for i, item in enumerate(board, start=1):
+            t_user = interaction.guild.get_member(item["target_id"]) if interaction.guild else None
+            name = t_user.display_name if t_user else f"User {item['target_id']}"
+            embed.add_field(
+                name=f"#{i} WANTED: {name}",
+                value=f"💰 **`{item['total_bounty']:,} pts`** ({item['bounty_count']} active bounty claims)",
+                inline=False,
+            )
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="steal", description="Consume a Pickpocket Card to attempt stealing 40%-60% points from a classmate!")
     @app_commands.describe(target="The classmate you want to pickpocket.")

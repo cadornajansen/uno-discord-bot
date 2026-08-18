@@ -1,6 +1,6 @@
 from collections import Counter
 import csv
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import io
 import logging
@@ -897,6 +897,17 @@ class ScavengeResult:
 
 
 @dataclass(frozen=True)
+class BountyRecord:
+    id: int
+    target_id: int
+    creator_id: int
+    amount: int
+    is_claimed: bool
+    claimed_by: Optional[int]
+    created_at: str
+
+
+@dataclass(frozen=True)
 class DuelResult:
     challenger_id: int
     target_id: int
@@ -906,6 +917,65 @@ class DuelResult:
     winner_id: Optional[int]
     pot_won: int
     is_tie: bool
+    bounty_won: int = 0
+    pet_perk_activated: Optional[str] = None
+    siphoned_amount: int = 0
+    mode: str = "dice"
+
+
+@dataclass
+class RPSDuelGame:
+    challenger_id: int
+    target_id: int
+    wager: int
+    challenger_choice: Optional[str] = None
+    target_choice: Optional[str] = None
+    winner_id: Optional[int] = None
+    loser_id: Optional[int] = None
+    is_tie: bool = False
+    is_over: bool = False
+    pot_won: int = 0
+    bounty_won: int = 0
+    siphoned_amount: int = 0
+    perk_msg: Optional[str] = None
+
+
+@dataclass
+class RouletteDuelGame:
+    challenger_id: int
+    target_id: int
+    wager: int
+    current_turn_id: int
+    chamber: list[bool]
+    current_index: int = 0
+    is_over: bool = False
+    exploded: bool = False
+    loser_id: Optional[int] = None
+    winner_id: Optional[int] = None
+    pot_won: int = 0
+    bounty_won: int = 0
+    siphoned_amount: int = 0
+    perk_msg: Optional[str] = None
+
+
+@dataclass
+class RPGCombatGame:
+    challenger_id: int
+    target_id: int
+    wager: int
+    c_hp: int = 100
+    t_hp: int = 100
+    turn_number: int = 1
+    c_action: Optional[str] = None
+    t_action: Optional[str] = None
+    last_round_log: list[str] = field(default_factory=list)
+    is_over: bool = False
+    winner_id: Optional[int] = None
+    loser_id: Optional[int] = None
+    pot_won: int = 0
+    bounty_won: int = 0
+    siphoned_amount: int = 0
+    perk_msg: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -950,6 +1020,10 @@ class UserRecord:
     last_work_time: Optional[str] = None
     last_scavenge_time: Optional[str] = None
     has_claimed_starter: bool = False
+    duel_wins: int = 0
+    duel_losses: int = 0
+    duel_streak: int = 0
+    bounties_claimed: int = 0
 
 
 @dataclass(frozen=True)
@@ -985,6 +1059,10 @@ class UserProfile:
     active_pet: Optional[PetRecord] = None
     bank_points: int = 0
     has_claimed_starter: bool = False
+    duel_wins: int = 0
+    duel_losses: int = 0
+    duel_streak: int = 0
+    bounties_claimed: int = 0
 
 
 STARTER_PET_CHOICES: list[str] = ["tuxedo_cat", "golden_dog", "brown_bunny"]
@@ -1120,6 +1198,9 @@ class RewardsDBService:
         self._active_blackjack: dict[int, BlackjackGame] = {}
         self._active_highlow: dict[int, HighLowGame] = {}
         self._pending_duels: dict[int, dict] = {}
+        self._active_rps: dict[str, RPSDuelGame] = {}
+        self._active_roulette: dict[str, RouletteDuelGame] = {}
+        self._active_rpg: dict[str, RPGCombatGame] = {}
 
         if self._is_memory:
             self._mem_conn = sqlite3.connect(":memory:", check_same_thread=False)
@@ -1155,6 +1236,11 @@ class RewardsDBService:
                     bank_points INTEGER DEFAULT 0,
                     last_work_time TEXT,
                     last_scavenge_time TEXT,
+                    has_claimed_starter INTEGER DEFAULT 0,
+                    duel_wins INTEGER DEFAULT 0,
+                    duel_losses INTEGER DEFAULT 0,
+                    duel_streak INTEGER DEFAULT 0,
+                    bounties_claimed INTEGER DEFAULT 0,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -1204,6 +1290,17 @@ class RewardsDBService:
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 );
                 CREATE INDEX IF NOT EXISTS idx_user_pets_user ON user_pets(user_id);
+
+                CREATE TABLE IF NOT EXISTS bounties (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    target_id INTEGER NOT NULL,
+                    creator_id INTEGER NOT NULL,
+                    amount INTEGER NOT NULL,
+                    is_claimed INTEGER DEFAULT 0,
+                    claimed_by INTEGER,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX IF NOT EXISTS idx_bounties_target ON bounties(target_id);
                 """
         )
         # Migration: ensure extra columns exist
@@ -1221,6 +1318,14 @@ class RewardsDBService:
             conn.execute("ALTER TABLE users ADD COLUMN last_scavenge_time TEXT")
         if "has_claimed_starter" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN has_claimed_starter INTEGER DEFAULT 0")
+        if "duel_wins" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN duel_wins INTEGER DEFAULT 0")
+        if "duel_losses" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN duel_losses INTEGER DEFAULT 0")
+        if "duel_streak" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN duel_streak INTEGER DEFAULT 0")
+        if "bounties_claimed" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN bounties_claimed INTEGER DEFAULT 0")
         conn.commit()
 
     def get_or_create_user(self, user_id: int) -> UserRecord:
@@ -1251,6 +1356,10 @@ class RewardsDBService:
                 last_work_time=row["last_work_time"] if "last_work_time" in keys else None,
                 last_scavenge_time=row["last_scavenge_time"] if "last_scavenge_time" in keys else None,
                 has_claimed_starter=bool(row["has_claimed_starter"]) if "has_claimed_starter" in keys else False,
+                duel_wins=row["duel_wins"] if "duel_wins" in keys else 0,
+                duel_losses=row["duel_losses"] if "duel_losses" in keys else 0,
+                duel_streak=row["duel_streak"] if "duel_streak" in keys else 0,
+                bounties_claimed=row["bounties_claimed"] if "bounties_claimed" in keys else 0,
             )
 
     def get_balance(self, user_id: int) -> int:
@@ -1857,6 +1966,14 @@ class RewardsDBService:
             badges.append("👑 Top 1 Scholar")
         elif user_rank <= 3:
             badges.append("🌟 Top 3 Elite")
+        if user.duel_wins >= 25:
+            badges.append("👑 Campus Gladiator")
+        elif user.duel_wins >= 5:
+            badges.append("🗡️ Duelist")
+        if user.bounties_claimed >= 1:
+            badges.append("🎯 Bounty Hunter")
+        if user.duel_streak >= 5:
+            badges.append("🔥 Undefeated Duelist")
 
         inv = self.get_inventory(user_id)
         active_pet = self.get_active_pet(user_id)
@@ -1874,6 +1991,10 @@ class RewardsDBService:
             active_pet=active_pet,
             bank_points=user.bank_points,
             has_claimed_starter=user.has_claimed_starter,
+            duel_wins=user.duel_wins,
+            duel_losses=user.duel_losses,
+            duel_streak=user.duel_streak,
+            bounties_claimed=user.bounties_claimed,
         )
 
     def record_redemption(self, user_id: int, item_id: str) -> dict:
@@ -2643,6 +2764,160 @@ class RewardsDBService:
             new_balance=new_balance,
         )
 
+    # ==================== BOUNTY SYSTEM ====================
+
+    def place_bounty(self, creator_id: int, target_id: int, amount: int) -> dict:
+        """Place a wanted bounty on a student."""
+        if creator_id == target_id:
+            raise RewardsError("You cannot place a bounty on yourself!")
+        if amount < 50:
+            raise RewardsError("Minimum bounty placement is 50 Uno Points!")
+
+        creator = self.get_or_create_user(creator_id)
+        if creator.points < amount:
+            raise InsufficientPointsError(f"You need at least {amount:,} pts to place this bounty (you have {creator.points:,} pts)!")
+
+        self.deduct_points(creator_id, amount, "BOUNTY_PLACED", f"Placed {amount:,} pts bounty on user {target_id}")
+
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "INSERT INTO bounties (target_id, creator_id, amount, is_claimed) VALUES (?, ?, ?, 0)",
+                (target_id, creator_id, amount),
+            )
+            b_id = cursor.lastrowid
+            total_pool = conn.execute(
+                "SELECT COALESCE(SUM(amount), 0) as total FROM bounties WHERE target_id = ? AND is_claimed = 0",
+                (target_id,),
+            ).fetchone()["total"]
+            conn.commit()
+
+        return {
+            "bounty_id": b_id,
+            "creator_id": creator_id,
+            "target_id": target_id,
+            "amount": amount,
+            "total_pool": total_pool,
+        }
+
+    def get_active_bounties(self, target_id: Optional[int] = None) -> list[BountyRecord]:
+        """Fetch uncompleted bounties, optionally filtered by target."""
+        with self._get_connection() as conn:
+            if target_id is not None:
+                rows = conn.execute(
+                    "SELECT * FROM bounties WHERE target_id = ? AND is_claimed = 0 ORDER BY id DESC",
+                    (target_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM bounties WHERE is_claimed = 0 ORDER BY id DESC"
+                ).fetchall()
+
+            return [
+                BountyRecord(
+                    id=r["id"],
+                    target_id=r["target_id"],
+                    creator_id=r["creator_id"],
+                    amount=r["amount"],
+                    is_claimed=bool(r["is_claimed"]),
+                    claimed_by=r["claimed_by"],
+                    created_at=r["created_at"],
+                )
+                for r in rows
+            ]
+
+    def get_bounty_board(self) -> list[dict]:
+        """Fetch aggregated wanted board with total bounty pools per target."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT target_id, SUM(amount) as total_bounty, COUNT(*) as bounty_count
+                FROM bounties
+                WHERE is_claimed = 0
+                GROUP BY target_id
+                ORDER BY total_bounty DESC
+                LIMIT 10
+                """
+            ).fetchall()
+            return [
+                {
+                    "target_id": r["target_id"],
+                    "total_bounty": r["total_bounty"],
+                    "bounty_count": r["bounty_count"],
+                }
+                for r in rows
+            ]
+
+    def claim_bounties_on_target(self, winner_id: int, target_id: int) -> int:
+        """Claim all open bounties on target user and award them to the winner."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT COALESCE(SUM(amount), 0) as total FROM bounties WHERE target_id = ? AND is_claimed = 0",
+                (target_id,),
+            ).fetchone()
+            total_bounty = row["total"] if row else 0
+
+            if total_bounty > 0:
+                conn.execute(
+                    "UPDATE bounties SET is_claimed = 1, claimed_by = ? WHERE target_id = ? AND is_claimed = 0",
+                    (winner_id, target_id),
+                )
+                conn.execute(
+                    "UPDATE users SET bounties_claimed = bounties_claimed + 1 WHERE user_id = ?",
+                    (winner_id,),
+                )
+                conn.commit()
+
+        if total_bounty > 0:
+            self.add_points(winner_id, total_bounty, "BOUNTY_CLAIM", f"Claimed wanted bounty on user {target_id}")
+
+        return total_bounty
+
+    def record_duel_outcome(self, winner_id: Optional[int], loser_id: Optional[int]) -> None:
+        """Update PvP win/loss counters and win streaks."""
+        with self._get_connection() as conn:
+            if winner_id is not None:
+                conn.execute(
+                    "UPDATE users SET duel_wins = duel_wins + 1, duel_streak = duel_streak + 1 WHERE user_id = ?",
+                    (winner_id,),
+                )
+            if loser_id is not None:
+                conn.execute(
+                    "UPDATE users SET duel_losses = duel_losses + 1, duel_streak = 0 WHERE user_id = ?",
+                    (loser_id,),
+                )
+            conn.commit()
+
+    def _apply_pet_duel_modifiers(self, player_id: int, opponent_id: int, initial_roll: int) -> tuple[int, Optional[str]]:
+        """Apply active pet perks to a player's duel roll."""
+        pet = self.get_active_pet(player_id)
+        opp_pet = self.get_active_pet(opponent_id)
+        final_roll = initial_roll
+        perk_msg = None
+
+        # 1. Bunny: Lucky Reroll if under 30
+        if pet and pet.species == "bunny" and final_roll < 30:
+            final_roll = random.randint(35, 100)
+            perk_msg = f"🐰 **{pet.nickname}**'s *Lucky Reroll* boosted roll to **{final_roll}**!"
+
+        # 2. Opponent Dog: Intimidating Bark (20% chance to reduce final roll by 15)
+        if opp_pet and opp_pet.species == "dog" and random.random() < 0.20:
+            final_roll = max(1, final_roll - 15)
+            bark_txt = f"🐶 Opponent's **{opp_pet.nickname}** barked fiercely (-15 to roll)!"
+            perk_msg = f"{perk_msg} | {bark_txt}" if perk_msg else bark_txt
+
+        return final_roll, perk_msg
+
+    def _check_fox_siphon(self, loser_id: int, wager: int) -> tuple[int, Optional[str]]:
+        """Fox perk: 25% chance on loss to sneakily siphon back 20% of lost wager."""
+        pet = self.get_active_pet(loser_id)
+        if pet and pet.species == "fox" and random.random() < 0.25:
+            siphon = max(1, int(wager * 0.20))
+            self.add_points(loser_id, siphon, "PET_PERK", f"{pet.nickname} Fox Siphon refund")
+            return siphon, f"🦊 **{pet.nickname}** sneakily siphoned back **{siphon:,} pts** ({pet.perk_title})!"
+        return 0, None
+
+    # ==================== DUEL GAME MODES ====================
+
     def resolve_duel(
         self,
         challenger_id: int,
@@ -2673,12 +2948,31 @@ class RewardsDBService:
         c_roll = fixed_c_roll or random.randint(1, 100)
         t_roll = fixed_t_roll or random.randint(1, 100)
 
+        # Pet perks for dice duel
+        c_perk_msg = None
+        t_perk_msg = None
+        if fixed_c_roll is None and fixed_t_roll is None:
+            c_roll, c_perk_msg = self._apply_pet_duel_modifiers(challenger_id, target_id, c_roll)
+            t_roll, t_perk_msg = self._apply_pet_duel_modifiers(target_id, challenger_id, t_roll)
+
+            # Owl clutch bonus: if rolls are within 5 points, Owl owner gains +10!
+            c_pet = self.get_active_pet(challenger_id)
+            t_pet = self.get_active_pet(target_id)
+            if c_pet and c_pet.species == "owl" and abs(c_roll - t_roll) <= 5:
+                c_roll += 10
+                c_perk_msg = (c_perk_msg or "") + f" 🦉 **{c_pet.nickname}** calculated clutch (+10 roll)!"
+            elif t_pet and t_pet.species == "owl" and abs(c_roll - t_roll) <= 5:
+                t_roll += 10
+                t_perk_msg = (t_perk_msg or "") + f" 🦉 **{t_pet.nickname}** calculated clutch (+10 roll)!"
+
         while c_roll == t_roll and fixed_c_roll is None and fixed_t_roll is None:
             c_roll = random.randint(1, 100)
             t_roll = random.randint(1, 100)
 
         total_pot = wager * 2
         is_tie = (c_roll == t_roll)
+        bounty_won = 0
+        siphoned_amount = 0
 
         if is_tie:
             self.add_points(challenger_id, wager, "DUEL_REFUND", "Duel tie refund")
@@ -2689,10 +2983,22 @@ class RewardsDBService:
             winner_id = challenger_id
             self.add_points(challenger_id, total_pot, "DUEL_WIN", f"Won 1v1 Duel against user {target_id}")
             pot_won = total_pot
+            bounty_won = self.claim_bounties_on_target(challenger_id, target_id)
+            self.record_duel_outcome(challenger_id, target_id)
+            siphoned_amount, fox_msg = self._check_fox_siphon(target_id, wager)
+            if fox_msg:
+                t_perk_msg = (t_perk_msg or "") + f" {fox_msg}"
         else:
             winner_id = target_id
             self.add_points(target_id, total_pot, "DUEL_WIN", f"Won 1v1 Duel against user {challenger_id}")
             pot_won = total_pot
+            bounty_won = self.claim_bounties_on_target(target_id, challenger_id)
+            self.record_duel_outcome(target_id, challenger_id)
+            siphoned_amount, fox_msg = self._check_fox_siphon(challenger_id, wager)
+            if fox_msg:
+                c_perk_msg = (c_perk_msg or "") + f" {fox_msg}"
+
+        perk_combined = " | ".join(filter(None, [c_perk_msg, t_perk_msg])) or None
 
         return DuelResult(
             challenger_id=challenger_id,
@@ -2703,7 +3009,270 @@ class RewardsDBService:
             winner_id=winner_id,
             pot_won=pot_won,
             is_tie=is_tie,
+            bounty_won=bounty_won,
+            pet_perk_activated=perk_combined,
+            siphoned_amount=siphoned_amount,
+            mode="dice",
         )
+
+    def resolve_rps_duel(
+        self,
+        challenger_id: int,
+        target_id: int,
+        c_choice: str,
+        t_choice: str,
+        wager: int,
+    ) -> RPSDuelGame:
+        """Resolve RPS duel (rock beats scissors, scissors beats paper, paper beats rock)."""
+        valid = {"rock": "🪨 Rock", "paper": "📄 Paper", "scissors": "✂️ Scissors"}
+        c_c = c_choice.lower().strip()
+        t_c = t_choice.lower().strip()
+        if c_c not in valid or t_c not in valid:
+            raise RewardsError("Invalid RPS choice! Must be rock, paper, or scissors.")
+
+        c_user = self.get_or_create_user(challenger_id)
+        t_user = self.get_or_create_user(target_id)
+        if c_user.points < wager:
+            raise InsufficientPointsError("Challenger does not have enough points!")
+        if t_user.points < wager:
+            raise InsufficientPointsError("Target does not have enough points!")
+
+        self.deduct_points(challenger_id, wager, "DUEL_WAGER", f"RPS Duel against {target_id}")
+        self.deduct_points(target_id, wager, "DUEL_WAGER", f"RPS Duel against {challenger_id}")
+
+        total_pot = wager * 2
+        bounty_won = 0
+        siphoned_amount = 0
+        perk_msg = None
+
+        if c_c == t_c:
+            self.add_points(challenger_id, wager, "DUEL_REFUND", "RPS tie refund")
+            self.add_points(target_id, wager, "DUEL_REFUND", "RPS tie refund")
+            winner_id = None
+            loser_id = None
+            is_tie = True
+            pot_won = wager
+        elif (c_c == "rock" and t_c == "scissors") or (c_c == "paper" and t_c == "rock") or (c_c == "scissors" and t_c == "paper"):
+            winner_id = challenger_id
+            loser_id = target_id
+            is_tie = False
+            self.add_points(challenger_id, total_pot, "DUEL_WIN", f"Won RPS Duel against {target_id}")
+            pot_won = total_pot
+            bounty_won = self.claim_bounties_on_target(challenger_id, target_id)
+            self.record_duel_outcome(challenger_id, target_id)
+            siphoned_amount, perk_msg = self._check_fox_siphon(target_id, wager)
+        else:
+            winner_id = target_id
+            loser_id = challenger_id
+            is_tie = False
+            self.add_points(target_id, total_pot, "DUEL_WIN", f"Won RPS Duel against {challenger_id}")
+            pot_won = total_pot
+            bounty_won = self.claim_bounties_on_target(target_id, challenger_id)
+            self.record_duel_outcome(target_id, challenger_id)
+            siphoned_amount, perk_msg = self._check_fox_siphon(challenger_id, wager)
+
+        return RPSDuelGame(
+            challenger_id=challenger_id,
+            target_id=target_id,
+            wager=wager,
+            challenger_choice=valid[c_c],
+            target_choice=valid[t_c],
+            winner_id=winner_id,
+            loser_id=loser_id,
+            is_tie=is_tie,
+            is_over=True,
+            pot_won=pot_won,
+            bounty_won=bounty_won,
+            siphoned_amount=siphoned_amount,
+            perk_msg=perk_msg,
+        )
+
+    def start_roulette_game(self, challenger_id: int, target_id: int, wager: int) -> RouletteDuelGame:
+        """Start a 6-card Uno Russian Roulette duel."""
+        c_user = self.get_or_create_user(challenger_id)
+        t_user = self.get_or_create_user(target_id)
+        if c_user.points < wager:
+            raise InsufficientPointsError("Challenger does not have enough points!")
+        if t_user.points < wager:
+            raise InsufficientPointsError("Target does not have enough points!")
+
+        self.deduct_points(challenger_id, wager, "DUEL_WAGER", f"Roulette Duel against {target_id}")
+        self.deduct_points(target_id, wager, "DUEL_WAGER", f"Roulette Duel against {challenger_id}")
+
+        chamber = [False] * 6
+        bomb_pos = random.randint(0, 5)
+        chamber[bomb_pos] = True
+
+        game_key = f"{min(challenger_id, target_id)}_{max(challenger_id, target_id)}"
+        game = RouletteDuelGame(
+            challenger_id=challenger_id,
+            target_id=target_id,
+            wager=wager,
+            current_turn_id=challenger_id,
+            chamber=chamber,
+            current_index=0,
+            is_over=False,
+            exploded=False,
+        )
+        self._active_roulette[game_key] = game
+        return game
+
+    def pull_roulette_trigger(self, player_id: int, opponent_id: int) -> RouletteDuelGame:
+        """Pull the trigger in an active Russian Roulette duel."""
+        game_key = f"{min(player_id, opponent_id)}_{max(player_id, opponent_id)}"
+        if game_key not in self._active_roulette:
+            raise RewardsError("No active roulette game found between these players!")
+
+        game = self._active_roulette[game_key]
+        if game.is_over:
+            raise RewardsError("This roulette game has already ended!")
+        if game.current_turn_id != player_id:
+            raise RewardsError("It is not your turn to draw!")
+
+        is_bomb = game.chamber[game.current_index]
+        game.current_index += 1
+
+        if is_bomb:
+            game.is_over = True
+            game.exploded = True
+            game.loser_id = player_id
+            game.winner_id = opponent_id
+            total_pot = game.wager * 2
+            game.pot_won = total_pot
+
+            self.add_points(opponent_id, total_pot, "DUEL_WIN", f"Won Roulette Duel against {player_id}")
+            game.bounty_won = self.claim_bounties_on_target(opponent_id, player_id)
+            self.record_duel_outcome(opponent_id, player_id)
+            game.siphoned_amount, game.perk_msg = self._check_fox_siphon(player_id, game.wager)
+            self._active_roulette.pop(game_key, None)
+        else:
+            # Switch turn
+            game.current_turn_id = opponent_id
+
+        return game
+
+    def start_rpg_game(self, challenger_id: int, target_id: int, wager: int) -> RPGCombatGame:
+        """Start a 100 HP Turn-Based RPG Duel."""
+        c_user = self.get_or_create_user(challenger_id)
+        t_user = self.get_or_create_user(target_id)
+        if c_user.points < wager:
+            raise InsufficientPointsError("Challenger does not have enough points!")
+        if t_user.points < wager:
+            raise InsufficientPointsError("Target does not have enough points!")
+
+        self.deduct_points(challenger_id, wager, "DUEL_WAGER", f"RPG Duel against {target_id}")
+        self.deduct_points(target_id, wager, "DUEL_WAGER", f"RPG Duel against {challenger_id}")
+
+        game_key = f"{min(challenger_id, target_id)}_{max(challenger_id, target_id)}"
+        game = RPGCombatGame(
+            challenger_id=challenger_id,
+            target_id=target_id,
+            wager=wager,
+            c_hp=100,
+            t_hp=100,
+            turn_number=1,
+        )
+        self._active_rpg[game_key] = game
+        return game
+
+    def submit_rpg_action(self, player_id: int, opponent_id: int, action: str) -> RPGCombatGame:
+        """Submit a combat action ('strike', 'block', 'ultimate') for an RPG duel round."""
+        game_key = f"{min(player_id, opponent_id)}_{max(player_id, opponent_id)}"
+        if game_key not in self._active_rpg:
+            raise RewardsError("No active RPG duel found!")
+
+        game = self._active_rpg[game_key]
+        if game.is_over:
+            raise RewardsError("This RPG duel is already finished!")
+
+        if action not in ("strike", "block", "ultimate"):
+            raise RewardsError("Invalid combat action!")
+
+        if player_id == game.challenger_id:
+            game.c_action = action
+        elif player_id == game.target_id:
+            game.t_action = action
+
+        # If both players submitted, resolve the round!
+        if game.c_action is not None and game.t_action is not None:
+            logs = []
+            c_act = game.c_action
+            t_act = game.t_action
+
+            # Resolve Challenger attack
+            c_dmg = 0
+            if c_act == "strike":
+                c_dmg = random.randint(20, 35)
+            elif c_act == "ultimate":
+                hit_rate = 0.65 if (self.get_active_pet(game.challenger_id) and self.get_active_pet(game.challenger_id).species == "bunny") else 0.50
+                if random.random() < hit_rate:
+                    c_dmg = random.randint(50, 65)
+                    logs.append("⚡ **Challenger Landed Critical Ultimate!**")
+                else:
+                    logs.append("💨 **Challenger Ultimate Missed!**")
+
+            # Resolve Target attack
+            t_dmg = 0
+            if t_act == "strike":
+                t_dmg = random.randint(20, 35)
+            elif t_act == "ultimate":
+                hit_rate = 0.65 if (self.get_active_pet(game.target_id) and self.get_active_pet(game.target_id).species == "bunny") else 0.50
+                if random.random() < hit_rate:
+                    t_dmg = random.randint(50, 65)
+                    logs.append("⚡ **Target Landed Critical Ultimate!**")
+                else:
+                    logs.append("💨 **Target Ultimate Missed!**")
+
+            # Apply Blocks & Parries
+            if t_act == "block":
+                c_dmg = int(c_dmg * 0.30)
+                t_dmg += 10
+                logs.append("🛡️ **Target Parried!** (Reduced incoming damage & reflected 10 DMG)")
+            if c_act == "block":
+                t_dmg = int(t_dmg * 0.30)
+                c_dmg += 10
+                logs.append("🛡️ **Challenger Parried!** (Reduced incoming damage & reflected 10 DMG)")
+
+            game.t_hp = max(0, game.t_hp - c_dmg)
+            game.c_hp = max(0, game.c_hp - t_dmg)
+            logs.append(f"⚔️ **Round {game.turn_number}**: Challenger dealt **{c_dmg} DMG** | Target dealt **{t_dmg} DMG**")
+
+            game.last_round_log = logs
+            game.turn_number += 1
+            game.c_action = None
+            game.t_action = None
+
+            # Check win conditions
+            if game.c_hp <= 0 or game.t_hp <= 0:
+                game.is_over = True
+                total_pot = game.wager * 2
+                game.pot_won = total_pot
+
+                if game.c_hp > game.t_hp:
+                    game.winner_id = game.challenger_id
+                    game.loser_id = game.target_id
+                    self.add_points(game.challenger_id, total_pot, "DUEL_WIN", f"Won RPG Duel against {game.target_id}")
+                    game.bounty_won = self.claim_bounties_on_target(game.challenger_id, game.target_id)
+                    self.record_duel_outcome(game.challenger_id, game.target_id)
+                    game.siphoned_amount, game.perk_msg = self._check_fox_siphon(game.target_id, game.wager)
+                elif game.t_hp > game.c_hp:
+                    game.winner_id = game.target_id
+                    game.loser_id = game.challenger_id
+                    self.add_points(game.target_id, total_pot, "DUEL_WIN", f"Won RPG Duel against {game.challenger_id}")
+                    game.bounty_won = self.claim_bounties_on_target(game.target_id, game.challenger_id)
+                    self.record_duel_outcome(game.target_id, game.challenger_id)
+                    game.siphoned_amount, game.perk_msg = self._check_fox_siphon(game.challenger_id, game.wager)
+                else:
+                    # Mutual KO tie refund
+                    self.add_points(game.challenger_id, game.wager, "DUEL_REFUND", "RPG Tie refund")
+                    self.add_points(game.target_id, game.wager, "DUEL_REFUND", "RPG Tie refund")
+                    game.winner_id = None
+                    game.loser_id = None
+                    game.pot_won = game.wager
+
+                self._active_rpg.pop(game_key, None)
+
+        return game
 
     def bank_deposit(self, user_id: int, amount: int) -> dict:
         """Deposit wallet points into protected campus bank account."""
