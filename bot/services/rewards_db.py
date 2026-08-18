@@ -746,6 +746,23 @@ PET_CATALOG: dict[str, dict] = {
     },
 }
 
+PET_ROTATION_ORDER: list[str] = [
+    "tuxedo_cat",
+    "golden_dog",
+    "brown_bunny",
+    "scholar_owl",
+    "oogway_turtle",
+    "orange_fox",
+    "pink_axolotl",
+    "calico_cat",
+    "shiba_dog",
+    "white_bunny",
+    "ice_owl",
+    "ice_fox",
+    "rainbow_axolotl",
+    "fiery_goldfish",
+]
+
 # Integrate pets into the shop catalog
 for _pet_id, _p in PET_CATALOG.items():
     SHOP_CATALOG[_pet_id] = {
@@ -1184,6 +1201,104 @@ class RewardsDBService:
 
             row = conn.execute("SELECT * FROM user_pets WHERE id = ?", (target["id"],)).fetchone()
             return self._pet_row_to_record(row)
+
+    def sell_pet(self, user_id: int, pet_id: str) -> dict:
+        """Sell / release an owned companion back to the shelter for a points refund (60% base + level bonuses)."""
+        clean_id = pet_id.strip().lower()
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM user_pets WHERE user_id = ? AND pet_id = ?",
+                (user_id, clean_id),
+            ).fetchone()
+            if not row:
+                raise RewardsError(f"You do not own the pet '{clean_id}'! You cannot sell a companion you don't have.")
+
+            pet_rec = self._pet_row_to_record(row)
+            base_cost = PET_CATALOG.get(clean_id, {}).get("cost", 500)
+
+            # Base refund: 60% of original cost
+            base_refund = int(base_cost * 0.60)
+            # Level bonus: +25 pts per level above 1
+            level_bonus = (pet_rec.level - 1) * 25
+            total_refund = base_refund + level_bonus
+
+            was_active = bool(row["is_active"])
+
+            # Delete pet from inventory
+            conn.execute("DELETE FROM user_pets WHERE id = ?", (row["id"],))
+
+            # If the sold pet was active, switch to next available companion
+            new_active_pet = None
+            if was_active:
+                remaining = conn.execute(
+                    "SELECT id FROM user_pets WHERE user_id = ? ORDER BY level DESC, id ASC LIMIT 1",
+                    (user_id,),
+                ).fetchone()
+                if remaining:
+                    conn.execute("UPDATE user_pets SET is_active = 1 WHERE id = ?", (remaining["id"],))
+                    new_active_row = conn.execute("SELECT * FROM user_pets WHERE id = ?", (remaining["id"],)).fetchone()
+                    new_active_pet = self._pet_row_to_record(new_active_row)
+
+            conn.commit()
+
+        # Add refund points to user balance
+        new_balance = self.add_points(
+            user_id,
+            total_refund,
+            "PET_SALE",
+            f"Released {pet_rec.nickname} ({pet_rec.display_name}) back to the Pet Shelter",
+        )
+
+        return {
+            "user_id": user_id,
+            "pet_id": clean_id,
+            "pet_name": pet_rec.display_name,
+            "nickname": pet_rec.nickname,
+            "level": pet_rec.level,
+            "refund_amount": total_refund,
+            "base_refund": base_refund,
+            "level_bonus": level_bonus,
+            "new_balance": new_balance,
+            "new_active_pet": new_active_pet,
+        }
+
+    def get_featured_pet(self, now: Optional[datetime] = None) -> dict:
+        """Calculate the currently spotlighted pet drop based on a 3-day deterministic rotation cycle."""
+        current_time = now or datetime.now(PHT)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=PHT)
+        else:
+            current_time = current_time.astimezone(PHT)
+
+        # Anchor date: 2026-08-18 00:00:00 PHT
+        anchor = datetime(2026, 8, 18, 0, 0, 0, tzinfo=PHT)
+        diff_seconds = max(0, int((current_time - anchor).total_seconds()))
+        cycle_duration = 3 * 86400  # 3 days in seconds
+
+        cycle_number = diff_seconds // cycle_duration
+        seconds_into_cycle = diff_seconds % cycle_duration
+        seconds_remaining = cycle_duration - seconds_into_cycle
+
+        pet_index = int(cycle_number % len(PET_ROTATION_ORDER))
+        featured_pet_id = PET_ROTATION_ORDER[pet_index]
+        pet_info = PET_CATALOG[featured_pet_id]
+
+        cycle_day = (seconds_into_cycle // 86400) + 1
+        days_remaining = seconds_remaining // 86400
+        hours_remaining = (seconds_remaining % 86400) // 3600
+
+        next_drop_dt = current_time + timedelta(seconds=seconds_remaining)
+
+        return {
+            "pet_id": featured_pet_id,
+            "pet_info": pet_info,
+            "cycle_number": cycle_number,
+            "cycle_day": int(cycle_day),
+            "days_remaining": int(days_remaining),
+            "hours_remaining": int(hours_remaining),
+            "seconds_remaining": int(seconds_remaining),
+            "next_drop_timestamp": int(next_drop_dt.timestamp()),
+        }
 
     def claim_daily(self, user_id: int, now: Optional[datetime] = None) -> DailyClaimResult:
         """Process daily point claim with streak multipliers, pet buffs, and 3k milestone detection."""

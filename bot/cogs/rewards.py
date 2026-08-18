@@ -3,6 +3,7 @@ import io
 import logging
 import math
 from pathlib import Path
+import random
 from typing import Any, Optional
 import discord
 from discord import app_commands
@@ -330,6 +331,222 @@ class AirdropCatchView(discord.ui.View):
         self.add_item(AirdropCatchButton())
 
 
+def build_pet_guide_embed() -> discord.Embed:
+    """Build comprehensive student handbook for the Pet Companion System."""
+    embed = discord.Embed(
+        title="📖 Uno Bot — Pet Companion Handbook & Guide",
+        description=(
+            "Welcome to the **Pet Companion System**! Adopt loyal pixel-art companions that provide "
+            "**permanent passive economic multipliers**, daily care rewards, and vibrant profile aesthetics."
+        ),
+        color=discord.Color.teal(),
+    )
+
+    embed.add_field(
+        name="🐾 1. How Companions Work",
+        value=(
+            "• Each pet variant grants a **permanent passive buff** while equipped as your active companion.\n"
+            "• You can own multiple companions and switch between them anytime with `/pet switch` or the `/pet` dashboard dropdown.\n"
+            "• Equipped companions appear directly on your `/profile` card with custom dialogue quotes!"
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="🌟 2. Companion Perks Breakdown",
+        value=(
+            "• 🐱 **Cats** (Tuxedo & Calico) — **2x Daily Attendance Points** on `/daily` permanently.\n"
+            "• 🐶 **Dogs** (Golden & Shiba) — **Guard Dog**: 75% thief catch rate & inflicts a 50 pt bite fine on pickpockets.\n"
+            "• 🐰 **Bunnies** (Lop-Eared & Moon) — **Lucky Gambler**: +15% Jackpot & Double win rates in `/bet`.\n"
+            "• 🦉 **Owls** (Scholar & Frost) — **Quiz Master**: +75 pts per correct trivia quiz and 4th attempt/day.\n"
+            "• 🐢 **Turtles** (Master Oogway) — **Streak Freeze**: Prevents daily streak resets on missed days & +2d shield boost.\n"
+            "• 🦊 **Foxes** (Trickster & Arctic) — **Pickpocket Master**: +15% steal rate & +10 pt bonus per airdrop catch.\n"
+            "• 🦎/🐠 **Axolotls & Goldfish** — **5% Cashback**: Instant 5% refund on all shop redemptions."
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="🍖 3. Care, Happiness & Leveling Up",
+        value=(
+            "• Open your pet dashboard with **`/pet`** (or `/pet view`).\n"
+            "• Use **`[ 🍖 Feed Snack ]`** & **`[ 💖 Cuddle & Pet ]`** to increase happiness (up to 100%) and gain +15 XP.\n"
+            "• Level up your companion to unlock higher resale value and stronger bond!"
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="🪙 4. Selling & Releasing Companions",
+        value=(
+            "• Changed your mind or need quick points? Sell your pet with **`/pet sell <species>`**.\n"
+            "• **Refund Formula:** `60% base cost` + `+25 pts` per level above Level 1!\n"
+            "• Releasing an active pet automatically equips your next highest-level companion."
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="📅 5. Rotating 3-Day Pet Drops",
+        value=(
+            "• Every **3 days**, a new companion is spotlighted with an announcement drop in chat!\n"
+            "• Use **`/pet drop`** to view the currently featured drop, its timer, and 1-click adoption."
+        ),
+        inline=False,
+    )
+
+    embed.set_footer(text="Adopt from /shop (Pet Shelter) • View your pet with /pet • /pet guide")
+    return embed
+
+
+class PetDropAdoptButton(discord.ui.Button):
+    """1-click adoption button on drop announcements."""
+
+    def __init__(self, pet_id: str, cost: int, display_name: str):
+        super().__init__(
+            label=f"Adopt {display_name} ({cost:,} pts)",
+            emoji="🐾",
+            style=discord.ButtonStyle.success,
+            custom_id=f"pet_drop_adopt_{pet_id}",
+        )
+        self.pet_id = pet_id
+        self.cost = cost
+        self.display_name = display_name
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: "PetDropAnnouncementView" = self.view  # type: ignore
+        user_id = interaction.user.id
+        try:
+            res = view.rewards_service.adopt_pet(user_id, self.pet_id)
+            new_bal = view.rewards_service.get_balance(user_id)
+            embed = discord.Embed(
+                title="🎉 Pet Companion Adopted!",
+                description=(
+                    f"Congratulations! You adopted **{res.nickname}** ({res.display_name})!\n\n"
+                    f"🌟 **Active Perk:** **{res.perk_title}**\n"
+                    f"*{res.perk_desc}*\n\n"
+                    f"💬 *\"{res.quote}\"*"
+                ),
+                color=discord.Color.green(),
+            )
+            embed.add_field(name="Remaining Balance", value=f"**{new_bal:,} Uno Points**", inline=True)
+
+            pet_img_path = Path("data/pets") / res.image_file
+            if pet_img_path.exists():
+                file_att = discord.File(str(pet_img_path), filename=f"adopt_{res.image_file}")
+                embed.set_thumbnail(url=f"attachment://adopt_{res.image_file}")
+                await interaction.response.send_message(embed=embed, file=file_att, ephemeral=True)
+            else:
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        except InsufficientPointsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+
+class PetDropAnnouncementView(discord.ui.View):
+    """View for spotlight pet drop announcement."""
+
+    def __init__(self, rewards_service: RewardsDBService, pet_id: str, cost: int, display_name: str):
+        super().__init__(timeout=None)
+        self.rewards_service = rewards_service
+        self.add_item(PetDropAdoptButton(pet_id, cost, display_name))
+
+
+def build_pet_drop_announcement_embed(rewards_service: RewardsDBService, pet_id: Optional[str] = None) -> tuple[discord.Embed, Optional[discord.File], PetDropAnnouncementView]:
+    """Build a rich spotlight announcement embed for the 3-day rotating pet drop."""
+    drop_info = rewards_service.get_featured_pet()
+    if pet_id and pet_id in PET_CATALOG:
+        chosen_id = pet_id
+        pet_data = PET_CATALOG[pet_id]
+    else:
+        chosen_id = drop_info["pet_id"]
+        pet_data = drop_info["pet_info"]
+
+    embed = discord.Embed(
+        title=f"🌟 NEW PET DROP: {pet_data['name']} is in the Spotlight!",
+        description=(
+            f"**Cycle Schedule:** Day {drop_info['cycle_day']} of 3 • Next rotation: <t:{drop_info['next_drop_timestamp']}:R>\n\n"
+            f"*{pet_data['title']}*\n\n"
+            f"🌟 **Perk:** **{pet_data['perk_title']}**\n"
+            f"*{pet_data['perk_desc']}*\n\n"
+            f"💬 *\"{random.choice(pet_data['quotes'])}\"*\n\n"
+            f"💰 **Adoption Cost:** `{pet_data['cost']:,} Uno Points`"
+        ),
+        color=discord.Color.gold(),
+    )
+
+    embed.add_field(
+        name="📖 How to Adopt or Switch",
+        value=(
+            f"• Click the **Adopt button below** or type `/pet adopt pet:{chosen_id}`\n"
+            "• To switch your active companion: `/pet switch <pet>`\n"
+            "• Care for your pet & feed snacks: `/pet`\n"
+            "• Release or sell companions anytime: `/pet sell <pet>`"
+        ),
+        inline=False,
+    )
+
+    file_attachment = None
+    pet_img_path = Path("data/pets") / pet_data["image_file"]
+    if pet_img_path.exists():
+        file_attachment = discord.File(str(pet_img_path), filename=pet_data["image_file"])
+        embed.set_image(url=f"attachment://{pet_data['image_file']}")
+
+    embed.set_footer(text="Every 3 days a new companion is spotlighted • /pet guide for full handbook")
+    view = PetDropAnnouncementView(rewards_service, chosen_id, pet_data["cost"], pet_data["name"])
+    return embed, file_attachment, view
+
+
+class PetSellConfirmView(discord.ui.View):
+    """Confirmation view for releasing/selling a pet companion."""
+
+    def __init__(self, rewards_service: RewardsDBService, user_id: int, pet_rec: PetRecord):
+        super().__init__(timeout=60.0)
+        self.rewards_service = rewards_service
+        self.user_id = user_id
+        self.pet_rec = pet_rec
+
+    @discord.ui.button(label="Confirm Sell & Release", emoji="✅", style=discord.ButtonStyle.danger)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This is not your pet companion!", ephemeral=True)
+            return
+
+        try:
+            res = self.rewards_service.sell_pet(self.user_id, self.pet_rec.pet_id)
+            embed = discord.Embed(
+                title="🪙 Companion Released & Refund Processed",
+                description=(
+                    f"You safely released **{res['nickname']}** ({res['pet_name']}) back to the Pet Shelter.\n\n"
+                    f"💰 **Points Refunded:** `+{res['refund_amount']:,} Uno Points`\n"
+                    f"• Base Refund (60%): `+{res['base_refund']:,} pts`\n"
+                    f"• Level {res['level']} Bonus: `+{res['level_bonus']:,} pts`\n\n"
+                    f"💳 **New Balance:** `{res['new_balance']:,} Uno Points`"
+                ),
+                color=discord.Color.green(),
+            )
+            if res["new_active_pet"]:
+                embed.add_field(
+                    name="New Active Companion",
+                    value=f"🐾 **{res['new_active_pet'].nickname}** ({res['new_active_pet'].display_name}) is now equipped!",
+                    inline=False,
+                )
+            self.stop()
+            await interaction.response.edit_message(embed=embed, view=None)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @discord.ui.button(label="Cancel", emoji="❌", style=discord.ButtonStyle.secondary)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This is not your confirmation!", ephemeral=True)
+            return
+        self.stop()
+        await interaction.response.edit_message(content="❌ Pet sale cancelled. Your companion remains safe with you!", embed=None, view=None)
+
+
 def build_pet_embed(pet: Optional[PetRecord], owner_name: str, all_pets: list[PetRecord]) -> tuple[discord.Embed, Optional[discord.File]]:
     """Build a rich embed showcasing the user's active pet companion with attached pixel art sprite."""
     if not pet:
@@ -342,7 +559,7 @@ def build_pet_embed(pet: Optional[PetRecord], owner_name: str, all_pets: list[Pe
             ),
             color=discord.Color.gold(),
         )
-        embed.set_footer(text="Browse companions with /shop or adopt with /pet adopt <species>")
+        embed.set_footer(text="Browse companions with /shop or adopt with /pet adopt <species> • /pet guide")
         return embed, None
 
     embed = discord.Embed(
@@ -371,7 +588,7 @@ def build_pet_embed(pet: Optional[PetRecord], owner_name: str, all_pets: list[Pe
         file_attachment = discord.File(str(pet_img_path), filename=pet.image_file)
         embed.set_thumbnail(url=f"attachment://{pet.image_file}")
 
-    embed.set_footer(text="Use buttons below to feed or pet • Switch companion with dropdown")
+    embed.set_footer(text="Feed/Pet companion • Switch active pet with dropdown • /pet guide")
     return embed, file_attachment
 
 
@@ -446,6 +663,17 @@ class PetSwitchSelect(discord.ui.Select):
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
 
+class PetGuideButton(discord.ui.Button):
+    """Button to view the pet companion handbook."""
+
+    def __init__(self):
+        super().__init__(label="Companion Guide", emoji="📖", style=discord.ButtonStyle.secondary, custom_id="pet_guide_btn")
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        embed = build_pet_guide_embed()
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+
 class PetView(discord.ui.View):
     """Interactive pet companion dashboard."""
 
@@ -464,6 +692,7 @@ class PetView(discord.ui.View):
         self.clear_items()
         self.add_item(PetCareButton("feed", "Feed Snack", "🍖", discord.ButtonStyle.success))
         self.add_item(PetCareButton("pet", "Cuddle & Pet", "💖", discord.ButtonStyle.primary))
+        self.add_item(PetGuideButton())
 
         if len(user_pets) > 1:
             self.add_item(PetSwitchSelect(user_pets))
@@ -484,8 +713,10 @@ def build_shop_embed(rewards_service: RewardsDBService, user_id: int, category: 
             color=discord.Color.gold(),
         )
 
+        drop_info = rewards_service.get_featured_pet()
+        feat_p = drop_info["pet_info"]
         featured_text = (
-            "• **🐾 Pet Shelter Companions** (`500–950 pts`) — *Permanent passive buffs & cute profile badges!*\n"
+            f"• **⭐ 3-Day Drop Spotlight: {feat_p['name']}** (`{feat_p['cost']:,} pts`) — *{feat_p['perk_title']} (Rotation: <t:{drop_info['next_drop_timestamp']}:R>)*\n"
             "• **🔄 Uno Reverse Card** (`180 pts`) — *Passive trap! Counter-steals 40%–60% from pickpockets!*\n"
             "• **📦 Mystery Gacha Box** (`150 pts`) — *Win up to 1,000 pts & exclusive High Roller badge!*\n"
             "• **☕ Intramuros Coffee Treat** (`1,200 pts`) — *₱50–₱80 Lawson/7-Eleven drink treat around PLM!*"
@@ -544,6 +775,19 @@ def build_shop_embed(rewards_service: RewardsDBService, user_id: int, category: 
         color=meta["color"],
     )
 
+    if category == "pets":
+        drop_info = rewards_service.get_featured_pet()
+        feat_p = drop_info["pet_info"]
+        embed.add_field(
+            name=f"⭐ 3-Day Drop Spotlight: {feat_p['name']} (`{feat_p['cost']:,} pts`)",
+            value=(
+                f"🌟 **Active Perk:** *{feat_p['perk_title']}*\n"
+                f"⏳ **Next Rotation:** <t:{drop_info['next_drop_timestamp']}:R> (Cycle Day {drop_info['cycle_day']}/3)\n"
+                f"`/pet adopt {drop_info['pet_id']}`"
+            ),
+            inline=False,
+        )
+
     items_in_cat = [
         (item_id, item)
         for item_id, item in SHOP_CATALOG.items()
@@ -559,7 +803,7 @@ def build_shop_embed(rewards_service: RewardsDBService, user_id: int, category: 
             inline=False,
         )
 
-    embed.set_footer(text="Select an item in the Quick-Buy dropdown below or use /redeem <item>")
+    embed.set_footer(text="Select an item in the Quick-Buy dropdown below or use /redeem <item> • /pet guide")
     return embed
 
 
@@ -1029,6 +1273,74 @@ class RewardsCog(commands.Cog):
             )
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @pet_group.command(name="guide", description="View the full Pet Companion Handbook and perk guide.")
+    async def pet_guide(self, interaction: discord.Interaction) -> None:
+        """Display comprehensive companion guide."""
+        embed = build_pet_guide_embed()
+        await interaction.response.send_message(embed=embed)
+
+    @pet_group.command(name="drop", description="View the currently spotlighted 3-day rotating pet drop.")
+    async def pet_drop(self, interaction: discord.Interaction) -> None:
+        """Display the active 3-day pet spotlight."""
+        embed, file_att, view = build_pet_drop_announcement_embed(self.rewards_service)
+        if file_att:
+            await interaction.response.send_message(embed=embed, file=file_att, view=view)
+        else:
+            await interaction.response.send_message(embed=embed, view=view)
+
+    @pet_group.command(name="sell", description="Sell an owned pet companion back to the shelter for a points refund.")
+    @app_commands.describe(pet="The species or ID of the pet you want to sell.")
+    async def pet_sell(self, interaction: discord.Interaction, pet: str) -> None:
+        """Initiate companion sale confirmation."""
+        clean_id = pet.strip().lower()
+        user_pets = self.rewards_service.get_user_pets(interaction.user.id)
+        target_pet = next((p for p in user_pets if p.pet_id == clean_id), None)
+        if not target_pet:
+            await interaction.response.send_message(
+                f"❌ You do not own the pet `{pet}`! Check your collection with `/pet list`.",
+                ephemeral=True,
+            )
+            return
+
+        base_cost = PET_CATALOG.get(clean_id, {}).get("cost", 500)
+        base_ref = int(base_cost * 0.60)
+        lvl_bonus = (target_pet.level - 1) * 25
+        total_ref = base_ref + lvl_bonus
+
+        embed = discord.Embed(
+            title=f"⚠️ Confirm Selling {target_pet.nickname}?",
+            description=(
+                f"Are you sure you want to release **{target_pet.nickname}** ({target_pet.display_name})?\n\n"
+                f"💰 **Refund Amount:** `+{total_ref:,} Uno Points`\n"
+                f"• Base Refund (60%): `+{base_ref:,} pts`\n"
+                f"• Level {target_pet.level} Bonus: `+{lvl_bonus:,} pts`\n\n"
+                "⚠️ *This action is irreversible. The pet will return to the shelter.*"
+            ),
+            color=discord.Color.orange(),
+        )
+        view = PetSellConfirmView(self.rewards_service, interaction.user.id, target_pet)
+        await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+
+    @pet_group.command(name="force-drop", description="[Admin] Broadcast a pet drop announcement in this channel.")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.describe(pet="Specific pet to spotlight (optional, defaults to current rotation).")
+    async def pet_force_drop(self, interaction: discord.Interaction, pet: Optional[str] = None) -> None:
+        """Broadcast pet drop announcement."""
+        if not self._check_admin_permissions(interaction):
+            await interaction.response.send_message("⛔ Access Denied: Admin only.", ephemeral=True)
+            return
+
+        pet_val = pet.strip().lower() if pet else None
+        if pet_val and pet_val not in PET_CATALOG:
+            await interaction.response.send_message(f"❌ Unknown pet `{pet}`.", ephemeral=True)
+            return
+
+        embed, file_att, view = build_pet_drop_announcement_embed(self.rewards_service, pet_id=pet_val)
+        if file_att:
+            await interaction.response.send_message(embed=embed, file=file_att, view=view)
+        else:
+            await interaction.response.send_message(embed=embed, view=view)
 
     @app_commands.command(name="rank", description="View the top 10 highest-ranked BSCS 1-4 members.")
     async def rank(self, interaction: discord.Interaction) -> None:

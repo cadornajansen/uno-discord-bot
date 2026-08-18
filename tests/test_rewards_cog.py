@@ -600,3 +600,68 @@ def test_pet_slash_commands_and_profile():
 
     asyncio.run(_test())
 
+
+def test_pet_guide_and_drop_commands():
+    """Test /pet guide and /pet drop commands."""
+    async def _test():
+        cog, service, _ = _make_rewards_cog()
+
+        # 1. /pet guide
+        interaction_guide = MagicMock()
+        interaction_guide.user.id = 888
+        interaction_guide.response.send_message = AsyncMock()
+
+        await cog.pet_guide.callback(cog, interaction_guide)
+        interaction_guide.response.send_message.assert_awaited_once()
+        guide_embed = interaction_guide.response.send_message.call_args.kwargs["embed"]
+        assert "Handbook & Guide" in guide_embed.title
+
+        # 2. /pet drop
+        interaction_drop = MagicMock()
+        interaction_drop.user.id = 888
+        interaction_drop.response.send_message = AsyncMock()
+
+        await cog.pet_drop.callback(cog, interaction_drop)
+        interaction_drop.response.send_message.assert_awaited_once()
+        drop_embed = interaction_drop.response.send_message.call_args.kwargs["embed"]
+        assert "NEW PET DROP" in drop_embed.title
+
+    asyncio.run(_test())
+
+
+def test_pet_sell_command_and_confirmation():
+    """Test /pet sell command and confirmation button callback."""
+    async def _test():
+        from bot.cogs.rewards import PetSellConfirmView
+        cog, service, _ = _make_rewards_cog()
+        service.add_points(888, 1000, "START")
+        service.adopt_pet(888, "tuxedo_cat")
+
+        # 1. /pet sell triggers confirmation embed
+        interaction_sell = MagicMock()
+        interaction_sell.user.id = 888
+        interaction_sell.user.display_name = "Seller"
+        interaction_sell.response.send_message = AsyncMock()
+
+        await cog.pet_sell.callback(cog, interaction_sell, pet="tuxedo_cat")
+        interaction_sell.response.send_message.assert_awaited_once()
+        sell_embed = interaction_sell.response.send_message.call_args.kwargs["embed"]
+        assert "Confirm Selling" in sell_embed.title
+
+        # 2. Click confirm button
+        pet_rec = service.get_active_pet(888)
+        confirm_view = PetSellConfirmView(service, 888, pet_rec)
+
+        interaction_btn = MagicMock()
+        interaction_btn.user.id = 888
+        interaction_btn.response.edit_message = AsyncMock()
+
+        await confirm_view.confirm.callback(interaction_btn)
+        interaction_btn.response.edit_message.assert_awaited_once()
+        final_embed = interaction_btn.response.edit_message.call_args.kwargs["embed"]
+        assert "Refund Processed" in final_embed.title
+        # Tuxedo cat (500 pts) refund is 300 pts. Starting points: 1000 - 500 + 300 = 800
+        assert service.get_balance(888) == 800
+
+    asyncio.run(_test())
+

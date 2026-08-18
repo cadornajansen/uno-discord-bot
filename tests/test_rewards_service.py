@@ -3,6 +3,7 @@ import pytest
 
 from bot.services.rewards_db import (
     RewardsDBService,
+    RewardsError,
     DailyAlreadyClaimedError,
     InsufficientPointsError,
     ItemNotFoundError,
@@ -552,4 +553,57 @@ def test_pet_interactions(rewards_service: RewardsDBService):
 
     pet_res = rewards_service.interact_pet(1001, action="pet")
     assert "petted" in pet_res.message.lower() or "cuddled" in pet_res.message.lower()
+
+
+def test_sell_pet_calculation_and_active_fallback(rewards_service: RewardsDBService):
+    """Test selling pet calculates 60% refund + level bonuses, and re-assigns active companion."""
+    rewards_service.add_points(1001, 3000, "START")
+
+    # 1. Adopt Tuxedo Cat (500 pts) and Golden Dog (550 pts)
+    rewards_service.adopt_pet(1001, "tuxedo_cat")
+    rewards_service.adopt_pet(1001, "golden_dog")
+    assert rewards_service.get_active_pet(1001).pet_id == "tuxedo_cat"
+
+    # Level up Tuxedo Cat to Level 2
+    for _ in range(4):
+        rewards_service.interact_pet(1001, action="feed")
+    active_cat = rewards_service.get_active_pet(1001)
+    assert active_cat.level >= 2
+
+    # Tuxedo Cat base: 500 -> 60% = 300 pts. Level bonus: +25 pts per level above 1
+    bal_before = rewards_service.get_balance(1001)
+    res_sell = rewards_service.sell_pet(1001, "tuxedo_cat")
+    assert res_sell["base_refund"] == 300
+    assert res_sell["level_bonus"] >= 25
+    assert res_sell["refund_amount"] == res_sell["base_refund"] + res_sell["level_bonus"]
+    assert rewards_service.get_balance(1001) == bal_before + res_sell["refund_amount"]
+
+    # Cat is removed from collection
+    pets_left = rewards_service.get_user_pets(1001)
+    assert len(pets_left) == 1
+    assert pets_left[0].pet_id == "golden_dog"
+
+    # Golden Dog became the new active companion automatically!
+    new_active = rewards_service.get_active_pet(1001)
+    assert new_active is not None
+    assert new_active.pet_id == "golden_dog"
+
+
+def test_sell_nonexistent_pet_error(rewards_service: RewardsDBService):
+    """Test selling a pet not owned raises RewardsError."""
+    with pytest.raises(RewardsError):
+        rewards_service.sell_pet(1001, "white_bunny")
+
+
+def test_featured_pet_rotation_schedule(rewards_service: RewardsDBService):
+    """Test 3-day rotating pet drop calculation."""
+    anchor = datetime(2026, 8, 18, 12, 0, tzinfo=timezone.utc)
+    drop_day1 = rewards_service.get_featured_pet(now=anchor)
+    assert drop_day1["pet_id"] == "tuxedo_cat"
+    assert drop_day1["cycle_day"] in (1, 2, 3)
+
+    # Fast-forward 3 days (August 21) -> Should rotate to next pet (golden_dog)
+    drop_cycle2 = rewards_service.get_featured_pet(now=anchor + timedelta(days=3))
+    assert drop_cycle2["pet_id"] == "golden_dog"
+    assert drop_cycle2["cycle_number"] == 1
 

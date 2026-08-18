@@ -287,6 +287,21 @@ class PrefixCommandsCog(commands.Cog):
         """Prefix alias for /pet rename."""
         await self._invoke_app_command(context, "RewardsCog", "pet_rename", species.strip().lower(), name)
 
+    @pet_prefix.command(name="guide")
+    async def pet_guide_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /pet guide."""
+        await self._invoke_app_command(context, "RewardsCog", "pet_guide")
+
+    @pet_prefix.command(name="drop")
+    async def pet_drop_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /pet drop."""
+        await self._invoke_app_command(context, "RewardsCog", "pet_drop")
+
+    @pet_prefix.command(name="sell")
+    async def pet_sell_prefix(self, context: commands.Context, species: str) -> None:
+        """Prefix alias for /pet sell."""
+        await self._invoke_app_command(context, "RewardsCog", "pet_sell", species.strip().lower())
+
     @commands.command(name="admin-inspect", aliases=["inspect"])
     @commands.has_permissions(administrator=True)
     async def admin_inspect_prefix(self, context: commands.Context, member: discord.Member) -> None:
