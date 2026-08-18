@@ -1086,6 +1086,7 @@ class UserRecord:
     bet_win_streak: int = 0
     bet_rigged_loss_remaining: int = 0
     bet_loss_streak: int = 0
+    last_tax_collection: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -1397,6 +1398,8 @@ class RewardsDBService:
             conn.execute("ALTER TABLE users ADD COLUMN bet_rigged_loss_remaining INTEGER DEFAULT 0")
         if "bet_loss_streak" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN bet_loss_streak INTEGER DEFAULT 0")
+        if "last_tax_collection" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN last_tax_collection TEXT")
         conn.commit()
 
     def get_or_create_user(self, user_id: int) -> UserRecord:
@@ -1434,6 +1437,7 @@ class RewardsDBService:
                 bet_win_streak=row["bet_win_streak"] if "bet_win_streak" in keys else 0,
                 bet_rigged_loss_remaining=row["bet_rigged_loss_remaining"] if "bet_rigged_loss_remaining" in keys else 0,
                 bet_loss_streak=row["bet_loss_streak"] if "bet_loss_streak" in keys else 0,
+                last_tax_collection=row["last_tax_collection"] if "last_tax_collection" in keys else None,
             )
 
     def get_balance(self, user_id: int) -> int:
@@ -2188,11 +2192,11 @@ class RewardsDBService:
         fixed_outcome: Optional[BetOutcome] = None,
         fixed_skill: Optional[str] = None,
     ) -> BetResult:
-        """Place a roulette bet (min 10 pts, limit 10 bets/day). Outcomes: Jackpot (4x profit), Double (1x profit), Skill Drop, Refund, Bust."""
+        """Place a roulette bet (min 10 pts, max 100 pts, limit 10 bets/day). Outcomes: Jackpot (4x profit), Double (1x profit), Skill Drop, Refund, Bust."""
         if wager < 10:
             raise RewardsError("Minimum bet amount is 10 Uno Points!")
-        if wager > 250:
-            raise RewardsError("Maximum bet amount is 250 Uno Points!")
+        if wager > 100:
+            raise RewardsError("Maximum bet amount is 100 Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -2399,11 +2403,11 @@ class RewardsDBService:
         wager: int = 50,
         fixed_reels: Optional[list[str]] = None,
     ) -> SlotsResult:
-        """Spin 3 slot machine reels (max 200 pts). Match 2 for consolation prize, match 3 for huge multipliers up to 35x!"""
+        """Spin 3 slot machine reels (max 100 pts). Match 2 for consolation prize, match 3 for huge multipliers up to 35x!"""
         if wager < 10:
             raise RewardsError("Minimum slots wager is 10 Uno Points!")
-        if wager > 200:
-            raise RewardsError("Maximum slots wager is 200 Uno Points!")
+        if wager > 100:
+            raise RewardsError("Maximum slots wager is 100 Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -2479,11 +2483,11 @@ class RewardsDBService:
         wager: int = 50,
         fixed_flip: Optional[str] = None,
     ) -> CoinflipResult:
-        """Fast double-or-nothing coin toss (limit 200 pts max)."""
+        """Fast 1.75x payout coin toss (limit 100 pts max)."""
         if wager < 10:
             raise RewardsError("Minimum coinflip wager is 10 Uno Points!")
-        if wager > 200:
-            raise RewardsError("Maximum coinflip wager is 200 Uno Points!")
+        if wager > 100:
+            raise RewardsError("Maximum coinflip wager is 100 Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -2513,16 +2517,17 @@ class RewardsDBService:
                 result = "tails" if picked == "heads" else "heads"
 
         won = (picked == result)
-        points_delta = wager if won else -wager
+        # 1.75x total return (+0.75x net profit on win)
+        points_delta = int(wager * 0.75) if won else -wager
         new_balance = user.points + points_delta
-        new_lifetime = user.lifetime_points + (wager if won else 0)
+        new_lifetime = user.lifetime_points + (points_delta if won else 0)
 
         with self._get_connection() as conn:
             conn.execute(
                 "UPDATE users SET points = ?, lifetime_points = ? WHERE user_id = ?",
                 (new_balance, new_lifetime, user_id),
             )
-            act_desc = f"Coinflip: Picked {picked}, Flipped {result} -> {'WON' if won else 'LOST'} ({'+' if points_delta > 0 else ''}{points_delta} pts)"
+            act_desc = f"Coinflip: Picked {picked}, Flipped {result} -> {'WON (1.75x)' if won else 'LOST'} ({'+' if points_delta > 0 else ''}{points_delta} pts)"
             conn.execute(
                 "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'COINFLIP', ?)",
                 (user_id, points_delta, act_desc),
@@ -2548,11 +2553,11 @@ class RewardsDBService:
         fixed_player_cards: Optional[list[BlackjackCard]] = None,
         fixed_dealer_cards: Optional[list[BlackjackCard]] = None,
     ) -> BlackjackGame:
-        """Start a new blackjack game, dealing 2 cards each."""
+        """Start a new blackjack game, dealing 2 cards each (max 100 pts)."""
         if wager < 10:
             raise RewardsError("Minimum blackjack wager is 10 Uno Points!")
-        if wager > 250:
-            raise RewardsError("Maximum blackjack wager is 250 Uno Points!")
+        if wager > 100:
+            raise RewardsError("Maximum blackjack wager is 100 Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -2716,11 +2721,11 @@ class RewardsDBService:
         wager: int = 50,
         fixed_card: Optional[BlackjackCard] = None,
     ) -> HighLowGame:
-        """Start a high-low streak game with a starting card (limit 200 pts max)."""
+        """Start a high-low streak game with a starting card (limit 100 pts max)."""
         if wager < 10:
             raise RewardsError("Minimum High-Low wager is 10 Uno Points!")
-        if wager > 200:
-            raise RewardsError("Maximum High-Low wager is 200 Uno Points!")
+        if wager > 100:
+            raise RewardsError("Maximum High-Low wager is 100 Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -3098,8 +3103,8 @@ class RewardsDBService:
 
         if wager < 10:
             raise RewardsError("Minimum duel wager is 10 Uno Points!")
-        if wager > 500:
-            raise RewardsError("Maximum duel wager is 500 Uno Points!")
+        if wager > 200:
+            raise RewardsError("Maximum duel wager is 200 Uno Points!")
 
         c_user = self.get_or_create_user(challenger_id)
         t_user = self.get_or_create_user(target_id)
@@ -3443,7 +3448,7 @@ class RewardsDBService:
         return game
 
     def bank_deposit(self, user_id: int, amount: int) -> dict:
-        """Deposit wallet points into protected campus bank account."""
+        """Deposit wallet points into protected campus bank vault (10% banking fee)."""
         if amount <= 0:
             raise RewardsError("Deposit amount must be greater than 0!")
 
@@ -3453,8 +3458,10 @@ class RewardsDBService:
                 f"You only have {user.points:,} pts in your wallet to deposit!"
             )
 
+        fee = max(1, int(amount * 0.10))
+        credited = amount - fee
         new_wallet = user.points - amount
-        new_bank = user.bank_points + amount
+        new_bank = user.bank_points + credited
 
         with self._get_connection() as conn:
             conn.execute(
@@ -3463,18 +3470,20 @@ class RewardsDBService:
             )
             conn.execute(
                 "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'BANK_DEPOSIT', ?)",
-                (user_id, -amount, f"Deposited {amount:,} pts into Piggy Bank"),
+                (user_id, -fee, f"Deposited {amount:,} pts into Piggy Bank (10% Fee: {fee:,} pts, Credited: {credited:,} pts)"),
             )
             conn.commit()
 
         return {
             "amount_deposited": amount,
+            "fee": fee,
+            "amount_credited": credited,
             "new_wallet": new_wallet,
             "new_bank": new_bank,
         }
 
     def bank_withdraw(self, user_id: int, amount: int) -> dict:
-        """Withdraw points from bank account into wallet."""
+        """Withdraw points from bank vault into wallet (10% withdrawal fee)."""
         if amount <= 0:
             raise RewardsError("Withdrawal amount must be greater than 0!")
 
@@ -3484,8 +3493,10 @@ class RewardsDBService:
                 f"You only have {user.bank_points:,} pts in your bank account to withdraw!"
             )
 
-        new_wallet = user.points + amount
+        fee = max(1, int(amount * 0.10))
+        credited = amount - fee
         new_bank = user.bank_points - amount
+        new_wallet = user.points + credited
 
         with self._get_connection() as conn:
             conn.execute(
@@ -3494,15 +3505,104 @@ class RewardsDBService:
             )
             conn.execute(
                 "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'BANK_WITHDRAW', ?)",
-                (user_id, amount, f"Withdrew {amount:,} pts from Piggy Bank"),
+                (user_id, -fee, f"Withdrew {amount:,} pts from Piggy Bank (10% Fee: {fee:,} pts, Received: {credited:,} pts)"),
             )
             conn.commit()
 
         return {
             "amount_withdrawn": amount,
+            "fee": fee,
+            "amount_credited": credited,
             "new_wallet": new_wallet,
             "new_bank": new_bank,
         }
+
+    def collect_daily_tax(self, user_id: int, now: Optional[datetime] = None) -> Optional[dict]:
+        """Collect 24-hr wealth tax: 8% on assets, or 10% for wealthy accounts (1k+ pts)."""
+        current_time = now or datetime.now(PHT)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=PHT)
+        else:
+            current_time = current_time.astimezone(PHT)
+        today_str = current_time.strftime("%Y-%m-%d")
+
+        user = self.get_or_create_user(user_id)
+        if user.last_tax_collection == today_str:
+            return None
+
+        total_assets = user.points + user.bank_points
+        if total_assets < 10:
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET last_tax_collection = ? WHERE user_id = ?",
+                    (today_str, user_id),
+                )
+                conn.commit()
+            return None
+
+        tax_rate = 0.10 if total_assets >= 1000 else 0.08
+        tax_amount = max(1, int(total_assets * tax_rate))
+
+        # Deduct from wallet first, then bank
+        new_wallet = max(0, user.points - tax_amount)
+        wallet_deducted = user.points - new_wallet
+        remaining_tax = tax_amount - wallet_deducted
+        new_bank = max(0, user.bank_points - remaining_tax)
+
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                UPDATE users
+                SET points = ?,
+                    bank_points = ?,
+                    last_tax_collection = ?
+                WHERE user_id = ?
+                """,
+                (new_wallet, new_bank, today_str, user_id),
+            )
+            conn.execute(
+                """
+                INSERT INTO transactions (user_id, amount, action_type, description)
+                VALUES (?, ?, 'TAX', ?)
+                """,
+                (user_id, -tax_amount, f"Daily Wealth Tax ({int(tax_rate * 100)}% on {total_assets:,} pts net worth)"),
+            )
+            conn.commit()
+
+        return {
+            "user_id": user_id,
+            "tax_rate": tax_rate,
+            "total_assets": total_assets,
+            "tax_amount": tax_amount,
+            "new_wallet": new_wallet,
+            "new_bank": new_bank,
+        }
+
+    def collect_all_pending_taxes(self, now: Optional[datetime] = None) -> list[dict]:
+        """Collect taxes from all users eligible for 24-hr tax collection."""
+        current_time = now or datetime.now(PHT)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=PHT)
+        else:
+            current_time = current_time.astimezone(PHT)
+        today_str = current_time.strftime("%Y-%m-%d")
+
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT user_id FROM users
+                WHERE (last_tax_collection IS NULL OR last_tax_collection != ?)
+                  AND (points + bank_points) >= 10
+                """,
+                (today_str,),
+            ).fetchall()
+
+        results = []
+        for r in rows:
+            res = self.collect_daily_tax(r["user_id"], now=current_time)
+            if res:
+                results.append(res)
+        return results
 
     def execute_steal(
         self,

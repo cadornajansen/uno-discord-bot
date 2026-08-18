@@ -675,21 +675,25 @@ def test_featured_pet_rotation_schedule(rewards_service: RewardsDBService):
 
 
 def test_custom_wager_bet(rewards_service: RewardsDBService):
-    """Test unlimited custom wager bet scaling with jackpot and double."""
+    """Test custom wager bet scaling with jackpot and double, and 100 pt max cap."""
     rewards_service.add_points(1001, 1000, "START")
 
-    # Wager 200 pts with JACKPOT (3x profit = 4x payout)
-    res_jp = rewards_service.play_bet(1001, wager=200, fixed_outcome=BetOutcome.JACKPOT)
-    assert res_jp.wager == 200
-    assert res_jp.points_delta == 600
-    assert res_jp.total_payout == 800
-    assert rewards_service.get_balance(1001) == 1600
+    # Wager 100 pts with JACKPOT (3x profit = 4x payout)
+    res_jp = rewards_service.play_bet(1001, wager=100, fixed_outcome=BetOutcome.JACKPOT)
+    assert res_jp.wager == 100
+    assert res_jp.points_delta == 300
+    assert res_jp.total_payout == 400
+    assert rewards_service.get_balance(1001) == 1300
 
-    # Wager 100 pts with DOUBLE (1x profit = 2x payout)
-    res_db = rewards_service.play_bet(1001, wager=100, fixed_outcome=BetOutcome.DOUBLE)
-    assert res_db.points_delta == 100
-    assert res_db.total_payout == 200
-    assert rewards_service.get_balance(1001) == 1700
+    # Wager 50 pts with DOUBLE (1x profit = 2x payout)
+    res_db = rewards_service.play_bet(1001, wager=50, fixed_outcome=BetOutcome.DOUBLE)
+    assert res_db.points_delta == 50
+    assert res_db.total_payout == 100
+    assert rewards_service.get_balance(1001) == 1350
+
+    # Exceeding 100 pt max bet cap raises RewardsError
+    with pytest.raises(RewardsError):
+        rewards_service.play_bet(1001, wager=150)
 
 
 def test_slots_engine(rewards_service: RewardsDBService):
@@ -717,22 +721,30 @@ def test_slots_engine(rewards_service: RewardsDBService):
     assert res_bust.points_delta == -100
     assert rewards_service.get_balance(1001) == 1750
 
+    # Exceeding 100 pt max cap raises RewardsError
+    with pytest.raises(RewardsError):
+        rewards_service.play_slots(1001, wager=150)
+
 
 def test_coinflip_engine(rewards_service: RewardsDBService):
-    """Test 50/50 coinflip win and loss."""
+    """Test 1.75x coinflip win (+0.75x profit) and loss, plus 100 pt max cap."""
     rewards_service.add_points(1001, 1000, "START")
 
-    # Correct guess
+    # Correct guess (1.75x total payout -> +75 pts net profit on 100 wager)
     res_win = rewards_service.play_coinflip(1001, choice="heads", wager=100, fixed_flip="heads")
     assert res_win.won is True
-    assert res_win.points_delta == 100
-    assert rewards_service.get_balance(1001) == 1100
+    assert res_win.points_delta == 75
+    assert rewards_service.get_balance(1001) == 1075
 
     # Incorrect guess
     res_loss = rewards_service.play_coinflip(1001, choice="heads", wager=100, fixed_flip="tails")
     assert res_loss.won is False
     assert res_loss.points_delta == -100
-    assert rewards_service.get_balance(1001) == 1000
+    assert rewards_service.get_balance(1001) == 975
+
+    # Exceeding 100 pt max cap raises RewardsError
+    with pytest.raises(RewardsError):
+        rewards_service.play_coinflip(1001, choice="heads", wager=150)
 
 
 def test_blackjack_engine(rewards_service: RewardsDBService):
@@ -928,18 +940,58 @@ def test_rpg_duel_combat_logic(rewards_service: RewardsDBService):
 
 
 def test_bank_deposit_and_withdraw(rewards_service: RewardsDBService):
-    """Test depositing and withdrawing from protected campus bank."""
+    """Test depositing and withdrawing with 10% transaction fees."""
     rewards_service.add_points(1001, 1000, "START")
 
-    # Deposit 600 pts
+    # Deposit 600 pts (10% fee = 60 pts burned, 540 pts credited)
     dep_res = rewards_service.bank_deposit(1001, 600)
+    assert dep_res["amount_deposited"] == 600
+    assert dep_res["fee"] == 60
+    assert dep_res["amount_credited"] == 540
     assert dep_res["new_wallet"] == 400
-    assert dep_res["new_bank"] == 600
+    assert dep_res["new_bank"] == 540
 
-    # Withdraw 250 pts
-    wd_res = rewards_service.bank_withdraw(1001, 250)
-    assert wd_res["new_wallet"] == 650
-    assert wd_res["new_bank"] == 350
-    assert rewards_service.get_profile(1001).bank_points == 350
+    # Withdraw 200 pts (10% fee = 20 pts burned, 180 pts credited to wallet)
+    wd_res = rewards_service.bank_withdraw(1001, 200)
+    assert wd_res["amount_withdrawn"] == 200
+    assert wd_res["fee"] == 20
+    assert wd_res["amount_credited"] == 180
+    assert wd_res["new_wallet"] == 580  # 400 + 180
+    assert wd_res["new_bank"] == 340    # 540 - 200
+    assert rewards_service.get_profile(1001).bank_points == 340
+
+
+def test_daily_wealth_taxes(rewards_service: RewardsDBService):
+    """Test 24-hr wealth taxes: 8% on assets, 10% on 1k+ assets, and daily reset."""
+    d1 = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+    d2 = datetime(2026, 8, 2, 12, 0, tzinfo=timezone.utc)
+
+    # User 1: 500 pts total (< 1000 pts) -> 8% tax = 40 pts
+    rewards_service.add_points(1001, 500, "START")
+    tax_res1 = rewards_service.collect_daily_tax(1001, now=d1)
+    assert tax_res1 is not None
+    assert tax_res1["tax_rate"] == 0.08
+    assert tax_res1["tax_amount"] == 40
+    assert tax_res1["new_wallet"] == 460
+    assert rewards_service.get_balance(1001) == 460
+
+    # Calling again same day -> None (already taxed)
+    assert rewards_service.collect_daily_tax(1001, now=d1) is None
+
+    # User 2: 2,000 pts total (>= 1000 pts) -> 10% tax = 200 pts
+    rewards_service.add_points(1002, 2000, "START")
+    tax_res2 = rewards_service.collect_daily_tax(1002, now=d1)
+    assert tax_res2 is not None
+    assert tax_res2["tax_rate"] == 0.10
+    assert tax_res2["tax_amount"] == 200
+    assert tax_res2["new_wallet"] == 1800
+    assert rewards_service.get_balance(1002) == 1800
+
+    # Next day -> eligible again
+    tax_next = rewards_service.collect_daily_tax(1001, now=d2)
+    assert tax_next is not None
+    # 8% of 460 is 36 pts
+    assert tax_next["tax_amount"] == 36
+    assert tax_next["new_wallet"] == 424
 
 

@@ -7,7 +7,7 @@ import random
 from typing import Any, Optional, Union
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 from bot.services.rewards_db import (
     BetOutcome,
@@ -2042,6 +2042,27 @@ class RewardsCog(commands.Cog):
                     db_path = str(p)
             self.rewards_service = RewardsDBService(db_path)
 
+    async def cog_load(self) -> None:
+        self.daily_tax_loop.start()
+
+    async def cog_unload(self) -> None:
+        self.daily_tax_loop.cancel()
+
+    @tasks.loop(hours=1)
+    async def daily_tax_loop(self) -> None:
+        """Periodic background task that collects 24-hr wealth taxes."""
+        try:
+            taxes = self.rewards_service.collect_all_pending_taxes()
+            if taxes:
+                total_tax_collected = sum(t["tax_amount"] for t in taxes)
+                logger.info(f"[taxes] Collected {total_tax_collected:,} pts in wealth taxes from {len(taxes)} users.")
+        except Exception as e:
+            logger.error(f"[taxes] Error during daily wealth tax collection: {e}", exc_info=True)
+
+    @daily_tax_loop.before_loop
+    async def before_daily_tax_loop(self) -> None:
+        await self.bot.wait_until_ready()
+
     def _check_admin_permissions(self, interaction: discord.Interaction) -> bool:
         """Verify whether caller is a server administrator or guild owner."""
         user = interaction.user
@@ -2826,13 +2847,15 @@ class RewardsCog(commands.Cog):
                 embed = discord.Embed(
                     title="📥 Piggy Bank Deposit Successful",
                     description=(
-                        f"Safely stored **{res['amount_deposited']:,} Uno Points** in your bank vault!\n\n"
+                        f"Deposited **{res['amount_deposited']:,} Uno Points**\n"
+                        f"🏷️ **10% Banking Fee:** `-{res['fee']:,} pts`\n"
+                        f"✨ **Credited to Vault:** `+{res['amount_credited']:,} pts`\n\n"
                         f"💳 **Wallet Balance:** `{res['new_wallet']:,} pts`\n"
                         f"🏦 **Bank Vault:** `{res['new_bank']:,} pts`"
                     ),
                     color=discord.Color.green(),
                 )
-                embed.set_footer(text="Bank points are 100% immune to pickpockets and tax audits!")
+                embed.set_footer(text="Bank vault points are 100% immune to pickpockets! • 10% deposit fee")
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
             elif action.value == "withdraw":
@@ -2843,23 +2866,30 @@ class RewardsCog(commands.Cog):
                 embed = discord.Embed(
                     title="📤 Piggy Bank Withdrawal Successful",
                     description=(
-                        f"Withdrew **{res['amount_withdrawn']:,} Uno Points** from your bank vault into your wallet!\n\n"
+                        f"Withdrew **{res['amount_withdrawn']:,} Uno Points**\n"
+                        f"🏷️ **10% ATM Fee:** `-{res['fee']:,} pts`\n"
+                        f"✨ **Credited to Wallet:** `+{res['amount_credited']:,} pts`\n\n"
                         f"💳 **Wallet Balance:** `{res['new_wallet']:,} pts`\n"
                         f"🏦 **Bank Vault:** `{res['new_bank']:,} pts`"
                     ),
                     color=discord.Color.blue(),
                 )
+                embed.set_footer(text="10% withdrawal fee applied • Wallet points are vulnerable to pickpockets")
                 await interaction.response.send_message(embed=embed, ephemeral=True)
 
             else:  # view
                 prof = self.rewards_service.get_profile(user_id)
+                net_worth = prof.points + prof.bank_points
+                tax_rate_str = "10%" if net_worth >= 1000 else "8%"
                 embed = discord.Embed(
                     title=f"🏦 {interaction.user.display_name}'s Campus Piggy Bank",
                     description=(
                         f"🔒 **Vault Status:** Protected & Insured\n\n"
                         f"🏦 **Bank Vault Balance:** `{prof.bank_points:,} Uno Points`\n"
                         f"💳 **Active Wallet:** `{prof.points:,} Uno Points`\n"
-                        f"💎 **Total Net Worth:** `{(prof.points + prof.bank_points):,} Uno Points`"
+                        f"💎 **Total Net Worth:** `{net_worth:,} Uno Points`\n\n"
+                        f"🏛️ **Daily Tax Bracket:** `{tax_rate_str}` every 24hrs\n"
+                        f"🏷️ **Banking Fees:** `10%` on deposits and withdrawals"
                     ),
                     color=discord.Color.gold(),
                 )
