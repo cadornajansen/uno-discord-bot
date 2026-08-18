@@ -8,6 +8,8 @@ from bot.services.rewards_db import (
     InsufficientPointsError,
     ItemNotFoundError,
     MaxTriviaReachedError,
+    BetOutcome,
+    BlackjackCard,
 )
 
 
@@ -186,39 +188,31 @@ def test_csv_export(rewards_service: RewardsDBService):
 
 
 def test_play_bet_outcomes_and_limit(rewards_service: RewardsDBService):
-    """Test bet mechanics, skill drops, and 3-bet daily cap."""
-    from bot.services.rewards_db import BetOutcome, MaxBetsReachedError
+    """Test bet mechanics, dynamic payouts, and skill drops with unlimited wagers."""
+    from bot.services.rewards_db import BetOutcome
 
     rewards_service.add_points(1001, 300, "TEST")
     now = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
 
-    # Bet 1: JACKPOT (+200 net, 250 return)
-    b1 = rewards_service.play_bet(1001, now=now, fixed_outcome=BetOutcome.JACKPOT)
+    # Bet 1: JACKPOT (+200 net on 50 wager -> 5x total payout)
+    b1 = rewards_service.play_bet(1001, wager=50, now=now, fixed_outcome=BetOutcome.JACKPOT)
     assert b1.points_delta == 200
     assert b1.new_balance == 500
-    assert b1.bets_remaining == 2
 
-    # Bet 2: SKILL_DROP (-50 pts, +1 pickpocket)
-    b2 = rewards_service.play_bet(1001, now=now, fixed_outcome=BetOutcome.SKILL_DROP, fixed_skill="pickpocket")
-    assert b2.points_delta == -50
-    assert b2.new_balance == 450
-    assert b2.bets_remaining == 1
+    # Bet 2: SKILL_DROP (reimburses wager + drops skill item)
+    b2 = rewards_service.play_bet(1001, wager=50, now=now, fixed_outcome=BetOutcome.SKILL_DROP, fixed_skill="pickpocket")
+    assert b2.points_delta == 0
+    assert b2.new_balance == 500
     inv = rewards_service.get_inventory(1001)
     assert inv["pickpocket"] == 1
 
     # Bet 3: BUST (-50 pts)
-    b3 = rewards_service.play_bet(1001, now=now, fixed_outcome=BetOutcome.BUST)
-    assert b3.new_balance == 400
-    assert b3.bets_remaining == 0
+    b3 = rewards_service.play_bet(1001, wager=50, now=now, fixed_outcome=BetOutcome.BUST)
+    assert b3.new_balance == 450
 
-    # Bet 4 on same day -> MaxBetsReachedError
-    with pytest.raises(MaxBetsReachedError):
-        rewards_service.play_bet(1001, now=now)
-
-    # Next day -> bets reset
-    next_day = now + timedelta(days=1)
-    b4 = rewards_service.play_bet(1001, now=next_day, fixed_outcome=BetOutcome.REFUND)
-    assert b4.bets_remaining == 2
+    # Bet 4 on same day -> Unlimited bets allowed!
+    b4 = rewards_service.play_bet(1001, wager=50, now=now, fixed_outcome=BetOutcome.REFUND)
+    assert b4.new_balance == 450
 
 
 def test_execute_steal_mechanics(rewards_service: RewardsDBService):
@@ -606,4 +600,179 @@ def test_featured_pet_rotation_schedule(rewards_service: RewardsDBService):
     drop_cycle2 = rewards_service.get_featured_pet(now=anchor + timedelta(days=3))
     assert drop_cycle2["pet_id"] == "golden_dog"
     assert drop_cycle2["cycle_number"] == 1
+
+
+def test_custom_wager_bet(rewards_service: RewardsDBService):
+    """Test unlimited custom wager bet scaling with jackpot and double."""
+    rewards_service.add_points(1001, 1000, "START")
+
+    # Wager 200 pts with JACKPOT (4x profit = 5x payout)
+    res_jp = rewards_service.play_bet(1001, wager=200, fixed_outcome=BetOutcome.JACKPOT)
+    assert res_jp.wager == 200
+    assert res_jp.points_delta == 800
+    assert res_jp.total_payout == 1000
+    assert rewards_service.get_balance(1001) == 1800
+
+    # Wager 100 pts with DOUBLE (1x profit = 2x payout)
+    res_db = rewards_service.play_bet(1001, wager=100, fixed_outcome=BetOutcome.DOUBLE)
+    assert res_db.points_delta == 100
+    assert res_db.total_payout == 200
+    assert rewards_service.get_balance(1001) == 1900
+
+
+def test_slots_engine(rewards_service: RewardsDBService):
+    """Test slots reel matching and multipliers."""
+    rewards_service.add_points(1001, 1000, "START")
+
+    # 3x Diamonds (12x multiplier)
+    res_trip = rewards_service.play_slots(1001, wager=100, fixed_reels=["💎", "💎", "💎"])
+    assert res_trip.multiplier == 12.0
+    assert res_trip.points_won == 1200
+    assert res_trip.points_delta == 1100
+    assert rewards_service.get_balance(1001) == 2100
+
+    # 2x Cherries (1.5x multiplier)
+    res_pair = rewards_service.play_slots(1001, wager=100, fixed_reels=["🍒", "🍒", "🍋"])
+    assert res_pair.multiplier == 1.5
+    assert res_pair.points_won == 150
+    assert res_pair.points_delta == 50
+    assert rewards_service.get_balance(1001) == 2150
+
+    # No match (0x multiplier)
+    res_bust = rewards_service.play_slots(1001, wager=100, fixed_reels=["🍒", "🍋", "🍇"])
+    assert res_bust.multiplier == 0.0
+    assert res_bust.points_won == 0
+    assert res_bust.points_delta == -100
+    assert rewards_service.get_balance(1001) == 2050
+
+
+def test_coinflip_engine(rewards_service: RewardsDBService):
+    """Test 50/50 coinflip win and loss."""
+    rewards_service.add_points(1001, 1000, "START")
+
+    # Correct guess
+    res_win = rewards_service.play_coinflip(1001, choice="heads", wager=100, fixed_flip="heads")
+    assert res_win.won is True
+    assert res_win.points_delta == 100
+    assert rewards_service.get_balance(1001) == 1100
+
+    # Incorrect guess
+    res_loss = rewards_service.play_coinflip(1001, choice="heads", wager=100, fixed_flip="tails")
+    assert res_loss.won is False
+    assert res_loss.points_delta == -100
+    assert rewards_service.get_balance(1001) == 1000
+
+
+def test_blackjack_engine(rewards_service: RewardsDBService):
+    """Test blackjack gameplay: starting hand, hit, stand, and natural 21."""
+    rewards_service.add_points(1001, 1000, "START")
+
+    # 1. Natural 21 Blackjack (A + K vs 10 + 7)
+    p_cards = [BlackjackCard("♠️", "A", 11), BlackjackCard("♥️", "K", 10)]
+    d_cards = [BlackjackCard("♦️", "10", 10), BlackjackCard("♣️", "7", 7)]
+    game_nat = rewards_service.start_blackjack(1001, wager=100, fixed_player_cards=p_cards, fixed_dealer_cards=d_cards)
+    assert game_nat.status == "BLACKJACK"
+    # 3:2 payout = +150 pts profit (total return 250 pts). Balance: 1000 - 100 + 250 = 1150
+    assert rewards_service.get_balance(1001) == 1150
+
+    # 2. Hit and Stand win (Player 10+6+4=20 vs Dealer 10+7=17)
+    p_start = [BlackjackCard("♠️", "10", 10), BlackjackCard("♥️", "6", 6)]
+    d_start = [BlackjackCard("♦️", "10", 10), BlackjackCard("♣️", "7", 7)]
+    game_play = rewards_service.start_blackjack(1001, wager=100, fixed_player_cards=p_start, fixed_dealer_cards=d_start)
+    assert game_play.status == "IN_PROGRESS"
+
+    # Hit 4 -> 20
+    game_hit = rewards_service.hit_blackjack(1001, fixed_card=BlackjackCard("♣️", "4", 4))
+    assert game_hit.status == "IN_PROGRESS"
+
+    # Stand -> Dealer 17 stands -> Player wins!
+    game_stand = rewards_service.stand_blackjack(1001)
+    assert game_stand.status == "PLAYER_WIN"
+    # Balance: 1150 - 100 + 200 = 1250
+    assert rewards_service.get_balance(1001) == 1250
+
+
+def test_highlow_engine(rewards_service: RewardsDBService):
+    """Test high-low card guessing, streak progression, and cashout."""
+    rewards_service.add_points(1001, 1000, "START")
+
+    # Start with 5 of Hearts
+    game = rewards_service.start_highlow(1001, wager=100, fixed_card=BlackjackCard("♥️", "5", 5))
+    assert game.status == "IN_PROGRESS"
+    assert rewards_service.get_balance(1001) == 900
+
+    # Guess Higher -> 9 of Spades (Correct!)
+    game_g1 = rewards_service.guess_highlow(1001, guess="higher", fixed_next_card=BlackjackCard("♠️", "9", 9))
+    assert game_g1.streak == 1
+    assert game_g1.current_multiplier == 1.5
+
+    # Guess Lower -> 3 of Diamonds (Correct!)
+    game_g2 = rewards_service.guess_highlow(1001, guess="lower", fixed_next_card=BlackjackCard("♦️", "3", 3))
+    assert game_g2.streak == 2
+    assert game_g2.current_multiplier == 2.5
+
+    # Cash out at 2.5x (100 * 2.5 = 250 pts payout)
+    game_cash = rewards_service.cashout_highlow(1001)
+    assert game_cash.status == "CASHED_OUT"
+    assert game_cash.points_delta == 150
+    # Balance: 900 + 250 = 1150
+    assert rewards_service.get_balance(1001) == 1150
+
+
+def test_work_and_scavenge_cooldowns(rewards_service: RewardsDBService):
+    """Test work shift and campus scavenge cooldown enforcement."""
+    rewards_service.add_points(1001, 0, "START")
+    now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+
+    # 1. Work shift
+    res_work = rewards_service.execute_work(1001, now=now, fixed_job_index=0)
+    assert res_work.points_earned >= 50
+    assert rewards_service.get_balance(1001) == res_work.points_earned
+
+    # Repeat work 10 mins later -> Cooldown error
+    with pytest.raises(RewardsError):
+        rewards_service.execute_work(1001, now=now + timedelta(minutes=10))
+
+    # 2. Scavenge
+    res_scav = rewards_service.execute_scavenge(1001, now=now, fixed_location_index=0)
+    assert res_scav.points_earned >= 10
+    bal_after_scav = rewards_service.get_balance(1001)
+
+    # Repeat scavenge 5 mins later -> Cooldown error
+    with pytest.raises(RewardsError):
+        rewards_service.execute_scavenge(1001, now=now + timedelta(minutes=5))
+
+    # Scavenge 31 mins later -> Success
+    res_scav2 = rewards_service.execute_scavenge(1001, now=now + timedelta(minutes=31), fixed_location_index=0)
+    assert rewards_service.get_balance(1001) == bal_after_scav + res_scav2.points_earned
+
+
+def test_duel_resolution(rewards_service: RewardsDBService):
+    """Test 1v1 PvP dice wager duels."""
+    rewards_service.add_points(1001, 500, "START")
+    rewards_service.add_points(1002, 500, "START")
+
+    # Challenger (1001) rolls 85, Target (1002) rolls 40 -> Challenger wins 200 pts pot
+    duel_res = rewards_service.resolve_duel(1001, 1002, wager=100, fixed_c_roll=85, fixed_t_roll=40)
+    assert duel_res.winner_id == 1001
+    assert duel_res.pot_won == 200
+    assert rewards_service.get_balance(1001) == 600
+    assert rewards_service.get_balance(1002) == 400
+
+
+def test_bank_deposit_and_withdraw(rewards_service: RewardsDBService):
+    """Test depositing and withdrawing from protected campus bank."""
+    rewards_service.add_points(1001, 1000, "START")
+
+    # Deposit 600 pts
+    dep_res = rewards_service.bank_deposit(1001, 600)
+    assert dep_res["new_wallet"] == 400
+    assert dep_res["new_bank"] == 600
+
+    # Withdraw 250 pts
+    wd_res = rewards_service.bank_withdraw(1001, 250)
+    assert wd_res["new_wallet"] == 650
+    assert wd_res["new_bank"] == 350
+    assert rewards_service.get_profile(1001).bank_points == 350
+
 

@@ -161,8 +161,7 @@ def test_bet_command():
 
         interaction.response.send_message.assert_awaited_once()
         embed = interaction.response.send_message.call_args.kwargs["embed"]
-        assert "pts" in embed.fields[0].value
-        assert "Bets Remaining" in embed.fields[1].name
+        assert "Uno Points" in embed.fields[0].value
         log_channel.send.assert_awaited_once()
 
     asyncio.run(_test())
@@ -664,4 +663,102 @@ def test_pet_sell_command_and_confirmation():
         assert service.get_balance(888) == 800
 
     asyncio.run(_test())
+
+
+def test_casino_and_earning_commands():
+    """Test /slots, /coinflip, /blackjack, /highlow, /work, /beg, /duel, and /bank slash commands."""
+    async def _test():
+        from discord import app_commands
+        cog, service, _ = _make_rewards_cog()
+        service.add_points(999, 5000, "START")
+        service.add_points(888, 5000, "START")
+
+        # 1. /slots
+        i_slots = MagicMock()
+        i_slots.user.id = 999
+        i_slots.user.display_name = "SlotsSpinner"
+        i_slots.response.send_message = AsyncMock()
+        await cog.slots.callback(cog, i_slots, amount=100)
+        i_slots.response.send_message.assert_awaited_once()
+
+        # 2. /coinflip
+        i_cf = MagicMock()
+        i_cf.user.id = 999
+        i_cf.user.display_name = "Flipper"
+        i_cf.response.send_message = AsyncMock()
+        choice_heads = app_commands.Choice(name="Heads", value="heads")
+        await cog.coinflip.callback(cog, i_cf, choice=choice_heads, amount=50)
+        i_cf.response.send_message.assert_awaited_once()
+
+        # 3. /blackjack
+        i_bj = MagicMock()
+        i_bj.user.id = 999
+        i_bj.user.display_name = "CardPlayer"
+        i_bj.response.send_message = AsyncMock()
+        await cog.blackjack.callback(cog, i_bj, amount=50)
+        i_bj.response.send_message.assert_awaited_once()
+
+        # 4. /highlow
+        i_hl = MagicMock()
+        i_hl.user.id = 999
+        i_hl.user.display_name = "HighLowPlayer"
+        i_hl.response.send_message = AsyncMock()
+        await cog.highlow.callback(cog, i_hl, amount=50)
+        i_hl.response.send_message.assert_awaited_once()
+
+        # 5. /work
+        i_work = MagicMock()
+        i_work.user.id = 999
+        i_work.user.display_name = "Worker"
+        i_work.response.send_message = AsyncMock()
+        await cog.work.callback(cog, i_work)
+        i_work.response.send_message.assert_awaited_once()
+        work_embed = i_work.response.send_message.call_args.kwargs["embed"]
+        assert "Campus Shift Complete" in work_embed.title
+
+        # 6. /beg
+        i_beg = MagicMock()
+        i_beg.user.id = 999
+        i_beg.user.display_name = "Scavenger"
+        i_beg.response.send_message = AsyncMock()
+        await cog.beg.callback(cog, i_beg)
+        i_beg.response.send_message.assert_awaited_once()
+        scav_embed = i_beg.response.send_message.call_args.kwargs["embed"]
+        assert "Campus Scavenge" in scav_embed.title
+
+        # 7. /duel challenge
+        i_duel = MagicMock()
+        i_duel.user.id = 999
+        i_duel.user.mention = "<@999>"
+        i_duel.response.send_message = AsyncMock()
+        target_m = MagicMock()
+        target_m.id = 888
+        target_m.bot = False
+        target_m.display_name = "Challenged"
+        target_m.mention = "<@888>"
+        await cog.duel.callback(cog, i_duel, target=target_m, amount=100)
+        i_duel.response.send_message.assert_awaited_once()
+
+        # 8. /bank deposit and view
+        i_bank_dep = MagicMock()
+        i_bank_dep.user.id = 999
+        i_bank_dep.response.send_message = AsyncMock()
+        choice_dep = app_commands.Choice(name="Deposit", value="deposit")
+        await cog.bank.callback(cog, i_bank_dep, action=choice_dep, amount=500)
+        i_bank_dep.response.send_message.assert_awaited_once()
+        dep_embed = i_bank_dep.response.send_message.call_args.kwargs["embed"]
+        assert "Deposit Successful" in dep_embed.title
+
+        i_bank_view = MagicMock()
+        i_bank_view.user.id = 999
+        i_bank_view.user.display_name = "Banker"
+        i_bank_view.response.send_message = AsyncMock()
+        choice_view = app_commands.Choice(name="View", value="view")
+        await cog.bank.callback(cog, i_bank_view, action=choice_view)
+        i_bank_view.response.send_message.assert_awaited_once()
+        view_embed = i_bank_view.response.send_message.call_args.kwargs["embed"]
+        assert "Piggy Bank" in view_embed.title
+
+    asyncio.run(_test())
+
 

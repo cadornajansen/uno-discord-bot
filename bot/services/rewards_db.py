@@ -1,9 +1,11 @@
+from collections import Counter
 import csv
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import io
 import logging
 from pathlib import Path
+import random
 import sqlite3
 from typing import Optional
 
@@ -811,11 +813,99 @@ class PetInteractResult:
 @dataclass(frozen=True)
 class BetResult:
     outcome: BetOutcome
+    wager: int
     points_delta: int
+    total_payout: int
     new_balance: int
-    bets_remaining: int
     reward_item_id: Optional[str] = None
     reward_item_name: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class SlotsResult:
+    reels: list[str]
+    multiplier: float
+    wager: int
+    points_won: int
+    points_delta: int
+    new_balance: int
+    is_jackpot: bool
+    description: str
+
+
+@dataclass(frozen=True)
+class CoinflipResult:
+    choice: str
+    result: str
+    won: bool
+    wager: int
+    points_delta: int
+    new_balance: int
+
+
+@dataclass(frozen=True)
+class BlackjackCard:
+    suit: str
+    rank: str
+    value: int
+
+    def __str__(self) -> str:
+        return f"{self.rank}{self.suit}"
+
+
+@dataclass
+class BlackjackGame:
+    user_id: int
+    wager: int
+    player_hand: list[BlackjackCard]
+    dealer_hand: list[BlackjackCard]
+    status: str  # "IN_PROGRESS", "PLAYER_WIN", "DEALER_WIN", "BLACKJACK", "PUSH", "BUST"
+    points_delta: int = 0
+    new_balance: int = 0
+    message: str = ""
+
+
+@dataclass
+class HighLowGame:
+    user_id: int
+    wager: int
+    current_card: BlackjackCard
+    streak: int
+    current_multiplier: float
+    status: str  # "IN_PROGRESS", "WON_ROUND", "BUST", "CASHED_OUT"
+    points_delta: int = 0
+    new_balance: int = 0
+    message: str = ""
+
+
+@dataclass(frozen=True)
+class WorkResult:
+    job_title: str
+    company_or_prof: str
+    description: str
+    points_earned: int
+    bonus_item_name: Optional[str]
+    new_balance: int
+
+
+@dataclass(frozen=True)
+class ScavengeResult:
+    location: str
+    description: str
+    points_earned: int
+    new_balance: int
+
+
+@dataclass(frozen=True)
+class DuelResult:
+    challenger_id: int
+    target_id: int
+    wager: int
+    challenger_roll: int
+    target_roll: int
+    winner_id: Optional[int]
+    pot_won: int
+    is_tie: bool
 
 
 @dataclass(frozen=True)
@@ -856,6 +946,9 @@ class UserRecord:
     last_trivia_date: Optional[str]
     shield_until: Optional[str]
     created_at: str
+    bank_points: int = 0
+    last_work_time: Optional[str] = None
+    last_scavenge_time: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -889,6 +982,127 @@ class UserProfile:
     inventory: dict[str, int]
     badges: list[str]
     active_pet: Optional[PetRecord] = None
+    bank_points: int = 0
+
+
+SLOTS_SYMBOLS: list[dict] = [
+    {"emoji": "🍒", "name": "Cherry", "weight": 30, "mult_3": 3.0, "mult_2": 1.5},
+    {"emoji": "🍋", "name": "Lemon", "weight": 25, "mult_3": 4.0, "mult_2": 1.5},
+    {"emoji": "🍇", "name": "Grape", "weight": 20, "mult_3": 6.0, "mult_2": 1.5},
+    {"emoji": "💎", "name": "Diamond", "weight": 12, "mult_3": 12.0, "mult_2": 2.0},
+    {"emoji": "👑", "name": "Crown", "weight": 8, "mult_3": 25.0, "mult_2": 3.0},
+    {"emoji": "🃏", "name": "Uno Wild", "weight": 5, "mult_3": 50.0, "mult_2": 5.0},
+]
+
+WORK_JOBS: list[dict] = [
+    {
+        "title": "AVR Projector Whisperer",
+        "company": "College of Engineering & Technology",
+        "desc": "Fixed the faulty VGA-to-HDMI adapter right before the Dean's presentation.",
+        "min_pts": 50,
+        "max_pts": 90,
+    },
+    {
+        "title": "C++ Debugging Hero",
+        "company": "BSCS 2nd Year Lab",
+        "desc": "Fixed a sophomore's memory leak and dangling pointer nightmare in 10 minutes.",
+        "min_pts": 60,
+        "max_pts": 110,
+    },
+    {
+        "title": "Campus Pastry Distributor",
+        "company": "Intramuros Treat Stand",
+        "desc": "Sold homemade cookies and brownies to starving computer science students.",
+        "min_pts": 45,
+        "max_pts": 85,
+    },
+    {
+        "title": "Freelance Web Scraper",
+        "company": "PLM Student Startup",
+        "desc": "Scraped research dataset papers for a senior thesis project.",
+        "min_pts": 70,
+        "max_pts": 120,
+    },
+    {
+        "title": "Discrete Math Peer Tutor",
+        "company": "Uno Study Circle",
+        "desc": "Explained proof by induction to confused classmates before the midterms.",
+        "min_pts": 55,
+        "max_pts": 100,
+    },
+    {
+        "title": "Linux Server Maintenance",
+        "company": "PLM CS Lab",
+        "desc": "Rebooted the lab workstation servers and cleared junk swap memory.",
+        "min_pts": 65,
+        "max_pts": 115,
+    },
+]
+
+SCAVENGE_LOCATIONS: list[dict] = [
+    {
+        "location": "Plaza Roma / Intramuros Walls",
+        "desc": "Searched around the cobblestone walkways and found forgotten coins from tourists.",
+        "min_pts": 10,
+        "max_pts": 30,
+    },
+    {
+        "location": "Lawson Convenience Store Corner",
+        "desc": "Picked up dropped change near the coffee machine and a lucky voucher.",
+        "min_pts": 15,
+        "max_pts": 35,
+    },
+    {
+        "location": "CET Computer Lab Benches",
+        "desc": "Looked under the keyboard trays and discovered loose Uno coins left behind.",
+        "min_pts": 20,
+        "max_pts": 40,
+    },
+    {
+        "location": "PLM Grandstand & Oval",
+        "desc": "Found extra pocket change dropped by jogging classmates after PE class.",
+        "min_pts": 12,
+        "max_pts": 28,
+    },
+    {
+        "location": "Campus Canteen Recycle Bin",
+        "desc": "Turned in recyclable bottles and cans for instant campus deposit points.",
+        "min_pts": 18,
+        "max_pts": 38,
+    },
+]
+
+CARD_SUITS: list[str] = ["♠️", "♥️", "♦️", "♣️"]
+CARD_RANKS: list[tuple[str, int]] = [
+    ("2", 2),
+    ("3", 3),
+    ("4", 4),
+    ("5", 5),
+    ("6", 6),
+    ("7", 7),
+    ("8", 8),
+    ("9", 9),
+    ("10", 10),
+    ("J", 10),
+    ("Q", 10),
+    ("K", 10),
+    ("A", 11),
+]
+
+
+def create_random_card() -> BlackjackCard:
+    suit = random.choice(CARD_SUITS)
+    rank, val = random.choice(CARD_RANKS)
+    return BlackjackCard(suit=suit, rank=rank, value=val)
+
+
+def calculate_blackjack_score(hand: list[BlackjackCard]) -> int:
+    score = sum(c.value for c in hand)
+    aces = sum(1 for c in hand if c.rank == "A")
+    while score > 21 and aces > 0:
+        score -= 10
+        aces -= 1
+    return score
 
 
 class RewardsDBService:
@@ -898,6 +1112,9 @@ class RewardsDBService:
         self.db_path = Path(db_path)
         self._is_memory = str(self.db_path) == ":memory:"
         self._mem_conn: Optional[sqlite3.Connection] = None
+        self._active_blackjack: dict[int, BlackjackGame] = {}
+        self._active_highlow: dict[int, HighLowGame] = {}
+        self._pending_duels: dict[int, dict] = {}
 
         if self._is_memory:
             self._mem_conn = sqlite3.connect(":memory:", check_same_thread=False)
@@ -930,6 +1147,9 @@ class RewardsDBService:
                     daily_trivia_count INTEGER DEFAULT 0,
                     last_trivia_date TEXT,
                     shield_until TEXT,
+                    bank_points INTEGER DEFAULT 0,
+                    last_work_time TEXT,
+                    last_scavenge_time TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -981,13 +1201,19 @@ class RewardsDBService:
                 CREATE INDEX IF NOT EXISTS idx_user_pets_user ON user_pets(user_id);
                 """
         )
-        # Migration: ensure daily_trivia_count and last_trivia_date columns exist
+        # Migration: ensure extra columns exist
         cursor = conn.execute("PRAGMA table_info(users)")
         cols = [r["name"] for r in cursor.fetchall()]
         if "daily_trivia_count" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN daily_trivia_count INTEGER DEFAULT 0")
         if "last_trivia_date" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN last_trivia_date TEXT")
+        if "bank_points" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN bank_points INTEGER DEFAULT 0")
+        if "last_work_time" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN last_work_time TEXT")
+        if "last_scavenge_time" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN last_scavenge_time TEXT")
         conn.commit()
 
     def get_or_create_user(self, user_id: int) -> UserRecord:
@@ -1014,6 +1240,9 @@ class RewardsDBService:
                 last_trivia_date=row["last_trivia_date"] if "last_trivia_date" in keys else None,
                 shield_until=row["shield_until"],
                 created_at=row["created_at"],
+                bank_points=row["bank_points"] if "bank_points" in keys else 0,
+                last_work_time=row["last_work_time"] if "last_work_time" in keys else None,
+                last_scavenge_time=row["last_scavenge_time"] if "last_scavenge_time" in keys else None,
             )
 
     def get_balance(self, user_id: int) -> int:
@@ -1592,6 +1821,7 @@ class RewardsDBService:
             inventory=inv,
             badges=badges,
             active_pet=active_pet,
+            bank_points=user.bank_points,
         )
 
     def record_redemption(self, user_id: int, item_id: str) -> dict:
@@ -1706,31 +1936,27 @@ class RewardsDBService:
     def play_bet(
         self,
         user_id: int,
+        wager: int = 50,
         now: Optional[datetime] = None,
         fixed_outcome: Optional[BetOutcome] = None,
         fixed_skill: Optional[str] = None,
     ) -> BetResult:
-        """Place a 50 pt bet (max 3/day). Outcomes: Double (25%), Skill Drop (25%), Refund (15%), Bust (35%)."""
-        BET_COST = 50
-        MAX_BETS = 3
+        """Place an unlimited wager roulette bet (min 10 pts). Outcomes: Jackpot (4x profit), Double (1x profit), Skill Drop, Refund, Bust."""
+        if wager < 10:
+            raise RewardsError("Minimum bet amount is 10 Uno Points!")
+
+        user = self.get_or_create_user(user_id)
+        if user.points < wager:
+            raise InsufficientPointsError(
+                f"You need at least {wager:,} pts to place this bet! You have {user.points:,} pts."
+            )
+
         current_time = now or datetime.now(PHT)
         if current_time.tzinfo is None:
             current_time = current_time.replace(tzinfo=PHT)
         else:
             current_time = current_time.astimezone(PHT)
         today_str = current_time.strftime("%Y-%m-%d")
-
-        user = self.get_or_create_user(user_id)
-        if user.points < BET_COST:
-            raise InsufficientPointsError(
-                f"You need at least {BET_COST} pts to place a bet! You have {user.points:,} pts."
-            )
-
-        if user.last_bet_date == today_str and user.daily_bets_count >= MAX_BETS:
-            raise MaxBetsReachedError("You've used all 3 of your bets today! Come back tomorrow.")
-
-        new_bets_count = (user.daily_bets_count + 1) if user.last_bet_date == today_str else 1
-        bets_remaining = MAX_BETS - new_bets_count
 
         # Determine outcome (Bunny pet gives +15% win rates!)
         active_pet = self.get_active_pet(user_id)
@@ -1758,16 +1984,24 @@ class RewardsDBService:
                     outcome = BetOutcome.BUST
 
         points_delta = 0
+        total_payout = 0
         reward_item_id = None
         reward_item_name = None
 
-        if outcome in (BetOutcome.JACKPOT, BetOutcome.DOUBLE):
-            points_delta = 200  # Bet 50 cost reimbursed + 200 bonus = +200 net (250 total return)
-            new_balance = user.points + 200
-            new_lifetime = user.lifetime_points + 200
+        if outcome == BetOutcome.JACKPOT:
+            points_delta = wager * 4  # Net gain: +4x wager (5x total return)
+            total_payout = wager * 5
+            new_balance = user.points + points_delta
+            new_lifetime = user.lifetime_points + points_delta
+        elif outcome == BetOutcome.DOUBLE:
+            points_delta = wager  # Net gain: +1x wager (2x total return)
+            total_payout = wager * 2
+            new_balance = user.points + points_delta
+            new_lifetime = user.lifetime_points + points_delta
         elif outcome == BetOutcome.SKILL_DROP:
-            points_delta = -50  # Deducted 50 cost
-            new_balance = user.points - 50
+            points_delta = 0  # Reimbursed wager + free card
+            total_payout = wager
+            new_balance = user.points
             new_lifetime = user.lifetime_points
             possible_skills = [
                 "pickpocket",
@@ -1785,11 +2019,13 @@ class RewardsDBService:
             self.add_item(user_id, reward_item_id, 1)
         elif outcome == BetOutcome.REFUND:
             points_delta = 0
+            total_payout = wager
             new_balance = user.points
             new_lifetime = user.lifetime_points
         else:  # BUST
-            points_delta = -50
-            new_balance = user.points - 50
+            points_delta = -wager
+            total_payout = 0
+            new_balance = user.points - wager
             new_lifetime = user.lifetime_points
 
         with self._get_connection() as conn:
@@ -1798,13 +2034,13 @@ class RewardsDBService:
                 UPDATE users
                 SET points = ?,
                     lifetime_points = ?,
-                    daily_bets_count = ?,
+                    daily_bets_count = daily_bets_count + 1,
                     last_bet_date = ?
                 WHERE user_id = ?
                 """,
-                (new_balance, new_lifetime, new_bets_count, today_str, user_id),
+                (new_balance, new_lifetime, today_str, user_id),
             )
-            action_desc = f"Bet Outcome: {outcome.value} ({'+' if points_delta > 0 else ''}{points_delta} pts)"
+            action_desc = f"Bet Outcome: {outcome.value} ({'+' if points_delta > 0 else ''}{points_delta} pts, wager: {wager} pts)"
             if active_pet and active_pet.species == "bunny":
                 action_desc += " [🐰 Bunny Perk!]"
             if reward_item_name:
@@ -1820,12 +2056,664 @@ class RewardsDBService:
 
         return BetResult(
             outcome=outcome,
+            wager=wager,
             points_delta=points_delta,
+            total_payout=total_payout,
             new_balance=new_balance,
-            bets_remaining=bets_remaining,
             reward_item_id=reward_item_id,
             reward_item_name=reward_item_name,
         )
+
+    def play_slots(
+        self,
+        user_id: int,
+        wager: int = 50,
+        fixed_reels: Optional[list[str]] = None,
+    ) -> SlotsResult:
+        """Spin 3 slot machine reels. Match 2 for consolation prize, match 3 for huge multipliers up to 50x!"""
+        if wager < 10:
+            raise RewardsError("Minimum slots wager is 10 Uno Points!")
+
+        user = self.get_or_create_user(user_id)
+        if user.points < wager:
+            raise InsufficientPointsError(
+                f"You need at least {wager:,} pts to spin the slots! You have {user.points:,} pts."
+            )
+
+        active_pet = self.get_active_pet(user_id)
+        is_bunny = active_pet and active_pet.species == "bunny"
+
+        if fixed_reels is not None and len(fixed_reels) == 3:
+            reels = fixed_reels
+        else:
+            symbols = []
+            weights = []
+            for s in SLOTS_SYMBOLS:
+                symbols.append(s["emoji"])
+                w = s["weight"]
+                if is_bunny and s["emoji"] in ("💎", "👑", "🃏"):
+                    w += 5  # Bunny luck perk
+                weights.append(w)
+            reels = random.choices(symbols, weights=weights, k=3)
+
+        # Calculate matching
+        sym_counts = Counter(reels)
+        most_common_sym, count = sym_counts.most_common(1)[0]
+        sym_def = next((s for s in SLOTS_SYMBOLS if s["emoji"] == most_common_sym), SLOTS_SYMBOLS[0])
+
+        is_jackpot = False
+        if count == 3:
+            multiplier = sym_def["mult_3"]
+            is_jackpot = (most_common_sym == "🃏")
+            desc = f"🎉 TRIPLE MATCH! 3x {sym_def['name']} ({multiplier:.1f}x Multiplier)!"
+        elif count == 2:
+            multiplier = sym_def["mult_2"]
+            desc = f"✨ DOUBLE MATCH! 2x {sym_def['name']} ({multiplier:.1f}x Consolation Payout)!"
+        else:
+            multiplier = 0.0
+            desc = "❌ No match. Better luck on the next spin!"
+
+        points_won = int(wager * multiplier)
+        points_delta = points_won - wager
+        new_balance = user.points + points_delta
+        new_lifetime = user.lifetime_points + max(0, points_delta)
+
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE users SET points = ?, lifetime_points = ? WHERE user_id = ?",
+                (new_balance, new_lifetime, user_id),
+            )
+            act_desc = f"Slots: [{' '.join(reels)}] -> {desc} ({'+' if points_delta > 0 else ''}{points_delta} pts)"
+            conn.execute(
+                "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'SLOTS', ?)",
+                (user_id, points_delta, act_desc),
+            )
+            conn.commit()
+
+        return SlotsResult(
+            reels=reels,
+            multiplier=multiplier,
+            wager=wager,
+            points_won=points_won,
+            points_delta=points_delta,
+            new_balance=new_balance,
+            is_jackpot=is_jackpot,
+            description=desc,
+        )
+
+    def play_coinflip(
+        self,
+        user_id: int,
+        choice: str,
+        wager: int = 50,
+        fixed_flip: Optional[str] = None,
+    ) -> CoinflipResult:
+        """Fast 50/50 double-or-nothing coin toss."""
+        if wager < 10:
+            raise RewardsError("Minimum coinflip wager is 10 Uno Points!")
+
+        user = self.get_or_create_user(user_id)
+        if user.points < wager:
+            raise InsufficientPointsError(
+                f"You need at least {wager:,} pts to flip! You have {user.points:,} pts."
+            )
+
+        clean_choice = choice.lower().strip()
+        if clean_choice in ("h", "head", "heads"):
+            picked = "heads"
+        elif clean_choice in ("t", "tail", "tails"):
+            picked = "tails"
+        else:
+            raise RewardsError("Invalid choice! Choose either `heads` (H) or `tails` (T).")
+
+        active_pet = self.get_active_pet(user_id)
+        is_bunny = active_pet and active_pet.species == "bunny"
+
+        if fixed_flip is not None:
+            result = fixed_flip.lower().strip()
+        else:
+            if is_bunny:
+                result = picked if random.random() < 0.55 else ("tails" if picked == "heads" else "heads")
+            else:
+                result = random.choice(["heads", "tails"])
+
+        won = (picked == result)
+        points_delta = wager if won else -wager
+        new_balance = user.points + points_delta
+        new_lifetime = user.lifetime_points + (wager if won else 0)
+
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE users SET points = ?, lifetime_points = ? WHERE user_id = ?",
+                (new_balance, new_lifetime, user_id),
+            )
+            act_desc = f"Coinflip: Picked {picked}, Flipped {result} -> {'WON' if won else 'LOST'} ({'+' if points_delta > 0 else ''}{points_delta} pts)"
+            conn.execute(
+                "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'COINFLIP', ?)",
+                (user_id, points_delta, act_desc),
+            )
+            conn.commit()
+
+        return CoinflipResult(
+            choice=picked,
+            result=result,
+            won=won,
+            wager=wager,
+            points_delta=points_delta,
+            new_balance=new_balance,
+        )
+
+    def get_active_blackjack(self, user_id: int) -> Optional[BlackjackGame]:
+        return self._active_blackjack.get(user_id)
+
+    def start_blackjack(
+        self,
+        user_id: int,
+        wager: int = 50,
+        fixed_player_cards: Optional[list[BlackjackCard]] = None,
+        fixed_dealer_cards: Optional[list[BlackjackCard]] = None,
+    ) -> BlackjackGame:
+        """Start a new blackjack game, dealing 2 cards each."""
+        if wager < 10:
+            raise RewardsError("Minimum blackjack wager is 10 Uno Points!")
+
+        user = self.get_or_create_user(user_id)
+        if user.points < wager:
+            raise InsufficientPointsError(
+                f"You need at least {wager:,} pts to play blackjack! You have {user.points:,} pts."
+            )
+
+        # Deduct wager upfront
+        self.deduct_points(user_id, wager, "BLACKJACK_BET", f"Started Blackjack hand with {wager} pts wager")
+
+        p_hand = fixed_player_cards or [create_random_card(), create_random_card()]
+        d_hand = fixed_dealer_cards or [create_random_card(), create_random_card()]
+
+        p_score = calculate_blackjack_score(p_hand)
+        d_score = calculate_blackjack_score(d_hand)
+
+        game = BlackjackGame(
+            user_id=user_id,
+            wager=wager,
+            player_hand=p_hand,
+            dealer_hand=d_hand,
+            status="IN_PROGRESS",
+            points_delta=0,
+            new_balance=self.get_balance(user_id),
+            message="Your turn! Hit to draw or Stand to hold.",
+        )
+
+        # Natural 21 Check
+        if p_score == 21:
+            if d_score == 21:
+                game.status = "PUSH"
+                game.points_delta = 0
+                self.add_points(user_id, wager, "BLACKJACK_PUSH", "Both hit 21: Push/Tie refund")
+                game.new_balance = self.get_balance(user_id)
+                game.message = "🤝 Both you and the dealer hit 21! Push — wager refunded."
+            else:
+                game.status = "BLACKJACK"
+                payout = int(wager * 2.5)  # 3:2 payout + wager returned
+                game.points_delta = payout - wager
+                self.add_points(user_id, payout, "BLACKJACK_WIN", "Natural Blackjack 21 Win (3:2 payout)")
+                game.new_balance = self.get_balance(user_id)
+                game.message = f"👑 NATURAL BLACKJACK 21! You won +{game.points_delta:,} pts!"
+            self._active_blackjack.pop(user_id, None)
+        else:
+            self._active_blackjack[user_id] = game
+
+        return game
+
+    def hit_blackjack(self, user_id: int, fixed_card: Optional[BlackjackCard] = None) -> BlackjackGame:
+        """Hit: draw 1 card for player."""
+        game = self._active_blackjack.get(user_id)
+        if not game or game.status != "IN_PROGRESS":
+            raise RewardsError("You don't have an active blackjack game in progress!")
+
+        new_card = fixed_card or create_random_card()
+        game.player_hand.append(new_card)
+        p_score = calculate_blackjack_score(game.player_hand)
+
+        if p_score > 21:
+            game.status = "BUST"
+            game.points_delta = -game.wager
+            game.new_balance = self.get_balance(user_id)
+            game.message = f"💥 BUSTED ({p_score})! You lost your {game.wager:,} pts wager."
+            self._active_blackjack.pop(user_id, None)
+        elif p_score == 21:
+            return self.stand_blackjack(user_id)
+        else:
+            game.message = f"Hit with {new_card}. Hand score: **{p_score}**. Hit or Stand?"
+
+        return game
+
+    def stand_blackjack(self, user_id: int, fixed_dealer_draws: Optional[list[BlackjackCard]] = None) -> BlackjackGame:
+        """Stand: dealer draws until reaching 17, then hand resolves."""
+        game = self._active_blackjack.get(user_id)
+        if not game or game.status != "IN_PROGRESS":
+            raise RewardsError("You don't have an active blackjack game in progress!")
+
+        p_score = calculate_blackjack_score(game.player_hand)
+
+        if fixed_dealer_draws:
+            for c in fixed_dealer_draws:
+                game.dealer_hand.append(c)
+        else:
+            while calculate_blackjack_score(game.dealer_hand) < 17:
+                game.dealer_hand.append(create_random_card())
+
+        d_score = calculate_blackjack_score(game.dealer_hand)
+
+        if d_score > 21:
+            game.status = "PLAYER_WIN"
+            payout = game.wager * 2
+            game.points_delta = game.wager
+            self.add_points(user_id, payout, "BLACKJACK_WIN", "Dealer busted! Player won.")
+            game.new_balance = self.get_balance(user_id)
+            game.message = f"🎉 Dealer busted ({d_score})! You won **+{game.wager:,} pts**!"
+        elif p_score > d_score:
+            game.status = "PLAYER_WIN"
+            payout = game.wager * 2
+            game.points_delta = game.wager
+            self.add_points(user_id, payout, "BLACKJACK_WIN", f"Player {p_score} beat Dealer {d_score}")
+            game.new_balance = self.get_balance(user_id)
+            game.message = f"🎉 You win ({p_score} vs {d_score})! Won **+{game.wager:,} pts**!"
+        elif p_score == d_score:
+            game.status = "PUSH"
+            game.points_delta = 0
+            self.add_points(user_id, game.wager, "BLACKJACK_PUSH", "Tie with dealer: Push refund")
+            game.new_balance = self.get_balance(user_id)
+            game.message = f"🤝 Push tie ({p_score} vs {d_score})! Your {game.wager:,} pts wager was refunded."
+        else:
+            game.status = "DEALER_WIN"
+            game.points_delta = -game.wager
+            game.new_balance = self.get_balance(user_id)
+            game.message = f"❌ Dealer wins ({d_score} vs {p_score}). You lost {game.wager:,} pts."
+
+        self._active_blackjack.pop(user_id, None)
+        return game
+
+    def double_down_blackjack(
+        self,
+        user_id: int,
+        fixed_card: Optional[BlackjackCard] = None,
+        fixed_dealer_draws: Optional[list[BlackjackCard]] = None,
+    ) -> BlackjackGame:
+        """Double down: double wager, receive exactly 1 card, then dealer resolves."""
+        game = self._active_blackjack.get(user_id)
+        if not game or game.status != "IN_PROGRESS":
+            raise RewardsError("You don't have an active blackjack game in progress!")
+
+        if len(game.player_hand) > 2:
+            raise RewardsError("You can only Double Down on your starting 2 cards!")
+
+        user = self.get_or_create_user(user_id)
+        if user.points < game.wager:
+            raise InsufficientPointsError(
+                f"You need another {game.wager:,} pts to Double Down! (Wallet: {user.points:,} pts)"
+            )
+
+        self.deduct_points(user_id, game.wager, "BLACKJACK_DOUBLE", "Doubled down blackjack wager")
+        game.wager *= 2
+
+        new_card = fixed_card or create_random_card()
+        game.player_hand.append(new_card)
+        p_score = calculate_blackjack_score(game.player_hand)
+
+        if p_score > 21:
+            game.status = "BUST"
+            game.points_delta = -game.wager
+            game.new_balance = self.get_balance(user_id)
+            game.message = f"💥 BUSTED ({p_score}) on Double Down! You lost {game.wager:,} pts."
+            self._active_blackjack.pop(user_id, None)
+            return game
+
+        return self.stand_blackjack(user_id, fixed_dealer_draws=fixed_dealer_draws)
+
+    def get_active_highlow(self, user_id: int) -> Optional[HighLowGame]:
+        return self._active_highlow.get(user_id)
+
+    def start_highlow(
+        self,
+        user_id: int,
+        wager: int = 50,
+        fixed_card: Optional[BlackjackCard] = None,
+    ) -> HighLowGame:
+        """Start a high-low streak game with a starting card."""
+        if wager < 10:
+            raise RewardsError("Minimum High-Low wager is 10 Uno Points!")
+
+        user = self.get_or_create_user(user_id)
+        if user.points < wager:
+            raise InsufficientPointsError(
+                f"You need at least {wager:,} pts to play High-Low! You have {user.points:,} pts."
+            )
+
+        self.deduct_points(user_id, wager, "HIGHLOW_BET", f"Started High-Low with {wager} pts")
+        start_c = fixed_card or create_random_card()
+
+        game = HighLowGame(
+            user_id=user_id,
+            wager=wager,
+            current_card=start_c,
+            streak=0,
+            current_multiplier=1.0,
+            status="IN_PROGRESS",
+            points_delta=0,
+            new_balance=self.get_balance(user_id),
+            message=f"Starting card: **{start_c}** (Value {start_c.value}). Will the next card be Higher or Lower?",
+        )
+        self._active_highlow[user_id] = game
+        return game
+
+    def guess_highlow(
+        self,
+        user_id: int,
+        guess: str,
+        fixed_next_card: Optional[BlackjackCard] = None,
+    ) -> HighLowGame:
+        """Guess whether next card is higher or lower."""
+        game = self._active_highlow.get(user_id)
+        if not game or game.status not in ("IN_PROGRESS", "WON_ROUND"):
+            raise RewardsError("You don't have an active High-Low game in progress!")
+
+        clean_guess = guess.lower().strip()
+        if clean_guess not in ("higher", "lower", "high", "low", "h", "l"):
+            raise RewardsError("Invalid guess! Choose `higher` (🔼) or `lower` (🔽).")
+
+        is_higher = clean_guess in ("higher", "high", "h")
+        next_c = fixed_next_card or create_random_card()
+
+        old_val = game.current_card.value
+        new_val = next_c.value
+        game.current_card = next_c
+
+        if new_val == old_val:
+            game.message = f"🃏 Drawn **{next_c}** (Value {new_val}). Equal value! Streak safe at {game.streak}. Guess again!"
+            return game
+
+        correct = (new_val > old_val) if is_higher else (new_val < old_val)
+        if not correct:
+            game.status = "BUST"
+            game.points_delta = -game.wager
+            game.new_balance = self.get_balance(user_id)
+            game.message = f"❌ Drawn **{next_c}** (Value {new_val}). Wrong guess! Busted and lost {game.wager:,} pts."
+            self._active_highlow.pop(user_id, None)
+            return game
+
+        game.streak += 1
+        mult_ladder = [1.5, 2.5, 4.5, 8.0, 15.0, 30.0]
+        idx = min(game.streak - 1, len(mult_ladder) - 1)
+        game.current_multiplier = mult_ladder[idx]
+        pot_payout = int(game.wager * game.current_multiplier)
+
+        if game.streak >= 6:
+            game.status = "CASHED_OUT"
+            game.points_delta = pot_payout - game.wager
+            self.add_points(user_id, pot_payout, "HIGHLOW_MAX_WIN", f"Hit max 6-card streak on High-Low! ({game.current_multiplier}x)")
+            game.new_balance = self.get_balance(user_id)
+            game.message = f"👑 MAXIMUM 6-STREAK HIT! Auto cashed out for **+{game.points_delta:,} pts** ({pot_payout:,} pts total)!"
+            self._active_highlow.pop(user_id, None)
+        else:
+            game.status = "WON_ROUND"
+            game.message = (
+                f"✅ Drawn **{next_c}** (Value {new_val})! Streak: **{game.streak}** 🔥\n"
+                f"Current Multiplier: **{game.current_multiplier:.1f}x** (Current Cashout: **{pot_payout:,} pts**)\n"
+                "Guess again or Cash Out now!"
+            )
+
+        return game
+
+    def cashout_highlow(self, user_id: int) -> HighLowGame:
+        """Cash out current High-Low multiplier winnings."""
+        game = self._active_highlow.get(user_id)
+        if not game or game.status not in ("IN_PROGRESS", "WON_ROUND"):
+            raise RewardsError("You don't have an active High-Low game to cash out!")
+
+        if game.streak == 0:
+            raise RewardsError("You need at least 1 correct guess before you can cash out!")
+
+        payout = int(game.wager * game.current_multiplier)
+        game.status = "CASHED_OUT"
+        game.points_delta = payout - game.wager
+        self.add_points(user_id, payout, "HIGHLOW_CASHOUT", f"Cashed out {game.streak}-streak at {game.current_multiplier}x")
+        game.new_balance = self.get_balance(user_id)
+        game.message = f"💰 Cashed out **{payout:,} Uno Points** (Net Profit: **+{game.points_delta:,} pts**)!"
+        self._active_highlow.pop(user_id, None)
+        return game
+
+    def execute_work(
+        self,
+        user_id: int,
+        now: Optional[datetime] = None,
+        fixed_job_index: Optional[int] = None,
+    ) -> WorkResult:
+        """Work an odd job on campus (1-hour cooldown). Earns 40–120 pts + random chance of skill item."""
+        current_time = now or datetime.now(timezone.utc)
+        user = self.get_or_create_user(user_id)
+
+        COOLDOWN_SECONDS = 3600  # 1 hour
+        if user.last_work_time:
+            try:
+                last_w = datetime.fromisoformat(user.last_work_time)
+                if last_w.tzinfo is None:
+                    last_w = last_w.replace(tzinfo=timezone.utc)
+                diff = (current_time - last_w).total_seconds()
+                if diff < COOLDOWN_SECONDS:
+                    rem = int(COOLDOWN_SECONDS - diff)
+                    mins, secs = divmod(rem, 60)
+                    raise RewardsError(f"⏳ You're exhausted from your last shift! Rest for **{mins}m {secs}s**.")
+            except ValueError:
+                pass
+
+        job = WORK_JOBS[fixed_job_index if fixed_job_index is not None and 0 <= fixed_job_index < len(WORK_JOBS) else random.randint(0, len(WORK_JOBS) - 1)]
+        earned = random.randint(job["min_pts"], job["max_pts"])
+
+        bonus_item_name = None
+        if random.random() < 0.25:
+            skill_keys = ["pickpocket", "shield_1w", "double_daily", "uno_reverse", "gacha_box", "coffee_bribe"]
+            chosen_skill = random.choice(skill_keys)
+            self.add_item(user_id, chosen_skill, 1)
+            bonus_item_name = ITEM_DEFINITIONS[chosen_skill]["name"]
+
+        new_balance = user.points + earned
+        new_lifetime = user.lifetime_points + earned
+
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE users SET points = ?, lifetime_points = ?, last_work_time = ? WHERE user_id = ?",
+                (new_balance, new_lifetime, current_time.isoformat(), user_id),
+            )
+            act_desc = f"Work: {job['title']} (+{earned} pts)"
+            if bonus_item_name:
+                act_desc += f" + Bonus Item {bonus_item_name}"
+            conn.execute(
+                "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'WORK', ?)",
+                (user_id, earned, act_desc),
+            )
+            conn.commit()
+
+        return WorkResult(
+            job_title=job["title"],
+            company_or_prof=job["company"],
+            description=job["desc"],
+            points_earned=earned,
+            bonus_item_name=bonus_item_name,
+            new_balance=new_balance,
+        )
+
+    def execute_scavenge(
+        self,
+        user_id: int,
+        now: Optional[datetime] = None,
+        fixed_location_index: Optional[int] = None,
+    ) -> ScavengeResult:
+        """Scavenge around campus for pocket change (30-min cooldown). Earns 10–40 pts."""
+        current_time = now or datetime.now(timezone.utc)
+        user = self.get_or_create_user(user_id)
+
+        COOLDOWN_SECONDS = 1800  # 30 mins
+        if user.last_scavenge_time:
+            try:
+                last_s = datetime.fromisoformat(user.last_scavenge_time)
+                if last_s.tzinfo is None:
+                    last_s = last_s.replace(tzinfo=timezone.utc)
+                diff = (current_time - last_s).total_seconds()
+                if diff < COOLDOWN_SECONDS:
+                    rem = int(COOLDOWN_SECONDS - diff)
+                    mins, secs = divmod(rem, 60)
+                    raise RewardsError(f"⏳ Nothing left to scavenge nearby! Wait **{mins}m {secs}s**.")
+            except ValueError:
+                pass
+
+        loc = SCAVENGE_LOCATIONS[fixed_location_index if fixed_location_index is not None and 0 <= fixed_location_index < len(SCAVENGE_LOCATIONS) else random.randint(0, len(SCAVENGE_LOCATIONS) - 1)]
+        earned = random.randint(loc["min_pts"], loc["max_pts"])
+
+        new_balance = user.points + earned
+        new_lifetime = user.lifetime_points + earned
+
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE users SET points = ?, lifetime_points = ?, last_scavenge_time = ? WHERE user_id = ?",
+                (new_balance, new_lifetime, current_time.isoformat(), user_id),
+            )
+            act_desc = f"Scavenge: {loc['location']} (+{earned} pts)"
+            conn.execute(
+                "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'SCAVENGE', ?)",
+                (user_id, earned, act_desc),
+            )
+            conn.commit()
+
+        return ScavengeResult(
+            location=loc["location"],
+            description=loc["desc"],
+            points_earned=earned,
+            new_balance=new_balance,
+        )
+
+    def resolve_duel(
+        self,
+        challenger_id: int,
+        target_id: int,
+        wager: int,
+        fixed_c_roll: Optional[int] = None,
+        fixed_t_roll: Optional[int] = None,
+    ) -> DuelResult:
+        """Resolve a 1v1 PvP dice roll duel between two students."""
+        if challenger_id == target_id:
+            raise RewardsError("You cannot duel yourself!")
+
+        if wager < 10:
+            raise RewardsError("Minimum duel wager is 10 Uno Points!")
+
+        c_user = self.get_or_create_user(challenger_id)
+        t_user = self.get_or_create_user(target_id)
+
+        if c_user.points < wager:
+            raise InsufficientPointsError(f"Challenger needs at least {wager:,} pts (has {c_user.points:,} pts)!")
+        if t_user.points < wager:
+            raise InsufficientPointsError(f"Target needs at least {wager:,} pts (has {t_user.points:,} pts)!")
+
+        # Deduct wager from both
+        self.deduct_points(challenger_id, wager, "DUEL_WAGER", f"1v1 Duel wager against user {target_id}")
+        self.deduct_points(target_id, wager, "DUEL_WAGER", f"1v1 Duel wager against user {challenger_id}")
+
+        c_roll = fixed_c_roll or random.randint(1, 100)
+        t_roll = fixed_t_roll or random.randint(1, 100)
+
+        while c_roll == t_roll and fixed_c_roll is None and fixed_t_roll is None:
+            c_roll = random.randint(1, 100)
+            t_roll = random.randint(1, 100)
+
+        total_pot = wager * 2
+        is_tie = (c_roll == t_roll)
+
+        if is_tie:
+            self.add_points(challenger_id, wager, "DUEL_REFUND", "Duel tie refund")
+            self.add_points(target_id, wager, "DUEL_REFUND", "Duel tie refund")
+            winner_id = None
+            pot_won = wager
+        elif c_roll > t_roll:
+            winner_id = challenger_id
+            self.add_points(challenger_id, total_pot, "DUEL_WIN", f"Won 1v1 Duel against user {target_id}")
+            pot_won = total_pot
+        else:
+            winner_id = target_id
+            self.add_points(target_id, total_pot, "DUEL_WIN", f"Won 1v1 Duel against user {challenger_id}")
+            pot_won = total_pot
+
+        return DuelResult(
+            challenger_id=challenger_id,
+            target_id=target_id,
+            wager=wager,
+            challenger_roll=c_roll,
+            target_roll=t_roll,
+            winner_id=winner_id,
+            pot_won=pot_won,
+            is_tie=is_tie,
+        )
+
+    def bank_deposit(self, user_id: int, amount: int) -> dict:
+        """Deposit wallet points into protected campus bank account."""
+        if amount <= 0:
+            raise RewardsError("Deposit amount must be greater than 0!")
+
+        user = self.get_or_create_user(user_id)
+        if user.points < amount:
+            raise InsufficientPointsError(
+                f"You only have {user.points:,} pts in your wallet to deposit!"
+            )
+
+        new_wallet = user.points - amount
+        new_bank = user.bank_points + amount
+
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE users SET points = ?, bank_points = ? WHERE user_id = ?",
+                (new_wallet, new_bank, user_id),
+            )
+            conn.execute(
+                "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'BANK_DEPOSIT', ?)",
+                (user_id, -amount, f"Deposited {amount:,} pts into Piggy Bank"),
+            )
+            conn.commit()
+
+        return {
+            "amount_deposited": amount,
+            "new_wallet": new_wallet,
+            "new_bank": new_bank,
+        }
+
+    def bank_withdraw(self, user_id: int, amount: int) -> dict:
+        """Withdraw points from bank account into wallet."""
+        if amount <= 0:
+            raise RewardsError("Withdrawal amount must be greater than 0!")
+
+        user = self.get_or_create_user(user_id)
+        if user.bank_points < amount:
+            raise InsufficientPointsError(
+                f"You only have {user.bank_points:,} pts in your bank account to withdraw!"
+            )
+
+        new_wallet = user.points + amount
+        new_bank = user.bank_points - amount
+
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE users SET points = ?, bank_points = ? WHERE user_id = ?",
+                (new_wallet, new_bank, user_id),
+            )
+            conn.execute(
+                "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'BANK_WITHDRAW', ?)",
+                (user_id, amount, f"Withdrew {amount:,} pts from Piggy Bank"),
+            )
+            conn.commit()
+
+        return {
+            "amount_withdrawn": amount,
+            "new_wallet": new_wallet,
+            "new_bank": new_bank,
+        }
 
     def execute_steal(
         self,

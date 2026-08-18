@@ -169,7 +169,7 @@ def test_rewards_prefix_commands_forward_correctly():
 
         # 3. !bet
         await PrefixCommandsCog.bet_prefix.callback(prefix_cog, context)
-        prefix_cog._invoke_app_command.assert_awaited_with(context, "RewardsCog", "bet")
+        prefix_cog._invoke_app_command.assert_awaited_with(context, "RewardsCog", "bet", 50)
 
         # 4. !shop
         await PrefixCommandsCog.shop_prefix.callback(prefix_cog, context)

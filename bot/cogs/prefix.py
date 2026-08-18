@@ -219,9 +219,52 @@ class PrefixCommandsCog(commands.Cog):
         await self._invoke_app_command(context, "RewardsCog", "leaderboard")
 
     @commands.command(name="bet", aliases=["gamble", "roll"])
-    async def bet_prefix(self, context: commands.Context) -> None:
+    async def bet_prefix(self, context: commands.Context, amount: int = 50) -> None:
         """Prefix alias for /bet."""
-        await self._invoke_app_command(context, "RewardsCog", "bet")
+        await self._invoke_app_command(context, "RewardsCog", "bet", amount)
+
+    @commands.command(name="slots", aliases=["slot", "spin"])
+    async def slots_prefix(self, context: commands.Context, amount: int = 50) -> None:
+        """Prefix alias for /slots."""
+        await self._invoke_app_command(context, "RewardsCog", "slots", amount)
+
+    @commands.command(name="coinflip", aliases=["cf", "flip"])
+    async def coinflip_prefix(self, context: commands.Context, choice: str, amount: int = 50) -> None:
+        """Prefix alias for /coinflip."""
+        choice_obj = app_commands.Choice(name=choice.title(), value=choice.lower())
+        await self._invoke_app_command(context, "RewardsCog", "coinflip", choice_obj, amount)
+
+    @commands.command(name="blackjack", aliases=["bj", "21"])
+    async def blackjack_prefix(self, context: commands.Context, amount: int = 50) -> None:
+        """Prefix alias for /blackjack."""
+        await self._invoke_app_command(context, "RewardsCog", "blackjack", amount)
+
+    @commands.command(name="highlow", aliases=["hl", "higherlower"])
+    async def highlow_prefix(self, context: commands.Context, amount: int = 50) -> None:
+        """Prefix alias for /highlow."""
+        await self._invoke_app_command(context, "RewardsCog", "highlow", amount)
+
+    @commands.command(name="work", aliases=["job", "shift"])
+    async def work_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /work."""
+        await self._invoke_app_command(context, "RewardsCog", "work")
+
+    @commands.command(name="beg", aliases=["scavenge"])
+    async def beg_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /beg."""
+        await self._invoke_app_command(context, "RewardsCog", "beg")
+
+    @commands.command(name="duel", aliases=["challenge", "pvp"])
+    async def duel_prefix(self, context: commands.Context, member: discord.Member, amount: int) -> None:
+        """Prefix alias for /duel."""
+        await self._invoke_app_command(context, "RewardsCog", "duel", member, amount)
+
+    @commands.command(name="bank")
+    async def bank_prefix(self, context: commands.Context, action: str = "view", amount: Optional[int] = None) -> None:
+        """Prefix alias for /bank."""
+        action_clean = action.lower().strip()
+        choice_obj = app_commands.Choice(name=action_clean.title(), value=action_clean)
+        await self._invoke_app_command(context, "RewardsCog", "bank", choice_obj, amount)
 
     @commands.command(name="steal", aliases=["rob"])
     async def steal_prefix(self, context: commands.Context, member: discord.Member) -> None:

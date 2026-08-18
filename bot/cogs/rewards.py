@@ -26,6 +26,12 @@ from bot.services.rewards_db import (
     ITEM_DEFINITIONS,
     SHOP_CATALOG,
     PHT,
+    BlackjackGame,
+    HighLowGame,
+    calculate_blackjack_score,
+    WorkResult,
+    ScavengeResult,
+    DuelResult,
 )
 
 logger = logging.getLogger(__name__)
@@ -545,6 +551,251 @@ class PetSellConfirmView(discord.ui.View):
             return
         self.stop()
         await interaction.response.edit_message(content="❌ Pet sale cancelled. Your companion remains safe with you!", embed=None, view=None)
+
+
+def build_blackjack_embed(game: BlackjackGame, player_name: str) -> discord.Embed:
+    """Build rich embed for Blackjack 21 game state."""
+    p_score = calculate_blackjack_score(game.player_hand)
+    p_cards_str = "  ".join(f"`{c}`" for c in game.player_hand)
+
+    if game.status == "IN_PROGRESS":
+        d_cards_str = f"`{game.dealer_hand[0]}`  `🎴 ?`"
+        d_score_str = f"{game.dealer_hand[0].value} + ?"
+        color = discord.Color.blue()
+        title = "🃏 Blackjack 21 — Hand in Progress"
+    else:
+        d_score = calculate_blackjack_score(game.dealer_hand)
+        d_cards_str = "  ".join(f"`{c}`" for c in game.dealer_hand)
+        d_score_str = str(d_score)
+
+        if game.status in ("PLAYER_WIN", "BLACKJACK"):
+            color = discord.Color.green()
+            title = "🎉 Blackjack 21 — WIN!"
+        elif game.status == "PUSH":
+            color = discord.Color.gold()
+            title = "🤝 Blackjack 21 — Push / Tie"
+        else:
+            color = discord.Color.red()
+            title = "❌ Blackjack 21 — House Wins"
+
+    embed = discord.Embed(title=title, description=f"💰 **Wager:** `{game.wager:,} Uno Points`\n\n{game.message}", color=color)
+    embed.add_field(name=f"👤 {player_name}'s Hand ({p_score})", value=p_cards_str, inline=False)
+    embed.add_field(name=f"🎩 Dealer's Hand ({d_score_str})", value=d_cards_str, inline=False)
+
+    if game.status != "IN_PROGRESS":
+        embed.add_field(name="Wallet Balance", value=f"**{game.new_balance:,} Uno Points**", inline=False)
+
+    embed.set_footer(text="Blackjack pays 3:2 • Dealer hits on soft 17")
+    return embed
+
+
+class BlackjackView(discord.ui.View):
+    """Interactive Discord UI view for Blackjack 21."""
+
+    def __init__(self, rewards_service: RewardsDBService, user_id: int, player_name: str):
+        super().__init__(timeout=120.0)
+        self.rewards_service = rewards_service
+        self.user_id = user_id
+        self.player_name = player_name
+
+    @discord.ui.button(label="Hit", emoji="🃏", style=discord.ButtonStyle.primary, custom_id="bj_hit")
+    async def hit(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This is not your blackjack table!", ephemeral=True)
+            return
+
+        try:
+            game = self.rewards_service.hit_blackjack(self.user_id)
+            if game.status != "IN_PROGRESS":
+                for child in self.children:
+                    child.disabled = True  # type: ignore
+                self.stop()
+            embed = build_blackjack_embed(game, self.player_name)
+            await interaction.response.edit_message(embed=embed, view=self if game.status == "IN_PROGRESS" else None)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @discord.ui.button(label="Stand", emoji="🛑", style=discord.ButtonStyle.secondary, custom_id="bj_stand")
+    async def stand(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This is not your blackjack table!", ephemeral=True)
+            return
+
+        try:
+            game = self.rewards_service.stand_blackjack(self.user_id)
+            for child in self.children:
+                child.disabled = True  # type: ignore
+            self.stop()
+            embed = build_blackjack_embed(game, self.player_name)
+            await interaction.response.edit_message(embed=embed, view=None)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @discord.ui.button(label="Double Down", emoji="✌️", style=discord.ButtonStyle.success, custom_id="bj_double")
+    async def double_down(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This is not your blackjack table!", ephemeral=True)
+            return
+
+        try:
+            game = self.rewards_service.double_down_blackjack(self.user_id)
+            for child in self.children:
+                child.disabled = True  # type: ignore
+            self.stop()
+            embed = build_blackjack_embed(game, self.player_name)
+            await interaction.response.edit_message(embed=embed, view=None)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+
+def build_highlow_embed(game: HighLowGame, player_name: str) -> discord.Embed:
+    """Build rich embed for High-Low streak game."""
+    pot_payout = int(game.wager * game.current_multiplier)
+    if game.status in ("IN_PROGRESS", "WON_ROUND"):
+        color = discord.Color.purple()
+        title = f"📈 High-Low Streak — Round {game.streak + 1}"
+    elif game.status == "CASHED_OUT":
+        color = discord.Color.green()
+        title = "💰 High-Low — Cashed Out!"
+    else:
+        color = discord.Color.red()
+        title = "💥 High-Low — Busted!"
+
+    embed = discord.Embed(
+        title=title,
+        description=(
+            f"👤 **Player:** {player_name}\n"
+            f"💰 **Initial Wager:** `{game.wager:,} pts`\n\n"
+            f"{game.message}"
+        ),
+        color=color,
+    )
+    embed.add_field(name="Current Card", value=f"# `{game.current_card}`", inline=True)
+    embed.add_field(name="Streak & Multiplier", value=f"🔥 **{game.streak} Streak**\n⚡ **{game.current_multiplier:.1f}x**", inline=True)
+    embed.add_field(name="Current Pot Value", value=f"💎 **{pot_payout:,} pts**", inline=True)
+
+    if game.status != "IN_PROGRESS" and game.status != "WON_ROUND":
+        embed.add_field(name="New Wallet Balance", value=f"**{game.new_balance:,} Uno Points**", inline=False)
+
+    embed.set_footer(text="Guess Higher or Lower • Cash out anytime after 1 win • Max 6 streak = 30x!")
+    return embed
+
+
+class HighLowView(discord.ui.View):
+    """Interactive Discord UI view for High-Low Card Streak."""
+
+    def __init__(self, rewards_service: RewardsDBService, user_id: int, player_name: str):
+        super().__init__(timeout=120.0)
+        self.rewards_service = rewards_service
+        self.user_id = user_id
+        self.player_name = player_name
+
+    @discord.ui.button(label="Higher", emoji="🔼", style=discord.ButtonStyle.primary, custom_id="hl_higher")
+    async def higher(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This is not your High-Low game!", ephemeral=True)
+            return
+
+        try:
+            game = self.rewards_service.guess_highlow(self.user_id, guess="higher")
+            if game.status not in ("IN_PROGRESS", "WON_ROUND"):
+                self.stop()
+            embed = build_highlow_embed(game, self.player_name)
+            await interaction.response.edit_message(embed=embed, view=self if game.status in ("IN_PROGRESS", "WON_ROUND") else None)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @discord.ui.button(label="Lower", emoji="🔽", style=discord.ButtonStyle.primary, custom_id="hl_lower")
+    async def lower(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This is not your High-Low game!", ephemeral=True)
+            return
+
+        try:
+            game = self.rewards_service.guess_highlow(self.user_id, guess="lower")
+            if game.status not in ("IN_PROGRESS", "WON_ROUND"):
+                self.stop()
+            embed = build_highlow_embed(game, self.player_name)
+            await interaction.response.edit_message(embed=embed, view=self if game.status in ("IN_PROGRESS", "WON_ROUND") else None)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @discord.ui.button(label="Cash Out", emoji="💰", style=discord.ButtonStyle.success, custom_id="hl_cashout")
+    async def cashout(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This is not your High-Low game!", ephemeral=True)
+            return
+
+        try:
+            game = self.rewards_service.cashout_highlow(self.user_id)
+            self.stop()
+            embed = build_highlow_embed(game, self.player_name)
+            await interaction.response.edit_message(embed=embed, view=None)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+
+class DuelAcceptView(discord.ui.View):
+    """Interactive confirmation view for 1v1 PvP Wager Duels."""
+
+    def __init__(self, rewards_service: RewardsDBService, challenger: discord.Member | discord.User, target: discord.Member | discord.User, wager: int):
+        super().__init__(timeout=60.0)
+        self.rewards_service = rewards_service
+        self.challenger = challenger
+        self.target = target
+        self.wager = wager
+
+    @discord.ui.button(label="Accept Duel", emoji="⚔️", style=discord.ButtonStyle.danger, custom_id="duel_accept")
+    async def accept(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if interaction.user.id != self.target.id:
+            await interaction.response.send_message(f"❌ Only {self.target.mention} can accept this duel!", ephemeral=True)
+            return
+
+        try:
+            res = self.rewards_service.resolve_duel(self.challenger.id, self.target.id, self.wager)
+            self.stop()
+
+            if res.is_tie:
+                title = "🤝 1v1 Duel — Draw / Tie!"
+                desc = (
+                    f"**{self.challenger.display_name}** rolled `{res.challenger_roll}`\n"
+                    f"**{self.target.display_name}** rolled `{res.target_roll}`\n\n"
+                    f"It's a dead heat! Both wagers of `{self.wager:,} pts` were refunded."
+                )
+                color = discord.Color.gold()
+            else:
+                winner = self.challenger if res.winner_id == self.challenger.id else self.target
+                loser = self.target if res.winner_id == self.challenger.id else self.challenger
+                w_roll = res.challenger_roll if res.winner_id == self.challenger.id else res.target_roll
+                l_roll = res.target_roll if res.winner_id == self.challenger.id else res.challenger_roll
+
+                title = f"👑 {winner.display_name} WON THE DUEL!"
+                desc = (
+                    f"⚔️ **{winner.display_name}** rolled 🎲 **`{w_roll}`**\n"
+                    f"💀 **{loser.display_name}** rolled 🎲 `{l_roll}`\n\n"
+                    f"🏆 **{winner.mention} took the entire pot of `{res.pot_won:,} Uno Points`!**"
+                )
+                color = discord.Color.green()
+
+            embed = discord.Embed(title=title, description=desc, color=color)
+            embed.set_footer(text="1v1 High-Stakes Duel • Roll range 1-100")
+            await interaction.response.edit_message(embed=embed, view=None)
+
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @discord.ui.button(label="Decline", emoji="❌", style=discord.ButtonStyle.secondary, custom_id="duel_decline")
+    async def decline(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        if interaction.user.id not in (self.challenger.id, self.target.id):
+            await interaction.response.send_message("❌ This is not your duel challenge!", ephemeral=True)
+            return
+
+        self.stop()
+        await interaction.response.edit_message(
+            content=f"🏳️ Duel between {self.challenger.mention} and {self.target.mention} was cancelled.",
+            embed=None,
+            view=None,
+        )
 
 
 def build_pet_embed(pet: Optional[PetRecord], owner_name: str, all_pets: list[PetRecord]) -> tuple[discord.Embed, Optional[discord.File]]:
@@ -1367,66 +1618,331 @@ class RewardsCog(commands.Cog):
         )
         await interaction.response.send_message(embed=embed, view=view)
 
-    @app_commands.command(name="bet", description="Gamble 50 Uno Points for double points, skill drops, or bust! (Max 3/day)")
-    async def bet(self, interaction: discord.Interaction) -> None:
-        """Play 50 pt roulette minigame."""
+    @app_commands.command(name="bet", description="Gamble Uno Points on roulette with dynamic multipliers! (Unlimited bets)")
+    @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, default 50).")
+    async def bet(self, interaction: discord.Interaction, amount: int = 50) -> None:
+        """Play roulette with custom wager."""
         user_id = interaction.user.id
         try:
-            res = self.rewards_service.play_bet(user_id)
+            res = self.rewards_service.play_bet(user_id, wager=amount)
 
             if res.outcome in (BetOutcome.JACKPOT, BetOutcome.DOUBLE):
-                title = "🎰 JACKPOT! Mega Win! (+200 pts)"
-                desc = (
-                    f"🎉 **JACKPOT!** You kept your **50 pts** bet and won **+200 Uno Points**!\n"
-                    f"💰 **Total Return:** `250 pts` (Net Gain: **+200 pts**)"
-                )
+                if res.outcome == BetOutcome.JACKPOT:
+                    title = f"🎰 MEGA JACKPOT! (5x Return: +{res.points_delta:,} pts)"
+                    desc = (
+                        f"🎉 **JACKPOT!** You wagered **{res.wager:,} pts** and won a **5x payout**!\n"
+                        f"💰 **Total Return:** `{res.total_payout:,} pts` (Net Profit: **+{res.points_delta:,} pts**)"
+                    )
+                else:
+                    title = f"⚡ DOUBLE WIN! (2x Return: +{res.points_delta:,} pts)"
+                    desc = (
+                        f"🎉 **DOUBLE!** You wagered **{res.wager:,} pts** and won a **2x payout**!\n"
+                        f"💰 **Total Return:** `{res.total_payout:,} pts` (Net Profit: **+{res.points_delta:,} pts**)"
+                    )
                 color = discord.Color.gold()
             elif res.outcome == BetOutcome.SKILL_DROP:
                 title = "🃏 Skill Card Dropped!"
-                desc = f"You won a rare consumable item: **{res.reward_item_name}**!\n*Check `/inventory` or activate with `/use`!*"
+                desc = (
+                    f"You wagered **{res.wager:,} pts** and won a rare consumable item: **{res.reward_item_name}**!\n"
+                    f"🪙 Your **{res.wager:,} pts** wager was reimbursed.\n*Check `/inventory` or activate with `/use`!*"
+                )
                 color = discord.Color.purple()
             elif res.outcome == BetOutcome.REFUND:
                 title = "🪙 Break-Even / Refund"
-                desc = "You rolled a safe break-even! Your **50 Uno Points** were refunded."
+                desc = f"You rolled a safe break-even! Your **{res.wager:,} Uno Points** were refunded."
                 color = discord.Color.blue()
             else:
                 title = "❌ Busted! (House Wins)"
-                desc = "The house took your bet. You lost **50 Uno Points**."
+                desc = f"The house took your bet. You lost **{res.wager:,} Uno Points**."
                 color = discord.Color.red()
 
             embed = discord.Embed(title=title, description=desc, color=color)
-            embed.add_field(name="Current Balance", value=f"**{res.new_balance:,} pts**", inline=True)
-            embed.add_field(name="Bets Remaining Today", value=f"**{res.bets_remaining} / 3**", inline=True)
-            embed.set_footer(text="Gamble responsibly • Max 3 bets per day • Resets midnight PHT")
+            embed.add_field(name="Current Balance", value=f"**{res.new_balance:,} Uno Points**", inline=True)
+            embed.set_footer(text="Gamble responsibly • Unlimited bets • 🐰 Bunny pet increases win rates!")
 
             await interaction.response.send_message(embed=embed)
 
-            # Log to admin channel
             await self._log_activity(
                 title=f"🎰 Bet: {res.outcome.value}",
-                description=f"**{interaction.user.display_name}** placed a 50 pt bet.",
+                description=f"**{interaction.user.display_name}** placed a {res.wager:,} pt bet.",
                 color=color,
                 fields=[
-                    ("Outcome", res.outcome.value, True),
+                    ("Wager", f"{res.wager:,} pts", True),
                     (
                         "Reward / Change",
-                        f"{'+' if res.points_delta > 0 else ''}{res.points_delta} pts"
+                        f"{'+' if res.points_delta > 0 else ''}{res.points_delta:,} pts"
                         + (f" ({res.reward_item_name})" if res.reward_item_name else ""),
                         True,
                     ),
                     ("New Balance", f"{res.new_balance:,} pts", True),
                 ],
             )
-        except InsufficientPointsError:
-            await interaction.response.send_message(
-                "❌ You need at least **50 Uno Points** to place a bet! Earn more with `/daily`.",
-                ephemeral=True,
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @app_commands.command(name="slots", description="Spin the 3-reel slot machine for up to 50x Mega Jackpot!")
+    @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, default 50).")
+    async def slots(self, interaction: discord.Interaction, amount: int = 50) -> None:
+        """Spin 3-reel slot machine."""
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.play_slots(user_id, wager=amount)
+
+            reels_display = "  ".join(f"` {r} `" for r in res.reels)
+            if res.is_jackpot:
+                title = "👑 50x UNO WILD MEGA JACKPOT!"
+                color = discord.Color.gold()
+            elif res.multiplier >= 3.0:
+                title = f"🎉 TRIPLE MATCH! ({res.multiplier:.1f}x Payout)"
+                color = discord.Color.green()
+            elif res.multiplier > 0:
+                title = f"✨ DOUBLE MATCH! ({res.multiplier:.1f}x Consolation)"
+                color = discord.Color.blue()
+            else:
+                title = "❌ Busted! (No Match)"
+                color = discord.Color.red()
+
+            embed = discord.Embed(
+                title=title,
+                description=(
+                    f"🎰 **Reels:**\n# {reels_display}\n\n"
+                    f"{res.description}\n\n"
+                    f"💰 **Wager:** `{res.wager:,} pts`\n"
+                    f"🏆 **Payout:** `{res.points_won:,} pts` ({'+' if res.points_delta > 0 else ''}{res.points_delta:,} pts net)\n"
+                    f"💳 **Wallet Balance:** `{res.new_balance:,} Uno Points`"
+                ),
+                color=color,
             )
-        except MaxBetsReachedError:
-            await interaction.response.send_message(
-                "⏳ You've reached your daily limit of **3 bets** today! Come back tomorrow after midnight PHT.",
-                ephemeral=True,
+            embed.set_footer(text="🍒 3x | 🍋 4x | 🍇 6x | 💎 12x | 👑 25x | 🃏 50x Wild • 🐰 Bunny pet increases luck!")
+            await interaction.response.send_message(embed=embed)
+
+            await self._log_activity(
+                title="🎰 Slots Spin",
+                description=f"**{interaction.user.display_name}** spun the slot machine: [{' '.join(res.reels)}]",
+                color=color,
+                fields=[
+                    ("Wager", f"{res.wager:,} pts", True),
+                    ("Payout", f"{res.points_won:,} pts", True),
+                    ("New Balance", f"{res.new_balance:,} pts", True),
+                ],
             )
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @app_commands.command(name="coinflip", description="Flip a coin for instant 50/50 double-or-nothing (2.0x return)!")
+    @app_commands.describe(choice="Choose Heads or Tails.", amount="The amount of Uno Points to wager (minimum 10, default 50).")
+    @app_commands.choices(
+        choice=[
+            app_commands.Choice(name="🪙 Heads", value="heads"),
+            app_commands.Choice(name="🪙 Tails", value="tails"),
+        ]
+    )
+    async def coinflip(self, interaction: discord.Interaction, choice: app_commands.Choice[str], amount: int = 50) -> None:
+        """Play 50/50 double-or-nothing coinflip."""
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.play_coinflip(user_id, choice=choice.value, wager=amount)
+
+            if res.won:
+                title = "🎉 COINFLIP WON! Double Points!"
+                desc = (
+                    f"🪙 The coin landed on **{res.result.upper()}**!\n\n"
+                    f"Your guess was **CORRECT**! You doubled your bet and won **+{res.wager:,} Uno Points**!"
+                )
+                color = discord.Color.green()
+            else:
+                title = "❌ COINFLIP LOST!"
+                desc = (
+                    f"🪙 The coin landed on **{res.result.upper()}**!\n\n"
+                    f"You guessed **{res.choice.upper()}**. You lost **{res.wager:,} Uno Points**."
+                )
+                color = discord.Color.red()
+
+            embed = discord.Embed(title=title, description=desc, color=color)
+            embed.add_field(name="Wager", value=f"`{res.wager:,} pts`", inline=True)
+            embed.add_field(name="Current Balance", value=f"**{res.new_balance:,} pts**", inline=True)
+            embed.set_footer(text="50/50 Double or Nothing • 🐰 Bunny pet gives 55% edge!")
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @app_commands.command(name="blackjack", description="Play classic Blackjack 21 vs the Dealer with Hit, Stand, and Double Down!")
+    @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, default 50).")
+    async def blackjack(self, interaction: discord.Interaction, amount: int = 50) -> None:
+        """Start a Blackjack 21 table."""
+        user_id = interaction.user.id
+        try:
+            game = self.rewards_service.start_blackjack(user_id, wager=amount)
+            embed = build_blackjack_embed(game, interaction.user.display_name)
+            if game.status == "IN_PROGRESS":
+                view = BlackjackView(self.rewards_service, user_id, interaction.user.display_name)
+                await interaction.response.send_message(embed=embed, view=view)
+            else:
+                await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @app_commands.command(name="highlow", description="Guess if the next card is Higher or Lower. Cash out streaks for up to 30x!")
+    @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, default 50).")
+    async def highlow(self, interaction: discord.Interaction, amount: int = 50) -> None:
+        """Start a High-Low streak game."""
+        user_id = interaction.user.id
+        try:
+            game = self.rewards_service.start_highlow(user_id, wager=amount)
+            embed = build_highlow_embed(game, interaction.user.display_name)
+            view = HighLowView(self.rewards_service, user_id, interaction.user.display_name)
+            await interaction.response.send_message(embed=embed, view=view)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @app_commands.command(name="work", description="Work an odd job on campus to earn 40–120 Uno Points and skill cards! (1h cooldown)")
+    async def work(self, interaction: discord.Interaction) -> None:
+        """Work a campus odd job."""
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.execute_work(user_id)
+            embed = discord.Embed(
+                title=f"💼 Campus Shift Complete — {res.job_title}",
+                description=(
+                    f"🏢 **Client:** {res.company_or_prof}\n\n"
+                    f"📝 *{res.description}*\n\n"
+                    f"💰 **Earned:** `+{res.points_earned:,} Uno Points`\n"
+                    f"💳 **Wallet Balance:** `{res.new_balance:,} Uno Points`"
+                ),
+                color=discord.Color.green(),
+            )
+            if res.bonus_item_name:
+                embed.add_field(
+                    name="🎁 Rare Bonus Drop!",
+                    value=f"Your boss gave you a free **{res.bonus_item_name}**!\n*Check `/inventory`!*",
+                    inline=False,
+                )
+            embed.set_footer(text="Work cooldown: 1 hour • Resets automatically")
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @app_commands.command(name="beg", description="Scavenge around campus for pocket change (10–40 pts). (30m cooldown)")
+    async def beg(self, interaction: discord.Interaction) -> None:
+        """Scavenge around campus."""
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.execute_scavenge(user_id)
+            embed = discord.Embed(
+                title=f"🎒 Campus Scavenge — {res.location}",
+                description=(
+                    f"*{res.description}*\n\n"
+                    f"💰 **Found:** `+{res.points_earned:,} Uno Points`\n"
+                    f"💳 **Wallet Balance:** `{res.new_balance:,} Uno Points`"
+                ),
+                color=discord.Color.teal(),
+            )
+            embed.set_footer(text="Scavenge cooldown: 30 minutes • Look around Intramuros!")
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @app_commands.command(name="duel", description="Challenge a classmate to a 1v1 PvP dice roll wager! Winner takes all.")
+    @app_commands.describe(target="The classmate you want to challenge.", amount="The amount of Uno Points to wager.")
+    async def duel(self, interaction: discord.Interaction, target: discord.Member, amount: int) -> None:
+        """Challenge a classmate to a 1v1 wager duel."""
+        if target.bot:
+            await interaction.response.send_message("❌ You cannot duel a bot!", ephemeral=True)
+            return
+        if target.id == interaction.user.id:
+            await interaction.response.send_message("❌ You cannot duel yourself!", ephemeral=True)
+            return
+        if amount < 10:
+            await interaction.response.send_message("❌ Minimum duel wager is 10 Uno Points!", ephemeral=True)
+            return
+
+        c_bal = self.rewards_service.get_balance(interaction.user.id)
+        t_bal = self.rewards_service.get_balance(target.id)
+
+        if c_bal < amount:
+            await interaction.response.send_message(f"❌ You don't have enough points! (Wallet: `{c_bal:,} pts`)", ephemeral=True)
+            return
+        if t_bal < amount:
+            await interaction.response.send_message(f"❌ {target.display_name} doesn't have enough points for this duel! (Wallet: `{t_bal:,} pts`)", ephemeral=True)
+            return
+
+        embed = discord.Embed(
+            title="⚔️ 1v1 PvP DUEL CHALLENGE!",
+            description=(
+                f"**{interaction.user.mention}** has challenged **{target.mention}** to a high-stakes dice duel!\n\n"
+                f"💰 **Wager per Player:** `{amount:,} Uno Points`\n"
+                f"🏆 **Total Winner's Pot:** `{amount * 2:,} Uno Points`\n\n"
+                f"{target.mention}, click **[ Accept Duel ]** below to roll the dice!"
+            ),
+            color=discord.Color.red(),
+        )
+        embed.set_footer(text="Roll range 1-100 • Highest roll takes the whole pot • 60s timeout")
+        view = DuelAcceptView(self.rewards_service, interaction.user, target, amount)
+        await interaction.response.send_message(content=f"{target.mention}", embed=embed, view=view)
+
+    @app_commands.command(name="bank", description="Manage your campus Piggy Bank to protect points from thieves and audits!")
+    @app_commands.describe(action="Deposit, withdraw, or view bank balance.", amount="Amount of points to deposit or withdraw.")
+    @app_commands.choices(
+        action=[
+            app_commands.Choice(name="🏦 View Bank Balance", value="view"),
+            app_commands.Choice(name="📥 Deposit Points", value="deposit"),
+            app_commands.Choice(name="📤 Withdraw Points", value="withdraw"),
+        ]
+    )
+    async def bank(self, interaction: discord.Interaction, action: app_commands.Choice[str], amount: Optional[int] = None) -> None:
+        """Deposit or withdraw points from protected bank account."""
+        user_id = interaction.user.id
+        try:
+            if action.value == "deposit":
+                if amount is None or amount <= 0:
+                    await interaction.response.send_message("❌ Please specify a positive amount to deposit.", ephemeral=True)
+                    return
+                res = self.rewards_service.bank_deposit(user_id, amount)
+                embed = discord.Embed(
+                    title="📥 Piggy Bank Deposit Successful",
+                    description=(
+                        f"Safely stored **{res['amount_deposited']:,} Uno Points** in your bank vault!\n\n"
+                        f"💳 **Wallet Balance:** `{res['new_wallet']:,} pts`\n"
+                        f"🏦 **Bank Vault:** `{res['new_bank']:,} pts`"
+                    ),
+                    color=discord.Color.green(),
+                )
+                embed.set_footer(text="Bank points are 100% immune to pickpockets and tax audits!")
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+
+            elif action.value == "withdraw":
+                if amount is None or amount <= 0:
+                    await interaction.response.send_message("❌ Please specify a positive amount to withdraw.", ephemeral=True)
+                    return
+                res = self.rewards_service.bank_withdraw(user_id, amount)
+                embed = discord.Embed(
+                    title="📤 Piggy Bank Withdrawal Successful",
+                    description=(
+                        f"Withdrew **{res['amount_withdrawn']:,} Uno Points** from your bank vault into your wallet!\n\n"
+                        f"💳 **Wallet Balance:** `{res['new_wallet']:,} pts`\n"
+                        f"🏦 **Bank Vault:** `{res['new_bank']:,} pts`"
+                    ),
+                    color=discord.Color.blue(),
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+
+            else:  # view
+                prof = self.rewards_service.get_profile(user_id)
+                embed = discord.Embed(
+                    title=f"🏦 {interaction.user.display_name}'s Campus Piggy Bank",
+                    description=(
+                        f"🔒 **Vault Status:** Protected & Insured\n\n"
+                        f"🏦 **Bank Vault Balance:** `{prof.bank_points:,} Uno Points`\n"
+                        f"💳 **Active Wallet:** `{prof.points:,} Uno Points`\n"
+                        f"💎 **Total Net Worth:** `{(prof.points + prof.bank_points):,} Uno Points`"
+                    ),
+                    color=discord.Color.gold(),
+                )
+                embed.set_footer(text="Use /bank deposit <amount> or /bank withdraw <amount>")
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
     @app_commands.command(name="steal", description="Consume a Pickpocket Card to attempt stealing 40%-60% points from a classmate!")
     @app_commands.describe(target="The classmate you want to pickpocket.")
