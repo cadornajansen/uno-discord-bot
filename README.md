@@ -1,4 +1,4 @@
-﻿<div align="center">
+<div align="center">
 
 ![Uno AI Banner](uno-banner.png)
 
@@ -55,6 +55,52 @@ Uno AI supports both **Slash Commands (`/`)** and **Prefix Commands (`!`)**. Com
 |---|---|---|
 | `/weather` | `!weather` | Real-time weather, 6-hour forecast, official PAGASA NCR warnings, and class disruption risk (*LOW*, *MODERATE*, *HIGH*). |
 
+### 💰 Economy, Attendance & Campus Bank
+| Slash Command | Prefix Alias | What It Does |
+|---|---|---|
+| `/daily` | `!daily` | Claim daily attendance points (20 base + up to +20 streak bonus). Resets midnight PHT. |
+| `/profile [user]` | `!profile` | View wallet balance, bank vault, net worth, daily streak, active companion pet, and inventory. |
+| `/leaderboard` | `!leaderboard` | Browse top students on the global Uno Points leaderboard. |
+| `/starter` | `!starter` | Claim free starter grant (+50 pts & adopt your first companion pet). |
+| `/bank [action] [amount]` | `!bank` | Deposit or withdraw points from your secure bank vault (*10% fee on deposits/withdrawals, immune to pickpocketing*). |
+| `/shop` | `!shop` | Open the campus store to buy consumable cards, pet snacks, and real physical prizes. |
+| `/inventory` | `!inventory` | Browse owned skill cards, shields, and items. |
+| `/use item:<name>` | `!use <item>` | Activate an inventory item (*pickpocket, 1-week shield, uno reverse, gacha box, coffee bribe*). |
+| `/give target:<user> amount:<pts>` | `!give <user> <pts>` | Transfer points to a classmate (*10% transfer tax*). |
+| `/steal target:<user>` | `!steal <user>` | Pickpocket 15%–30% (max 120 pts) from a classmate (*requires Pickpocket card, beware of Guard Dogs & Uno Reverses!*). |
+
+### 💼 Work & Campus Activities
+| Slash Command | Prefix Alias | What It Does |
+|---|---|---|
+| `/trivia` | `!trivia` | Test your CS, Math, and PLM knowledge (+25 pts per correct answer, 3 daily attempts). |
+| `/work` | `!work` | Work a 1-hour campus shift (earns 18–45 pts + 15% chance of consumable skill card drop). |
+| `/scavenge` or `/beg` | `!scavenge`, `!beg` | Scavenge around Intramuros/CET for loose points (5–18 pts, 30-min cooldown). |
+
+### 🎰 Casino & Gambling Games (Max 100 pt Bet Caps)
+| Slash Command | Prefix Alias | What It Does |
+|---|---|---|
+| `/bet amount:<pts>` | `!bet <pts>` | Spin the roulette wheel (*5% Jackpot for 4x return, 12% Double, 15% Skill Drop, 55% Bust; 10 bets/day limit*). |
+| `/coinflip choice:<h/t> wager:<pts>` | `!coinflip <h/t> <pts>` | Double-or-nothing coin toss (*46% win chance, 1.75x payout*). |
+| `/slots wager:<pts>` | `!slots <pts>` | Spin the 3-reel slot machine (consolation matching from 0.5x up to 35x Uno Wild jackpot). |
+| `/blackjack wager:<pts>` | `!blackjack <pts>` | Play 21 against the dealer (*3:2 natural blackjack payout, supports hit, stand, and double down*). |
+| `/highlow wager:<pts>` | `!highlow <pts>` | Guess higher or lower cards on a streak ladder from 1.3x up to 16.0x multiplier cashout. |
+
+### 🐾 Companion Pets
+| Slash Command | Prefix Alias | What It Does |
+|---|---|---|
+| `/pets store` | `!pets store` | Browse adoptable pets (*Tuxedo Cat, Golden Dog, Oogway Turtle, Scholar Owl, Pink Axolotl, Desert Fox, Lucky Bunny*). |
+| `/pets list` | `!pets list` | View your adopted companion collection and active buddy. |
+| `/pets switch pet_id:<id>` | `!pets switch <id>` | Switch your active companion pet to gain their unique passive gameplay perk. |
+| `/pets interact action:<feed/pet>` | `!pets interact` | Feed treats or pet your buddy to gain XP, level up, and increase happiness. |
+| `/pets rename nickname:<name>` | `!pets rename <name>` | Give your active companion pet a custom nickname. |
+
+### ⚔️ PvP Duels & Wanted Bounty Board
+| Slash Command | Prefix Alias | What It Does |
+|---|---|---|
+| `/duel target:<user> wager:<pts>` | `!duel <user> <pts>` | Challenge a classmate to a 1v1 PvP dice wager roll (*5% server rake to eliminate collusion*). |
+| `/bounty place target:<user> amount:<pts>` | `!bounty place` | Place a wanted bounty on a classmate (awarded to whoever defeats them in a duel!). |
+| `/bounty board` | `!bounty board` | View the top 10 wanted classroom bounty targets. |
+
 ### ⚙️ General & Info
 | Slash Command | Prefix Alias | What It Does |
 |---|---|---|
@@ -63,6 +109,36 @@ Uno AI supports both **Slash Commands (`/`)** and **Prefix Commands (`!`)**. Com
 | `/ping` | `!ping` | Check bot connection latency. |
 | `/userinfo` | `!userinfo` | View public account details. |
 | `/serverinfo` | `!serverinfo` | View server metadata. |
+
+---
+
+## 💎 Economy, Banking & Gambling Rules
+
+Uno AI features a balanced classroom economy designed so that accumulating points and redeeming real-world physical prizes (coffee treats, GCash gift cards, free printing services, Discord Nitro) requires **weeks of consistent participation**.
+
+### 🏦 Banking & Wealth Taxes
+- **10% Banking Fees**: A **10% transaction fee** applies to all `/bank deposit` and `/bank withdraw` operations. Deposited bank points are 100% immune to `/steal` pickpockets.
+- **24-Hour Wealth Taxes**: Every 24 hours, the campus treasury collects wealth taxes on total net worth (*wallet + bank vault*):
+  - **8% Tax**: Standard accounts under 1,000 Uno Points.
+  - **10% Tax**: Wealthy accounts holding 1,000+ Uno Points.
+  - Accounts with under 10 points are fully tax-exempt.
+
+### 🎲 Gambling Safeguards & House Edge
+- **Strict 100 pt Wager Caps**: Maximum bet is capped at **100 Uno Points** across `/bet`, `/coinflip`, `/slots`, `/blackjack`, and `/highlow` (max 200 pts on `/duel`). High rollers cannot instantly double large bankrolls.
+- **`/bet` Daily Limit & Anti-Streak Trap**:
+  - Limited to **10 bets per calendar day** (PHT).
+  - **5-Win Rigged House Trap**: Hitting 5 consecutive wins forces the next **7 bets into guaranteed BUST losses**.
+  - **5-Loss Pity**: Losing 5 consecutive bets outside the trap guarantees a win on the next spin.
+- **Coinflip Payout**: Coinflip awards a **1.75x total payout** (+0.75x net profit) with a **46% win rate** (50% with Bunny) to eliminate infinite Martingale doubling exploits.
+
+### 🐾 Companion Pet Perks
+- 🐱 **Tuxedo Cat**: Doubles `/daily` attendance reward points (up to 80 pts/day).
+- 🐶 **Golden Dog**: Guards against pickpocketing (75% catch rate + inflicts 50 pt bite fine on thief).
+- 🐢 **Oogway Turtle**: Freezes daily attendance streak on missed days & extends shields by +2 days.
+- 🦉 **Scholar Owl**: Grants +40 pts per correct trivia quiz and unlocks a 4th daily quiz attempt.
+- 🦎 **Pink Axolotl**: Grants 5% cashback on all shop purchases.
+- 🦊 **Desert Fox**: Boosts pickpocket success rate to 75% and siphons back 20% wager on duel loss.
+- 🐰 **Lucky Bunny**: Boosts gambling odds (+10% on `/bet`, +4% on `/coinflip`, extra weights on `/slots`).
 
 ---
 
