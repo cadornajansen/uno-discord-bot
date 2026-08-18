@@ -1328,93 +1328,65 @@ def build_pet_store_embed(
     selected_pet_id: str,
     user_name: str,
 ) -> tuple[discord.Embed, Optional[discord.File]]:
-    """Build a rich, Dank-Memer inspired interactive Pet Shelter & Companion Embed."""
+    """Build a minimal, clean, professional Pet Shelter & Companion Embed."""
     user = rewards_service.get_or_create_user(user_id)
     user_pets = rewards_service.get_user_pets(user_id)
     owned_dict = {p.pet_id: p for p in user_pets}
     pet_info = PET_CATALOG.get(selected_pet_id, PET_CATALOG["tuxedo_cat"])
 
+    # Clean Title without repetitive species names
     if selected_pet_id in owned_dict:
         owned_pet = owned_dict[selected_pet_id]
-        embed_title = f"🐾 {owned_pet.nickname} — {pet_info['name']}"
+        if owned_pet.nickname and owned_pet.nickname != pet_info["name"]:
+            embed_title = f"{pet_info['name']} ({owned_pet.nickname})"
+        else:
+            embed_title = f"{pet_info['name']}"
     else:
-        embed_title = f"🐾 Uno AI Pet Shelter — {pet_info['name']}"
+        embed_title = f"{pet_info['name']}"
 
+    perk_desc = pet_info.get("perk_desc", "")
     embed = discord.Embed(
         title=embed_title,
-        description=f"*{pet_info.get('title', 'Companion')}*\n\n{pet_info.get('perk_desc', '')}",
-        color=discord.Color.teal(),
+        description=f"*{pet_info.get('title', 'Companion')}*\n{perk_desc}",
+        color=discord.Color.from_rgb(47, 49, 54),
     )
 
-    # Status / Price field
+    # Status / Price field (compact)
     if selected_pet_id in owned_dict:
         owned_pet = owned_dict[selected_pet_id]
         if owned_pet.is_active:
-            status_val = f"⭐ **Equipped as Active Companion**\n⭐ Level **{owned_pet.level}** (💖 {owned_pet.happiness}% Happiness • {owned_pet.xp}/{owned_pet.level * 50} XP)"
+            status_text = f"Equipped (Level {owned_pet.level} • {owned_pet.happiness}% Mood)"
         else:
-            status_val = f"🏠 **Owned in Shelter Reserve**\n⭐ Level **{owned_pet.level}** (Click **[ Equip Active ]** below to activate)"
-        embed.add_field(name="📌 Companion Status", value=status_val, inline=False)
+            status_text = f"In Shelter (Level {owned_pet.level})"
+        embed.add_field(name="Status", value=status_text, inline=True)
     else:
-        cost = pet_info["cost"]
         if not user.has_claimed_starter and selected_pet_id in ("tuxedo_cat", "golden_dog", "brown_bunny"):
-            price_val = f"🎁 **100% FREE Starter Claim Eligible!** (`0 pts`)\n💳 Wallet: `{user.points:,} Uno Points`"
+            price_text = "Free Starter (0 pts)"
         else:
-            price_val = f"🏷️ **`{cost:,} Uno Points`** (50% Limited Discount)\n💳 Wallet: `{user.points:,} Uno Points`"
-        embed.add_field(name="💰 Adoption Price", value=price_val, inline=False)
+            price_text = f"{pet_info['cost']:,} pts (Wallet: {user.points:,})"
+        embed.add_field(name="Price", value=price_text, inline=True)
 
-    # Economic Passive Perk
-    embed.add_field(
-        name="🌟 Economic Passive Buff",
-        value=f"**{pet_info.get('perk_title', 'Passive Buff')}**",
-        inline=True,
-    )
+    # Combat Perk (compact)
+    duel_perk = pet_info.get("duel_perk", "")
+    if duel_perk:
+        embed.add_field(name="Combat Perk", value=duel_perk, inline=True)
 
-    # PvP Duel Perk
-    embed.add_field(
-        name="⚔️ PvP Combat Buff (/duel)",
-        value=f"**{pet_info.get('duel_perk', 'Battle perk activated in duels')}**",
-        inline=True,
-    )
+    # Friendly & Hostile relations (clean Dank Memer style)
+    friendly = pet_info.get("friendly_with", "")
+    rival = pet_info.get("rival_with", "")
+    if friendly:
+        embed.add_field(name="Friendly with:", value=friendly, inline=False)
+    if rival:
+        embed.add_field(name="Hostile with:", value=rival, inline=False)
 
-    # Synergies & Relations (Dank Memer Style)
-    friendly = pet_info.get("friendly_with", "None")
-    rival = pet_info.get("rival_with", "None")
-    snack = pet_info.get("favorite_snack", "Snacks")
-    embed.add_field(
-        name="🤝 Companion Relations",
-        value=(
-            f"• 💚 **Friendly with:** {friendly}\n"
-            f"• ⚔️ **Hostile with:** {rival}\n"
-            f"• 🍖 **Favorite Snack:** {snack}"
-        ),
-        inline=False,
-    )
-
-    # Happiness & Bond progress bar if owned
-    if selected_pet_id in owned_dict:
-        owned_pet = owned_dict[selected_pet_id]
-        bar_len = 10
-        filled = max(1, int(owned_pet.happiness / 100 * bar_len))
-        hp_bar = "💖" * filled + "🖤" * (bar_len - filled)
-        embed.add_field(
-            name=f"💖 Bond & Happiness ({owned_pet.happiness}%)",
-            value=f"`[{hp_bar}]` (Feed snacks and cuddle to level up & boost value!)",
-            inline=False,
-        )
-
-    # Random quote
-    quotes = pet_info.get("quotes", [])
-    if quotes:
-        embed.add_field(name="💬 Companion Quote", value=f"*\"{random.choice(quotes)}\"*", inline=False)
-
-    # Image file
+    # Image sprite
     file_attachment = None
     pet_img_path = resolve_pet_image_path(pet_info.get("image_file"))
     if pet_img_path:
         file_attachment = discord.File(str(pet_img_path), filename=pet_info["image_file"])
         embed.set_thumbnail(url=f"attachment://{pet_info['image_file']}")
 
-    embed.set_footer(text=f"BSCS 1-4 Pet Center • {len(user_pets)}/14 Pets Owned • Use dropdown to browse all companions")
+    embed.set_footer(text=f"Pet Shelter • {len(user_pets)}/14 Owned")
     return embed, file_attachment
 
 
@@ -1526,15 +1498,15 @@ class PetStoreSelect(discord.ui.Select):
         for pid, pdata in PET_CATALOG.items():
             if pid in owned_ids:
                 p_rec = owned_ids[pid]
-                desc = f"⭐ Active (Lvl {p_rec.level})" if p_rec.is_active else f"✅ Owned (Lvl {p_rec.level})"
+                desc = f"Active (Lvl {p_rec.level})" if p_rec.is_active else f"Owned (Lvl {p_rec.level})"
             elif not user.has_claimed_starter and pid in ("tuxedo_cat", "golden_dog", "brown_bunny"):
-                desc = "🎁 FREE Starter Choice (0 pts)"
+                desc = "Free Starter Choice"
             else:
-                desc = f"🏷️ {pdata['cost']:,} pts • {pdata['perk_title']}"[:95]
+                desc = f"{pdata['cost']:,} pts"
 
             options.append(
                 discord.SelectOption(
-                    label=f"{pdata['name']} ({pdata['title']})"[:95],
+                    label=f"{pdata['name']}",
                     value=pid,
                     description=desc,
                     default=(pid == selected_pet_id),
@@ -1542,7 +1514,7 @@ class PetStoreSelect(discord.ui.Select):
             )
 
         super().__init__(
-            placeholder="🐾 Browse & select a pet companion...",
+            placeholder="Browse & select a pet companion...",
             min_values=1,
             max_values=1,
             options=options,
@@ -1619,9 +1591,8 @@ class PetStoreView(discord.ui.View):
         if self.selected_pet_id not in owned_dict:
             if not user.has_claimed_starter and self.selected_pet_id in ("tuxedo_cat", "golden_dog", "brown_bunny"):
                 btn_starter = discord.ui.Button(
-                    label="🎁 Adopt FREE Starter (0 pts)",
+                    label="Claim Starter",
                     style=discord.ButtonStyle.success,
-                    emoji="🐾",
                     custom_id="btn_adopt_starter",
                 )
                 btn_starter.callback = self._on_adopt_starter
@@ -1629,7 +1600,7 @@ class PetStoreView(discord.ui.View):
             else:
                 cost = pet_info["cost"]
                 btn_adopt = discord.ui.Button(
-                    label=f"🐾 Adopt {pet_info['name']} ({cost:,} pts)",
+                    label=f"Buy ({cost:,} pts)",
                     style=discord.ButtonStyle.success,
                     custom_id="btn_adopt_pet",
                 )
@@ -1639,21 +1610,19 @@ class PetStoreView(discord.ui.View):
             owned_pet = owned_dict[self.selected_pet_id]
             if not owned_pet.is_active:
                 btn_equip = discord.ui.Button(
-                    label="⭐ Equip as Active Companion",
+                    label="Equip Companion",
                     style=discord.ButtonStyle.primary,
-                    emoji="✨",
                     custom_id="btn_equip_pet",
                 )
                 btn_equip.callback = self._on_equip_pet
                 self.add_item(btn_equip)
             else:
-                self.add_item(PetCareButton("feed", "Feed Snack (+15 XP)", "🍖", discord.ButtonStyle.primary))
-                self.add_item(PetCareButton("pet", "Cuddle & Pet", "💖", discord.ButtonStyle.success))
+                self.add_item(PetCareButton("feed", "Feed (+15 XP)", "🍖", discord.ButtonStyle.primary))
+                self.add_item(PetCareButton("pet", "Cuddle", "💖", discord.ButtonStyle.secondary))
 
             btn_sell = discord.ui.Button(
-                label="Sell Pet",
+                label="Sell",
                 style=discord.ButtonStyle.secondary,
-                emoji="🪙",
                 custom_id="btn_sell_pet",
             )
             btn_sell.callback = self._on_sell_pet
