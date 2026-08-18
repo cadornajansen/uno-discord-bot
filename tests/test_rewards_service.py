@@ -255,6 +255,20 @@ def test_execute_steal_mechanics(rewards_service: RewardsDBService):
     assert res_busted.thief_new_balance == 120  # 150 - 30
 
 
+def test_steal_percentage_range(rewards_service: RewardsDBService):
+    """Test that steal without fixed_amount extracts between 40% and 60% of target balance."""
+    rewards_service.add_points(1001, 100, "THIEF")
+    rewards_service.add_points(1002, 1000, "TARGET")
+    rewards_service.add_item(1001, "pickpocket", 1)
+
+    res = rewards_service.execute_steal(1001, 1002, fixed_success=True)
+    assert res.success is True
+    # 40% to 60% of 1,000 points is 400 to 600 points
+    assert 400 <= res.points_stolen <= 600
+    assert res.target_new_balance == 1000 - res.points_stolen
+    assert res.thief_new_balance == 100 + res.points_stolen
+
+
 def test_use_item_activation(rewards_service: RewardsDBService):
     """Test using inventory items activates 7-day shield."""
     now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)

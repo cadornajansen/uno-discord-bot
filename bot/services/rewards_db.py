@@ -382,7 +382,7 @@ class BetOutcome(str, Enum):
 ITEM_DEFINITIONS = {
     "pickpocket": {
         "name": "🦹 Pickpocket Card",
-        "description": "Allows you to attempt to steal 10%–15% points from a classmate with `/steal`.",
+        "description": "Allows you to attempt to steal 40%–60% points from a classmate with `/steal`.",
         "usable": False,
     },
     "shield_1w": {
@@ -402,7 +402,7 @@ ITEM_DEFINITIONS = {
     },
     "uno_reverse": {
         "name": "🔄 Uno Reverse Card",
-        "description": "Passive trap! Reverses any `/steal` attempt to steal 15% from the attacker instead.",
+        "description": "Passive trap! Reverses any `/steal` attempt to steal 40%–60% from the attacker instead.",
         "usable": False,
     },
     "airdrop": {
@@ -438,7 +438,7 @@ SHOP_CATALOG = {
         "name": "🦹 Pickpocket Card",
         "cost": 100,
         "category": "consumable",
-        "description": "Consumable skill card that lets you attempt to steal 10%–15% points with `/steal`.",
+        "description": "Consumable skill card that lets you attempt to steal 40%–60% points with `/steal`.",
     },
     "shield_1w": {
         "name": "🛡️ 1-Week Immunity Shield",
@@ -456,7 +456,7 @@ SHOP_CATALOG = {
         "name": "🔄 Uno Reverse Card",
         "cost": 180,
         "category": "consumable",
-        "description": "Passive trap! Counter-steals 15% from anyone who attempts to `/steal` from you.",
+        "description": "Passive trap! Counter-steals 40%–60% from anyone who attempts to `/steal` from you.",
     },
     "airdrop": {
         "name": "🌧️ Point Airdrop",
@@ -1211,7 +1211,9 @@ class RewardsDBService:
         if target_inv.get("uno_reverse", 0) > 0:
             self.remove_item(target_id, "uno_reverse", 1)
             thief = self.get_or_create_user(thief_id)
-            counter_stolen = min(thief.points, max(10, int(thief.points * 0.15)))
+            rev_pct = random.uniform(0.40, 0.60)
+            calc_counter = int(thief.points * rev_pct)
+            counter_stolen = min(thief.points, max(10, calc_counter))
             if counter_stolen > 0:
                 thief_new = self.deduct_points(thief_id, counter_stolen, "UNO_REVERSE_LOST", f"Counter-stolen by user {target_id}")
                 target_new = self.add_points(target_id, counter_stolen, "UNO_REVERSE_WON", f"Uno Reverse counter-steal from user {thief_id}")
@@ -1245,9 +1247,9 @@ class RewardsDBService:
         is_success = fixed_success if fixed_success is not None else (random.random() < 0.65)
 
         if is_success:
-            pct = random.uniform(0.10, 0.15)
+            pct = random.uniform(0.40, 0.60)
             calc_stolen = int(target.points * pct)
-            stolen = fixed_amount if fixed_amount is not None else min(80, max(10, calc_stolen))
+            stolen = fixed_amount if fixed_amount is not None else max(10, calc_stolen)
             stolen = min(stolen, target.points)
 
             target_new = self.deduct_points(target_id, stolen, "STEAL_VICTIM", f"Stolen by user {thief_id}")

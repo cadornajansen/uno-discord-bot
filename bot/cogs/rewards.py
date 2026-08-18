@@ -581,7 +581,7 @@ class RewardsCog(commands.Cog):
                 ephemeral=True,
             )
 
-    @app_commands.command(name="steal", description="Consume a Pickpocket Card to attempt stealing 10%-15% points from a classmate!")
+    @app_commands.command(name="steal", description="Consume a Pickpocket Card to attempt stealing 40%-60% points from a classmate!")
     @app_commands.describe(target="The classmate you want to pickpocket.")
     async def steal(self, interaction: discord.Interaction, target: discord.Member) -> None:
         """Attempt pickpocketing a classmate."""
@@ -1056,7 +1056,7 @@ class RewardsCog(commands.Cog):
                 "• **`/daily` or `!daily`**: Claim your daily attendance reward (+30 pts base + 5 pts/day of streak, max +35 pts bonus!).\n"
                 "• **`/trivia` or `!trivia`**: Answer CS & Tech quizzes for **`+50 Uno Points`** each (max 3/day, no cooldown)!\n"
                 "• **`/bet` or `!bet`**: Risk 50 pts on roulette (max 3/day). 25% Jackpot (+200 pts net!), 25% Skill Drop, 15% Refund, 35% Bust.\n"
-                "• **`/steal @user` or `!steal`**: Use a *Pickpocket Card* to steal 10%–15% points from an unshielded classmate!"
+                "• **`/steal @user` or `!steal`**: Use a *Pickpocket Card* to steal 40%–60% points from an unshielded classmate!"
             ),
             inline=False,
         )
@@ -1066,7 +1066,7 @@ class RewardsCog(commands.Cog):
             value=(
                 "• **`/inventory` or `!inv`**: Inspect your owned skill cards.\n"
                 "• **`🛡️ 1-Week Immunity Shield`**: Deflects all `/steal` robbery attempts for 7 days!\n"
-                "• **`🔄 Uno Reverse Card`**: Passive trap! Counter-steals 15% from anyone who attempts to steal from you!\n"
+                "• **`🔄 Uno Reverse Card`**: Passive trap! Counter-steals 40%–60% from anyone who attempts to steal from you!\n"
                 "• **`🌧️ Point Airdrop`**: Launches a 100 pt community care package in chat (+25 pts each for 4 catchers)!\n"
                 "• **`📦 Mystery Gacha Box`**: Lucky lootbox with rewards up to 1,000 points and rare cards!\n"
                 "• **`🔨 EMP Shield Breaker`**: Target a protected classmate (`/use shield_breaker @user`) to shatter their Immunity Shield!\n"
