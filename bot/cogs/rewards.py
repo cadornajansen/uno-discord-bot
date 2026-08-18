@@ -42,6 +42,23 @@ from bot.services.rewards_db import (
 logger = logging.getLogger(__name__)
 
 
+def resolve_pet_image_path(image_file: Optional[str]) -> Optional[Path]:
+    """Robustly locate absolute path for pet pixel-art image across local and Azure environments."""
+    if not image_file:
+        return None
+
+    candidates = [
+        Path(__file__).resolve().parent.parent.parent / "data" / "pets" / image_file,
+        Path.cwd() / "data" / "pets" / image_file,
+        Path("data/pets") / image_file,
+        Path(__file__).resolve().parent.parent / "data" / "pets" / image_file,
+    ]
+    for p in candidates:
+        if p.is_file():
+            return p
+    return None
+
+
 async def build_leaderboard_embed(
     rewards_service: RewardsDBService,
     guild: Optional[discord.Guild],
@@ -459,8 +476,8 @@ class PetDropAdoptButton(discord.ui.Button):
             )
             embed.add_field(name="Remaining Balance", value=f"**{new_bal:,} Uno Points**", inline=True)
 
-            pet_img_path = Path("data/pets") / res.image_file
-            if pet_img_path.exists():
+            pet_img_path = resolve_pet_image_path(res.image_file)
+            if pet_img_path:
                 file_att = discord.File(str(pet_img_path), filename=f"adopt_{res.image_file}")
                 embed.set_thumbnail(url=f"attachment://adopt_{res.image_file}")
                 await interaction.response.send_message(embed=embed, file=file_att, ephemeral=True)
@@ -517,8 +534,8 @@ def build_pet_drop_announcement_embed(rewards_service: RewardsDBService, pet_id:
     )
 
     file_attachment = None
-    pet_img_path = Path("data/pets") / pet_data["image_file"]
-    if pet_img_path.exists():
+    pet_img_path = resolve_pet_image_path(pet_data.get("image_file"))
+    if pet_img_path:
         file_attachment = discord.File(str(pet_img_path), filename=pet_data["image_file"])
         embed.set_image(url=f"attachment://{pet_data['image_file']}")
 
@@ -628,8 +645,8 @@ class StarterPetSelectView(discord.ui.View):
                 color=discord.Color.green(),
             )
             file_att = None
-            pet_img_path = Path("data/pets") / pet_rec.image_file
-            if pet_img_path.exists():
+            pet_img_path = resolve_pet_image_path(pet_rec.image_file)
+            if pet_img_path:
                 file_att = discord.File(str(pet_img_path), filename=pet_rec.image_file)
                 embed.set_thumbnail(url=f"attachment://{pet_rec.image_file}")
 
@@ -1290,8 +1307,8 @@ def build_pet_embed(pet: Optional[PetRecord], owner_name: str, all_pets: list[Pe
     embed.add_field(name="Collection", value=f"🏠 **{len(all_pets)}** Pet(s) Owned", inline=True)
 
     file_attachment = None
-    pet_img_path = Path("data/pets") / pet.image_file
-    if pet_img_path.exists():
+    pet_img_path = resolve_pet_image_path(pet.image_file)
+    if pet_img_path:
         file_attachment = discord.File(str(pet_img_path), filename=pet.image_file)
         embed.set_thumbnail(url=f"attachment://{pet.image_file}")
 
@@ -1316,10 +1333,13 @@ class PetCareButton(discord.ui.Button):
             res = view.rewards_service.interact_pet(interaction.user.id, action=self.action)
             updated_pet = view.rewards_service.get_active_pet(interaction.user.id)
             all_pets = view.rewards_service.get_user_pets(interaction.user.id)
-            embed, _ = build_pet_embed(updated_pet, interaction.user.display_name, all_pets)
+            embed, file_att = build_pet_embed(updated_pet, interaction.user.display_name, all_pets)
             view.update_components(all_pets)
 
-            await interaction.response.edit_message(embed=embed, view=view)
+            if file_att:
+                await interaction.response.edit_message(embed=embed, attachments=[file_att], view=view)
+            else:
+                await interaction.response.edit_message(embed=embed, view=view)
             await interaction.followup.send(res.message, ephemeral=True)
 
         except RewardsError as e:
@@ -1357,10 +1377,13 @@ class PetSwitchSelect(discord.ui.Select):
         try:
             switched = view.rewards_service.switch_active_pet(interaction.user.id, pet_id)
             all_pets = view.rewards_service.get_user_pets(interaction.user.id)
-            embed, _ = build_pet_embed(switched, interaction.user.display_name, all_pets)
+            embed, file_att = build_pet_embed(switched, interaction.user.display_name, all_pets)
             view.update_components(all_pets)
 
-            await interaction.response.edit_message(embed=embed, view=view)
+            if file_att:
+                await interaction.response.edit_message(embed=embed, attachments=[file_att], view=view)
+            else:
+                await interaction.response.edit_message(embed=embed, view=view)
             await interaction.followup.send(
                 f"✨ Switched active companion to **{switched.nickname}** ({switched.display_name})!\n"
                 f"Active Perk: **{switched.perk_title}**",
@@ -1837,8 +1860,8 @@ class RewardsCog(commands.Cog):
                 ),
                 inline=False,
             )
-            pet_img_path = Path("data/pets") / pet.image_file
-            if pet_img_path.exists():
+            pet_img_path = resolve_pet_image_path(pet.image_file)
+            if pet_img_path:
                 file_attachment = discord.File(str(pet_img_path), filename=pet.image_file)
                 embed.set_thumbnail(url=f"attachment://{pet.image_file}")
 
@@ -1931,8 +1954,8 @@ class RewardsCog(commands.Cog):
                 color=discord.Color.green(),
             )
             file_att = None
-            pet_img_path = Path("data/pets") / pet_rec.image_file
-            if pet_img_path.exists():
+            pet_img_path = resolve_pet_image_path(pet_rec.image_file)
+            if pet_img_path:
                 file_att = discord.File(str(pet_img_path), filename=pet_rec.image_file)
                 embed.set_thumbnail(url=f"attachment://{pet_rec.image_file}")
 
@@ -1986,8 +2009,8 @@ class RewardsCog(commands.Cog):
             )
             embed.add_field(name="Remaining Balance", value=f"**{new_bal:,} Uno Points**", inline=True)
 
-            pet_img_path = Path("data/pets") / res.image_file
-            if pet_img_path.exists():
+            pet_img_path = resolve_pet_image_path(res.image_file)
+            if pet_img_path:
                 file_att = discord.File(str(pet_img_path), filename=res.image_file)
                 embed.set_thumbnail(url=f"attachment://{res.image_file}")
                 await interaction.response.send_message(embed=embed, file=file_att)
@@ -2661,6 +2684,58 @@ class RewardsCog(commands.Cog):
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
+    @app_commands.command(name="give", description="Give Uno Points to a classmate from your wallet.")
+    @app_commands.describe(
+        target="The classmate to send points to.",
+        amount="How many Uno Points to give (minimum 10).",
+    )
+    async def give(self, interaction: discord.Interaction, target: discord.Member, amount: int) -> None:
+        """Transfer points from the caller's wallet to another member."""
+        if target.bot:
+            await interaction.response.send_message("❌ You cannot give points to a bot!", ephemeral=True)
+            return
+
+        if target.id == interaction.user.id:
+            await interaction.response.send_message("❌ You cannot give points to yourself!", ephemeral=True)
+            return
+
+        if amount < 10:
+            await interaction.response.send_message("❌ Minimum transfer is **10 Uno Points**.", ephemeral=True)
+            return
+
+        try:
+            new_sender_bal = self.rewards_service.deduct_points(
+                interaction.user.id,
+                amount,
+                "give_sent",
+                f"Sent {amount} pts to user {target.id}",
+            )
+            new_receiver_bal = self.rewards_service.add_points(
+                target.id,
+                amount,
+                "give_received",
+                f"Received {amount} pts from user {interaction.user.id}",
+            )
+
+            embed = discord.Embed(
+                title="💸 Points Transferred!",
+                description=(
+                    f"**{interaction.user.display_name}** gave **{amount:,} Uno Points** "
+                    f"to **{target.display_name}**!"
+                ),
+                color=discord.Color.green(),
+            )
+            embed.add_field(name=f"{interaction.user.display_name}'s Balance", value=f"`{new_sender_bal:,} pts`", inline=True)
+            embed.add_field(name=f"{target.display_name}'s Balance", value=f"`{new_receiver_bal:,} pts`", inline=True)
+            await interaction.response.send_message(embed=embed)
+
+        except InsufficientPointsError:
+            bal = self.rewards_service.get_balance(interaction.user.id)
+            await interaction.response.send_message(
+                f"❌ You don't have enough points! (Wallet: `{bal:,} pts`)",
+                ephemeral=True,
+            )
+
     @app_commands.command(name="inventory", description="View your owned skill cards and consumables.")
     async def inventory(self, interaction: discord.Interaction) -> None:
         """Display caller's inventory cards."""
@@ -3020,6 +3095,7 @@ class RewardsCog(commands.Cog):
                 "• **`/work` or `!work`**: Work a campus shift (1h cooldown, earn 40–120 pts + rare card drops).\n"
                 "• **`/beg` or `!beg`**: Scavenge pocket change across campus (30m cooldown, 10–40 pts).\n"
                 "• **`/trivia` or `!trivia`**: Answer CS & Tech quizzes for **`+50 Uno Points`** each (max 3/day, +75 pts with Owl companion)!\n"
+                "• **`/give @user <amount>` or `!give`**: Transfer points directly to a classmate from your wallet (min 10 pts).\n"
                 "• **`/steal @user` or `!steal`**: Use a *Pickpocket Card* to steal 40%–60% points from an unshielded classmate!"
             ),
             inline=False,

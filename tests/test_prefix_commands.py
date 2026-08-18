@@ -66,6 +66,7 @@ def test_prefix_cog_registers_all_non_document_aliases():
         "trivia",
         "duel",
         "bounty",
+        "give",
     }.issubset(command_names)
 
 
@@ -203,5 +204,10 @@ def test_rewards_prefix_commands_forward_correctly():
         # 9. !trivia
         await PrefixCommandsCog.trivia_prefix.callback(prefix_cog, context)
         prefix_cog._invoke_app_command.assert_awaited_with(context, "RewardsCog", "trivia")
+
+        # 10. !give @user 50
+        recipient = MagicMock()
+        await PrefixCommandsCog.give_prefix.callback(prefix_cog, context, member=recipient, amount=50)
+        prefix_cog._invoke_app_command.assert_awaited_with(context, "RewardsCog", "give", recipient, 50)
 
     asyncio.run(_test())

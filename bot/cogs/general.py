@@ -180,7 +180,8 @@ class GeneralCog(commands.Cog):
                 "`/rank` or `!rank` - Quick Top 10 campus leaderboard.\n"
                 "`/leaderboard` or `!lb` - Interactive paginated server leaderboard.\n"
                 "`/bank <deposit|withdraw|view>` or `!bank` - Bank vault immune to theft.\n"
-                "`/steal @member` or `!steal` - Pickpocket Card to steal 40%-60% points."
+                "`/steal @member` or `!steal` - Pickpocket Card to steal 40%-60% points.\n"
+                "`/give @member <amount>` or `!give` - Send points to a classmate (min 10)."
             ),
             inline=False,
         )

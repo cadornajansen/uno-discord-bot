@@ -857,3 +857,69 @@ def test_bounty_commands_and_duel_modes_cog():
     asyncio.run(_test())
 
 
+def test_give_command_success_and_guards():
+    """Test /give slash command with successful transfer, bot/self check, minimum amount, and insufficient points."""
+    async def _test():
+        cog, service, _ = _make_rewards_cog()
+        service.add_points(111, 200, "TEST")
+        service.add_points(222, 50, "TEST")
+
+        interaction = MagicMock()
+        interaction.user.id = 111
+        interaction.user.display_name = "Alice"
+        interaction.response.send_message = AsyncMock()
+
+        target = MagicMock()
+        target.id = 222
+        target.bot = False
+        target.display_name = "Bob"
+
+        # 1. Success transfer 50 pts
+        await cog.give.callback(cog, interaction, target=target, amount=50)
+        interaction.response.send_message.assert_awaited_once()
+        embed = interaction.response.send_message.call_args.kwargs["embed"]
+        assert "Points Transferred!" in embed.title
+        assert service.get_balance(111) == 150
+        assert service.get_balance(222) == 100
+
+        # 2. Cannot give to self
+        self_target = MagicMock()
+        self_target.id = 111
+        self_target.bot = False
+        interaction.response.send_message.reset_mock()
+        await cog.give.callback(cog, interaction, target=self_target, amount=50)
+        assert "yourself" in interaction.response.send_message.call_args.args[0]
+
+        # 3. Cannot give to bot
+        bot_target = MagicMock()
+        bot_target.id = 999
+        bot_target.bot = True
+        interaction.response.send_message.reset_mock()
+        await cog.give.callback(cog, interaction, target=bot_target, amount=50)
+        assert "bot" in interaction.response.send_message.call_args.args[0]
+
+        # 4. Minimum transfer (less than 10)
+        interaction.response.send_message.reset_mock()
+        await cog.give.callback(cog, interaction, target=target, amount=5)
+        assert "10 Uno Points" in interaction.response.send_message.call_args.args[0]
+
+        # 5. Insufficient points
+        interaction.response.send_message.reset_mock()
+        await cog.give.callback(cog, interaction, target=target, amount=9999)
+        assert "don't have enough points" in interaction.response.send_message.call_args.args[0]
+
+    asyncio.run(_test())
+
+
+def test_resolve_pet_image_path_all_catalog_pets():
+    """Verify that resolve_pet_image_path finds the image file for all 14 pets in PET_CATALOG."""
+    from bot.cogs.rewards import resolve_pet_image_path
+    from bot.services.rewards_db import PET_CATALOG
+
+    for pet_id, data in PET_CATALOG.items():
+        img_name = data.get("image_file")
+        assert img_name is not None, f"Pet {pet_id} missing image_file"
+        path = resolve_pet_image_path(img_name)
+        assert path is not None and path.exists(), f"Image not found for pet {pet_id}: {img_name}"
+
+

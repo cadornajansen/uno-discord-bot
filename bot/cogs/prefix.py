@@ -294,6 +294,11 @@ class PrefixCommandsCog(commands.Cog):
         """Prefix alias for /steal."""
         await self._invoke_app_command(context, "RewardsCog", "steal", member)
 
+    @commands.command(name="give", aliases=["send", "pay"])
+    async def give_prefix(self, context: commands.Context, member: discord.Member, amount: int) -> None:
+        """Prefix alias for /give."""
+        await self._invoke_app_command(context, "RewardsCog", "give", member, amount)
+
     @commands.command(name="inventory", aliases=["inv", "bag"])
     async def inventory_prefix(self, context: commands.Context) -> None:
         """Prefix alias for /inventory."""
@@ -466,6 +471,7 @@ class PrefixCommandsCog(commands.Cog):
                 "search": "!search <query>",
                 "prof": "!prof <subject>",
                 "steal": "!steal <@member>",
+                "give": "!give <@member> <amount>",
                 "use": "!use <item>",
                 "redeem": "!redeem <item>",
                 "admin-inspect": "!admin-inspect <@member>",
