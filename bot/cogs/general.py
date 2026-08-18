@@ -153,7 +153,8 @@ class GeneralCog(commands.Cog):
                 "`/today` or `!today` - Show today's class schedule.\n"
                 "`/schedule` or `!schedule` - Show the full weekly schedule.\n"
                 "`/nextclass` or `!nextclass` - Show the next upcoming class.\n"
-                "`/prof subject:<name>` or `!prof <name>` - Look up the professor for a subject."
+                "`/prof subject:<name>` or `!prof <name>` - Look up the professor for a subject.\n"
+                "`/countdown` or `!countdown` - View countdown to upcoming academic milestones."
             ),
             inline=False,
         )
@@ -168,6 +169,67 @@ class GeneralCog(commands.Cog):
         )
 
         embed.add_field(
+            name="💰 Rewards, Economy & Side Hustles",
+            value=(
+                "`/daily` or `!daily` - Claim daily attendance points and build streaks.\n"
+                "`/work` or `!work` - Work a campus shift (1hr cooldown, earn 40-120 pts + rare item drops).\n"
+                "`/beg` or `!beg` - Scavenge pocket change across campus (30m cooldown, 10-40 pts).\n"
+                "`/trivia` or `!trivia` - Answer daily CS/Tech trivia questions for +50 pts each.\n"
+                "`/balance` or `!bal` - Check wallet balance, streak, and shield status.\n"
+                "`/profile [member]` or `!profile` - View full student card, companion, rank, badges, and inventory.\n"
+                "`/rank` or `!rank` - Quick Top 10 campus leaderboard.\n"
+                "`/leaderboard` or `!lb` - Interactive paginated server leaderboard.\n"
+                "`/bank <deposit|withdraw|view>` or `!bank` - Protected bank vault immune to theft and audits.\n"
+                "`/steal @member` or `!steal` - Consume Pickpocket Card to steal 40%-60% points.\n"
+                "`/shop` or `!shop` - Browse real-world prizes and active skill card items.\n"
+                "`/redeem <item>` or `!redeem` - Redeem prizes (Coffee, GCash, Nitro, Survival Kit).\n"
+                "`/inventory` or `!inv` - View owned skill cards and consumable items.\n"
+                "`/use <item> [@target]` or `!use` - Activate skill cards (Shield Breaker, Tax Audit, Gacha, Coffee).\n"
+                "`/guide` or `!guide` - Complete student guide and handbook.\n"
+                "`/milestone` or `!milestone` - View the official Uno Rewards launch announcement."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="🎰 High-Stakes Casino",
+            value=(
+                "`/bet [amount]` or `!bet` - Unlimited high-roller betting with jackpots and item drops.\n"
+                "`/slots [amount]` or `!slots` - 3-Reel slot machine with up to 50x Wild Jackpot.\n"
+                "`/coinflip <heads|tails> [amount]` or `!cf` - 50/50 coinflip with 2.0x payout.\n"
+                "`/blackjack [amount]` or `!bj` - Blackjack 21 with Hit, Stand, Double Down.\n"
+                "`/highlow [amount]` or `!hl` - High-Low card guessing streak up to 30x multiplier."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="⚔️ 1v1 PvP Duels & Classroom Bounties",
+            value=(
+                "`/duel @member [amount] [mode]` or `!duel` - Challenge a classmate across 4 game modes (🎲 Dice, ✂️ RPS, 🃏 Russian Roulette, ⚔️ 100 HP RPG Combat)!\n"
+                "`/bounty place @member <amount>` or `!bounty place` - Place a wanted bounty on a classmate.\n"
+                "`/bounty list` or `!bounty list` - View the Most Wanted classroom bounty board."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="🐾 Pet Companions & Shelter",
+            value=(
+                "`/pet` or `!pet` - Pet dashboard to feed, cuddle, level up, and manage companions.\n"
+                "`/pet starter` or `!pet starter` - Adopt your 1 Free Starter Companion (0 pts)!\n"
+                "`/pet adopt <species>` or `!pet adopt` - Adopt companions with permanent passive perks (Cats, Dogs, Bunnies, Owls, Turtles, Foxes, Axolotls, Goldfish).\n"
+                "`/pet list` or `!pet list` - View all pets in your collection.\n"
+                "`/pet switch <species>` or `!pet switch` - Switch active companion.\n"
+                "`/pet rename <species> <name>` or `!pet rename` - Give your companion a custom nickname.\n"
+                "`/pet sell <species>` or `!pet sell` - Sell a companion for points refund.\n"
+                "`/pet drop` or `!pet drop` - View the active rotating 3-day pet drop spotlight.\n"
+                "`/pet guide` or `!pet guide` - Comprehensive pet companion handbook."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
             name="General & Utility",
             value=(
                 "`/ping` or `!ping` - Check bot latency.\n"
@@ -175,7 +237,9 @@ class GeneralCog(commands.Cog):
                 "`/userinfo [member]` or `!userinfo [member]` - View public account info.\n"
                 "`/serverinfo` or `!serverinfo` - View details about this server.\n"
                 "`/about` or `!about` - Learn how Uno AI works.\n"
-                "`/help` or `!help` - Show this command list."
+                "`/help` or `!help` - Show this command list.\n"
+                "**Right-click a message → Apps → Explain This** - AI explanation of any message.\n"
+                "**Right-click a message → Apps → Run OCR** - Extract text from an image attachment."
             ),
             inline=False,
         )

@@ -348,37 +348,64 @@ def build_pet_guide_embed() -> discord.Embed:
         title="📖 Uno Bot — Pet Companion Handbook & Guide",
         description=(
             "Welcome to the **Pet Companion System**! Adopt loyal pixel-art companions that provide "
-            "**permanent passive economic multipliers**, daily care rewards, and vibrant profile aesthetics."
+            "**permanent passive economic multipliers**, **PvP duel battle perks**, daily care rewards, and vibrant profile aesthetics."
         ),
         color=discord.Color.teal(),
     )
 
     embed.add_field(
-        name="🐾 1. How Companions Work",
+        name="🎁 1. FREE Starter Companion (0 pts)",
         value=(
-            "• Each pet variant grants a **permanent passive buff** while equipped as your active companion.\n"
-            "• You can own multiple companions and switch between them anytime with `/pet switch` or the `/pet` dashboard dropdown.\n"
-            "• Equipped companions appear directly on your `/profile` card with custom dialogue quotes!"
+            "• Every student can claim **1 Free Starter Pet** using **`/pet starter`** or by opening **`/pet`**!\n"
+            "• Choose between **🐱 Tuxedo Cat**, **🐶 Golden Retriever**, or **🐰 Lop-Eared Bunny** at **0 pts cost** with 100% happiness!"
         ),
         inline=False,
     )
 
     embed.add_field(
-        name="🌟 2. Companion Perks Breakdown",
+        name="🐾 2. How Companions Work & 50%+ Discount Catalog",
         value=(
-            "• 🐱 **Cats** (Tuxedo & Calico) — **2x Daily Attendance Points** on `/daily` permanently.\n"
-            "• 🐶 **Dogs** (Golden & Shiba) — **Guard Dog**: 75% thief catch rate & inflicts a 50 pt bite fine on pickpockets.\n"
-            "• 🐰 **Bunnies** (Lop-Eared & Moon) — **Lucky Gambler**: +15% Jackpot & Double win rates in `/bet`.\n"
-            "• 🦉 **Owls** (Scholar & Frost) — **Quiz Master**: +75 pts per correct trivia quiz and 4th attempt/day.\n"
-            "• 🐢 **Turtles** (Master Oogway) — **Streak Freeze**: Prevents daily streak resets on missed days & +2d shield boost.\n"
-            "• 🦊 **Foxes** (Trickster & Arctic) — **Pickpocket Master**: +15% steal rate & +10 pt bonus per airdrop catch.\n"
+            "• Each pet variant grants a **permanent passive buff** while equipped as your active companion.\n"
+            "• **🐱 Cats**: Tuxedo (`50 pts`), Calico (`100 pts`)\n"
+            "• **🐶 Dogs**: Golden (`50 pts`), Shiba Inu (`100 pts`)\n"
+            "• **🐰 Bunnies**: Brown (`150 pts`), White (`200 pts`)\n"
+            "• **🦉 Owls**: Scholar (`150 pts`), Ice Owl (`200 pts`)\n"
+            "• **🐢 Turtles**: Master Oogway (`200 pts`)\n"
+            "• **🦊 Foxes**: Orange Trickster (`200 pts`), Arctic (`250 pts`)\n"
+            "• **🦎 Axolotls**: Pink (`150 pts`), Rainbow (`250 pts`)\n"
+            "• **🐠 Goldfish**: Fiery Goldfish (`150 pts`)\n"
+            "• Adopt via **`/pet adopt <species>`** or in the **`/shop`** Pet Shelter tab!"
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="🌟 3. Passive Economic Perks",
+        value=(
+            "• 🐱 **Cats** — **2x Daily Attendance Points** on `/daily` permanently.\n"
+            "• 🐶 **Dogs** — **Guard Dog**: 75% thief catch rate & inflicts a 50 pt bite fine on pickpockets.\n"
+            "• 🐰 **Bunnies** — **Lucky Gambler**: +15% Jackpot & Double win rates in `/bet` and `/slots`.\n"
+            "• 🦉 **Owls** — **Quiz Master**: +75 pts per correct trivia quiz and 4th attempt/day.\n"
+            "• 🐢 **Turtles** — **Streak Freeze**: Prevents daily streak resets on missed days & +2d shield boost.\n"
+            "• 🦊 **Foxes** — **Pickpocket Master**: +15% steal rate & +10 pt bonus per airdrop catch.\n"
             "• 🦎/🐠 **Axolotls & Goldfish** — **5% Cashback**: Instant 5% refund on all shop redemptions."
         ),
         inline=False,
     )
 
     embed.add_field(
-        name="🍖 3. Care, Happiness & Leveling Up",
+        name="⚔️ 4. PvP Duel Combat Perks (`/duel`)",
+        value=(
+            "• 🐶 **Dogs** (*Intimidating Bark*) — 20% chance to bark fiercely, reducing opponent's roll/damage by 15.\n"
+            "• 🐰 **Bunnies** (*Lucky Reroll*) — Automatically rerolls duel dice if under 30, and +15% hit rate on RPG Ultimates.\n"
+            "• 🦉 **Owls** (*Calculated Strike*) — +10 clutch roll bonus when roll is within 5 points of the opponent.\n"
+            "• 🦊 **Foxes** (*Consolation Siphon*) — 25% chance on losing a duel to sneakily siphon back 20% of your lost wager."
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="🍖 5. Care, Happiness & Leveling Up",
         value=(
             "• Open your pet dashboard with **`/pet`** (or `/pet view`).\n"
             "• Use **`[ 🍖 Feed Snack ]`** & **`[ 💖 Cuddle & Pet ]`** to increase happiness (up to 100%) and gain +15 XP.\n"
@@ -388,25 +415,15 @@ def build_pet_guide_embed() -> discord.Embed:
     )
 
     embed.add_field(
-        name="🪙 4. Selling & Releasing Companions",
+        name="🪙 6. Selling & Rotating Drops",
         value=(
-            "• Changed your mind or need quick points? Sell your pet with **`/pet sell <species>`**.\n"
-            "• **Refund Formula:** `60% base cost` + `+25 pts` per level above Level 1!\n"
-            "• Releasing an active pet automatically equips your next highest-level companion."
+            "• **Sell Companion**: `/pet sell <species>` refunds `60% base cost` + `+25 pts` per level above Level 1!\n"
+            "• **Rotating 3-Day Drops**: Use **`/pet drop`** to view the currently featured drop, its timer, and 1-click adoption."
         ),
         inline=False,
     )
 
-    embed.add_field(
-        name="📅 5. Rotating 3-Day Pet Drops",
-        value=(
-            "• Every **3 days**, a new companion is spotlighted with an announcement drop in chat!\n"
-            "• Use **`/pet drop`** to view the currently featured drop, its timer, and 1-click adoption."
-        ),
-        inline=False,
-    )
-
-    embed.set_footer(text="Adopt from /shop (Pet Shelter) • View your pet with /pet • /pet guide")
+    embed.set_footer(text="Adopt from /shop (Pet Shelter) • View your pet with /pet • /pet starter for free claim")
     return embed
 
 
@@ -2984,46 +3001,82 @@ class RewardsCog(commands.Cog):
         )
         await interaction.response.send_message(embed=embed, view=view)
 
-    @app_commands.command(name="guide", description="Complete guide on how to earn points, gamble, steal, and redeem prizes in Uno!")
+    @app_commands.command(name="guide", description="Complete guide on how to earn points, gamble, duel, adopt pets, and redeem prizes!")
     async def guide(self, interaction: discord.Interaction) -> None:
         """Display the complete student game guide for Uno Rewards."""
         embed = discord.Embed(
-            title="🎮 Uno AI Rewards & Economy — Complete Student Guide",
+            title="🎮 Uno AI Rewards, Casino, Pets & PvP — Complete Student Guide",
             description=(
-                "Welcome to the **BSCS 1-4 Uno Rewards System**! Earn points by interacting, "
-                "competing on the leaderboard, answering daily trivia, and redeeming real-world prizes!"
+                "Welcome to the **BSCS 1-4 Uno Rewards & Gamification Universe**! Earn points, "
+                "adopt companions, gamble in the casino, clash in 1v1 PvP duels, place student bounties, and redeem real-world prizes!"
             ),
             color=discord.Color.blue(),
         )
 
         embed.add_field(
-            name="📅 1. How to Earn Points",
+            name="📅 1. How to Earn Points & Side Hustles",
             value=(
-                "• **`/daily` or `!daily`**: Claim your daily attendance reward (+30 pts base + 5 pts/day of streak, max +35 pts bonus!).\n"
-                "• **`/trivia` or `!trivia`**: Answer CS & Tech quizzes for **`+50 Uno Points`** each (max 3/day, no cooldown)!\n"
-                "• **`/bet` or `!bet`**: Risk 50 pts on roulette (max 3/day). 25% Jackpot (+200 pts net!), 25% Skill Drop, 15% Refund, 35% Bust.\n"
+                "• **`/daily` or `!daily`**: Daily attendance check-in (+30 base + streak bonus up to +35 pts, 2x with Cat companion!).\n"
+                "• **`/work` or `!work`**: Work a campus shift (1h cooldown, earn 40–120 pts + rare card drops).\n"
+                "• **`/beg` or `!beg`**: Scavenge pocket change across campus (30m cooldown, 10–40 pts).\n"
+                "• **`/trivia` or `!trivia`**: Answer CS & Tech quizzes for **`+50 Uno Points`** each (max 3/day, +75 pts with Owl companion)!\n"
                 "• **`/steal @user` or `!steal`**: Use a *Pickpocket Card* to steal 40%–60% points from an unshielded classmate!"
             ),
             inline=False,
         )
 
         embed.add_field(
-            name="🛡️ 2. Protection & Special Skill Cards",
+            name="🎰 2. High-Stakes Casino (Unlimited Bets)",
             value=(
-                "• **`/inventory` or `!inv`**: Inspect your owned skill cards.\n"
-                "• **`🛡️ 1-Week Immunity Shield`**: Deflects all `/steal` robbery attempts for 7 days!\n"
-                "• **`🔄 Uno Reverse Card`**: Passive trap! Counter-steals 40%–60% from anyone who attempts to steal from you!\n"
-                "• **`🌧️ Point Airdrop`**: Launches a 100 pt community care package in chat (+25 pts each for 4 catchers)!\n"
-                "• **`📦 Mystery Gacha Box`**: Lucky lootbox with rewards up to 1,000 points and rare cards!\n"
-                "• **`🔨 EMP Shield Breaker`**: Target a protected classmate (`/use shield_breaker @user`) to shatter their Immunity Shield!\n"
-                "• **`🕵️ Class Treasurer Audit`**: Audit a 5% Class Tax from a Top-3 Leaderboard player (`/use tax_audit @user`)!\n"
-                "• **`☕ Dean's Coffee Bribe`**: Instant grant of +100 to +180 Uno Points!"
+                "• **`/bet [amount]` or `!bet`**: High-roller roulette gamble with up to 5x Mega Jackpot & skill card drops.\n"
+                "• **`/slots [amount]` or `!slots`**: 3-Reel classic slots with up to 50x Wild Jackpot.\n"
+                "• **`/coinflip <heads|tails> [amount]` or `!cf`**: 50/50 coinflip with 2.0x instant payout.\n"
+                "• **`/blackjack [amount]` or `!bj`**: Interactive Blackjack 21 with Hit, Stand, Double Down.\n"
+                "• **`/highlow [amount]` or `!hl`**: Climb the card guessing ladder for up to 30x max multiplier!"
             ),
             inline=False,
         )
 
         embed.add_field(
-            name="🎁 3. Prize Catalog (`/shop` or `!shop`)",
+            name="⚔️ 3. 1v1 PvP Duels & Classroom Bounties",
+            value=(
+                "• **`/duel @user [amount] [mode]`**: Challenge a classmate across 4 game modes:\n"
+                "  🎲 **Dice Roll** · ✂️ **Rock-Paper-Scissors** · 🃏 **Uno Russian Roulette** · ⚔️ **100 HP RPG Arena**\n"
+                "• **`/bounty place @target <amount>`**: Place a wanted bounty on a classmate (min 50 pts).\n"
+                "• **`/bounty list`**: View the Most Wanted board. Defeating a bountied classmate in ANY duel awards **100% of their bounty pool**!\n"
+                "• **🔁 Double-or-Nothing**: Defeated duelists get a 20s rematch button to double the stakes!"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="🐾 4. Pet Companions & Shelter",
+            value=(
+                "• **`/pet starter`**: Claim **1 FREE Starter Companion (0 pts)** (Tuxedo Cat, Golden Dog, or Lop-Eared Bunny)!\n"
+                "• **Discounted Adoption**: 🐱 Cats & 🐶 Dogs (`50 pts`), Calico/Shiba (`100 pts`), Bunnies/Owls/Turtles/Foxes/Axolotls (`150-250 pts`).\n"
+                "• **Passive Perks**: 2x daily claims, guard dog anti-theft, casino luck boosts, cashback, and trivia bonuses.\n"
+                "• **Duel Battle Perks**: Dog intimidation (-15 roll/DMG), Bunny lucky rerolls, Owl clutch roll bonus, Fox loss siphon!\n"
+                "• **Care & Shelter**: `/pet view` (feed & cuddle), `/pet switch`, `/pet sell`, `/pet drop`, `/pet guide`."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="🛡️ 5. Bank Vault & Special Skill Cards",
+            value=(
+                "• **`/bank <deposit|withdraw|view>`**: Protected bank vault 100% immune to theft and audits.\n"
+                "• **`🛡️ 1-Week Immunity Shield`**: Deflects all `/steal` robbery attempts for 7 days!\n"
+                "• **`🔄 Uno Reverse Card`**: Counter-steals 40%–60% from anyone who attempts to steal from you!\n"
+                "• **`🌧️ Point Airdrop`**: Launches a 100 pt community care package in chat (+25 pts each for 4 catchers)!\n"
+                "• **`📦 Mystery Gacha Box`**: Lucky lootbox with rewards up to 1,000 points and rare cards!\n"
+                "• **`🔨 EMP Shield Breaker`**: Shatter a classmate's active Immunity Shield (`/use shield_breaker @user`)!\n"
+                "• **`🕵️ Class Treasurer Audit`**: Audit a 5% Class Tax from a Top-3 Leaderboard player (`/use tax_audit @user`)!"
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="🎁 6. Prize Catalog (`/shop` or `!shop`)",
             value=(
                 "• `1,200 pts` — **☕ Intramuros Coffee Treat** (7-Eleven / Lawson)\n"
                 "• `2,200 pts` — **💳 GCash Gift Card ₱100**\n"
@@ -3035,17 +3088,6 @@ class RewardsCog(commands.Cog):
             inline=False,
         )
 
-        embed.add_field(
-            name="📊 4. Profiles & Leaderboard",
-            value=(
-                "• **`/balance` / `!bal`**: Check wallet balance, streak, and shield status.\n"
-                "• **`/profile` / `!profile`**: View student rank, badges, and inventory.\n"
-                "• **`/rank` / `!rank`**: Compact Top 10 members today.\n"
-                "• **`/leaderboard` / `!lb`**: Full class ranking with interactive page buttons."
-            ),
-            inline=False,
-        )
-
         embed.set_footer(text="BSCS 1-4 • Pamantasan ng Lungsod ng Maynila • Built by Jansen")
         await interaction.response.send_message(embed=embed)
 
@@ -3053,32 +3095,36 @@ class RewardsCog(commands.Cog):
     async def milestone(self, interaction: discord.Interaction) -> None:
         """Display the official production milestone announcement."""
         embed = discord.Embed(
-            title="🎉 PRODUCTION MILESTONE: UNO CASINO, PETS & ECONOMY MEGA EXPANSION",
+            title="🎉 PRODUCTION MILESTONE: UNO CASINO, PETS & MEGA PVP EXPANSION",
             description=(
-                "**Uno AI Gamification, Casino & Pet Companion System is officially live 🟢**\n\n"
-                "Earn Uno Points daily, adopt pixel-art pet companions, grind campus side hustles, gamble high-stakes wagers, "
-                "challenge classmates in 1v1 PvP duels, secure your wealth in bank vaults, and redeem real-world student rewards!\n\n"
-                "**🐾 PET COMPANIONS & ADOPTION**\n"
-                "• 🐱 **Cats**: 2x permanent daily claim boost\n"
-                "• 🐶 **Dogs**: Guard dog protection against thieves & bite back\n"
-                "• 🐰 **Bunnies**: Passive luck edge in casino gambling & coinflips\n"
-                "• 🦉 **Owls**: 1.5x bonus trivia points\n"
-                "• 🔄 **3-Day Rotating Drops & Pet Shelter**: `/pet drop`, `/pet adopt`, `/pet sell`, `/pet guide`\n\n"
+                "**Uno AI Gamification, Casino, Pet Companions & PvP Duels are officially live 🟢**\n\n"
+                "Earn Uno Points daily, adopt pixel-art companions (including 1 FREE Starter Pet!), gamble in the casino, "
+                "clash in 4-mode PvP duels, place classroom bounties, store savings in bank vaults, and redeem real-world student rewards!\n\n"
+                "**🐾 PET COMPANIONS & FREE STARTER (50%+ DISCOUNT)**\n"
+                "• 🐱 **Cats**: 2x permanent daily claim boost (`50 pts` / `100 pts` Calico)\n"
+                "• 🐶 **Dogs**: Guard dog protection against thieves & -15 roll duel bark (`50 pts` / `100 pts` Shiba)\n"
+                "• 🐰 **Bunnies**: Passive luck edge in casino wagers & lucky duel rerolls (`150 pts`)\n"
+                "• 🦉 **Owls**: 1.5x bonus trivia points & clutch roll duel bonus (`150 pts`)\n"
+                "• 🎁 **Claim Free Starter Companion**: `/pet starter` (0 pts cost!)\n"
+                "• 🔄 **Shelter & 3-Day Drops**: `/pet drop`, `/pet adopt`, `/pet switch`, `/pet sell`, `/pet guide`\n\n"
+                "**⚔️ 1v1 MEGA DUELS & CLASSROOM BOUNTIES**\n"
+                "• 🎮 **4 Duel Modes**: `/duel @classmate [amount] [dice|rps|roulette|rpg]`\n"
+                "• 🎯 **Classroom Bounties**: `/bounty place @target <amount>` & `/bounty list` (winner claims 100% bounty pot!)\n"
+                "• 🔁 **Double-or-Nothing Rematches**: Instant 2x rematch button for defeated duelists\n\n"
                 "**🎰 CASINO & HIGH-STAKES GAMBLING (UNLIMITED WAGERS)**\n"
                 "• 🎰 **Unlimited Roulette**: `/bet [amount]` (up to 5x Mega Jackpot!)\n"
                 "• 🍒 **3-Reel Slots**: `/slots [amount]` (up to 50x Uno Wild Jackpot!)\n"
                 "• 🃏 **Interactive Blackjack 21**: `/blackjack [amount]` (Hit, Stand, Double Down!)\n"
                 "• 📈 **High-Low Card Streak**: `/highlow [amount]` (Climb ladder up to 30x max win!)\n"
                 "• 🪙 **Coinflip 50/50**: `/coinflip <heads|tails> [amount]`\n\n"
-                "**💼 CAMPUS SIDE HUSTLES & DUELS**\n"
+                "**💼 CAMPUS SIDE HUSTLES & BANK VAULTS**\n"
                 "• 💻 **Campus Shift / Work**: `/work` (earn 40–120 pts + rare card drops, 1h cooldown)\n"
                 "• 🎒 **Campus Scavenge**: `/beg` (find loose change across Intramuros, 30m cooldown)\n"
-                "• ⚔️ **1v1 PvP Dice Wager Duels**: `/duel @classmate [amount]` (winner takes all!)\n"
                 "• 🏦 **Piggy Bank Vault**: `/bank deposit|withdraw|view` (100% immune to theft & audits)\n\n"
                 "**🏪 REAL-WORLD SHOP & REDEMPTIONS**\n"
                 "• ☕ Intramuros Coffee · 💵 GCash ₱100 · 🖨️ 1-Month Printing · 🎒 3k Exam Kit · 💎 Discord Nitro (`/shop`, `/redeem`)\n\n"
                 "**🚀 GET STARTED**\n"
-                "Claim your first reward with `/daily` or `!daily`, check `/guide`, and adopt your first companion with `/pet drop`!"
+                "Claim your free starter with `/pet starter`, check `/daily`, read `/guide`, and test your luck in `/bet` or `/duel`!"
             ),
             color=discord.Color.from_rgb(0, 114, 239),
         )
