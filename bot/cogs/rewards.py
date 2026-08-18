@@ -43,12 +43,18 @@ logger = logging.getLogger(__name__)
 
 
 def resolve_pet_image_path(image_file: Optional[str]) -> Optional[Path]:
-    """Robustly locate absolute path for pet pixel-art image across local and Azure environments."""
+    """Robustly locate absolute path for pet pixel-art image across local, bundled assets, and Docker environments."""
     if not image_file:
         return None
 
+    cogs_dir = Path(__file__).resolve().parent
+    bot_dir = cogs_dir.parent
+    repo_root = bot_dir.parent
+
     candidates = [
-        Path(__file__).resolve().parent.parent.parent / "data" / "pets" / image_file,
+        bot_dir / "assets" / "pets" / image_file,
+        repo_root / "data" / "pets" / image_file,
+        Path.cwd() / "bot" / "assets" / "pets" / image_file,
         Path.cwd() / "data" / "pets" / image_file,
         Path("data/pets") / image_file,
         Path(__file__).resolve().parent.parent / "data" / "pets" / image_file,
@@ -1316,6 +1322,102 @@ def build_pet_embed(pet: Optional[PetRecord], owner_name: str, all_pets: list[Pe
     return embed, file_attachment
 
 
+def build_pet_store_embed(
+    rewards_service: RewardsDBService,
+    user_id: int,
+    selected_pet_id: str,
+    user_name: str,
+) -> tuple[discord.Embed, Optional[discord.File]]:
+    """Build a rich, Dank-Memer inspired interactive Pet Shelter & Companion Embed."""
+    user = rewards_service.get_or_create_user(user_id)
+    user_pets = rewards_service.get_user_pets(user_id)
+    owned_dict = {p.pet_id: p for p in user_pets}
+    pet_info = PET_CATALOG.get(selected_pet_id, PET_CATALOG["tuxedo_cat"])
+
+    if selected_pet_id in owned_dict:
+        owned_pet = owned_dict[selected_pet_id]
+        embed_title = f"🐾 {owned_pet.nickname} — {pet_info['name']}"
+    else:
+        embed_title = f"🐾 Uno AI Pet Shelter — {pet_info['name']}"
+
+    embed = discord.Embed(
+        title=embed_title,
+        description=f"*{pet_info.get('title', 'Companion')}*\n\n{pet_info.get('perk_desc', '')}",
+        color=discord.Color.teal(),
+    )
+
+    # Status / Price field
+    if selected_pet_id in owned_dict:
+        owned_pet = owned_dict[selected_pet_id]
+        if owned_pet.is_active:
+            status_val = f"⭐ **Equipped as Active Companion**\n⭐ Level **{owned_pet.level}** (💖 {owned_pet.happiness}% Happiness • {owned_pet.xp}/{owned_pet.level * 50} XP)"
+        else:
+            status_val = f"🏠 **Owned in Shelter Reserve**\n⭐ Level **{owned_pet.level}** (Click **[ Equip Active ]** below to activate)"
+        embed.add_field(name="📌 Companion Status", value=status_val, inline=False)
+    else:
+        cost = pet_info["cost"]
+        if not user.has_claimed_starter and selected_pet_id in ("tuxedo_cat", "golden_dog", "brown_bunny"):
+            price_val = f"🎁 **100% FREE Starter Claim Eligible!** (`0 pts`)\n💳 Wallet: `{user.points:,} Uno Points`"
+        else:
+            price_val = f"🏷️ **`{cost:,} Uno Points`** (50% Limited Discount)\n💳 Wallet: `{user.points:,} Uno Points`"
+        embed.add_field(name="💰 Adoption Price", value=price_val, inline=False)
+
+    # Economic Passive Perk
+    embed.add_field(
+        name="🌟 Economic Passive Buff",
+        value=f"**{pet_info.get('perk_title', 'Passive Buff')}**",
+        inline=True,
+    )
+
+    # PvP Duel Perk
+    embed.add_field(
+        name="⚔️ PvP Combat Buff (/duel)",
+        value=f"**{pet_info.get('duel_perk', 'Battle perk activated in duels')}**",
+        inline=True,
+    )
+
+    # Synergies & Relations (Dank Memer Style)
+    friendly = pet_info.get("friendly_with", "None")
+    rival = pet_info.get("rival_with", "None")
+    snack = pet_info.get("favorite_snack", "Snacks")
+    embed.add_field(
+        name="🤝 Companion Relations",
+        value=(
+            f"• 💚 **Friendly with:** {friendly}\n"
+            f"• ⚔️ **Hostile with:** {rival}\n"
+            f"• 🍖 **Favorite Snack:** {snack}"
+        ),
+        inline=False,
+    )
+
+    # Happiness & Bond progress bar if owned
+    if selected_pet_id in owned_dict:
+        owned_pet = owned_dict[selected_pet_id]
+        bar_len = 10
+        filled = max(1, int(owned_pet.happiness / 100 * bar_len))
+        hp_bar = "💖" * filled + "🖤" * (bar_len - filled)
+        embed.add_field(
+            name=f"💖 Bond & Happiness ({owned_pet.happiness}%)",
+            value=f"`[{hp_bar}]` (Feed snacks and cuddle to level up & boost value!)",
+            inline=False,
+        )
+
+    # Random quote
+    quotes = pet_info.get("quotes", [])
+    if quotes:
+        embed.add_field(name="💬 Companion Quote", value=f"*\"{random.choice(quotes)}\"*", inline=False)
+
+    # Image file
+    file_attachment = None
+    pet_img_path = resolve_pet_image_path(pet_info.get("image_file"))
+    if pet_img_path:
+        file_attachment = discord.File(str(pet_img_path), filename=pet_info["image_file"])
+        embed.set_thumbnail(url=f"attachment://{pet_info['image_file']}")
+
+    embed.set_footer(text=f"BSCS 1-4 Pet Center • {len(user_pets)}/14 Pets Owned • Use dropdown to browse all companions")
+    return embed, file_attachment
+
+
 class PetCareButton(discord.ui.Button):
     """Button to feed or cuddle active companion."""
 
@@ -1324,22 +1426,29 @@ class PetCareButton(discord.ui.Button):
         self.action = action
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        view: "PetView" = self.view  # type: ignore
+        view = self.view
         if interaction.user.id != view.user_id:
             await interaction.response.send_message("❌ This is not your pet companion!", ephemeral=True)
             return
 
         try:
             res = view.rewards_service.interact_pet(interaction.user.id, action=self.action)
-            updated_pet = view.rewards_service.get_active_pet(interaction.user.id)
-            all_pets = view.rewards_service.get_user_pets(interaction.user.id)
-            embed, file_att = build_pet_embed(updated_pet, interaction.user.display_name, all_pets)
-            view.update_components(all_pets)
+            if hasattr(view, "selected_pet_id"):
+                view.update_components()
+                embed, file_att = build_pet_store_embed(
+                    view.rewards_service, view.user_id, view.selected_pet_id, interaction.user.display_name
+                )
+            else:
+                updated_pet = view.rewards_service.get_active_pet(interaction.user.id)
+                all_pets = view.rewards_service.get_user_pets(interaction.user.id)
+                embed, file_att = build_pet_embed(updated_pet, interaction.user.display_name, all_pets)
+                if hasattr(view, "update_components"):
+                    view.update_components(all_pets)
 
             if file_att:
                 await interaction.response.edit_message(embed=embed, attachments=[file_att], view=view)
             else:
-                await interaction.response.edit_message(embed=embed, view=view)
+                await interaction.response.edit_message(embed=embed, attachments=[], view=view)
             await interaction.followup.send(res.message, ephemeral=True)
 
         except RewardsError as e:
@@ -1368,22 +1477,23 @@ class PetSwitchSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        view: "PetView" = self.view  # type: ignore
+        view = self.view
         if interaction.user.id != view.user_id:
             await interaction.response.send_message("❌ This is not your pet companion!", ephemeral=True)
             return
 
-        pet_id = self.values[0]
+        pet_id = self.values[0] if self.values else "tuxedo_cat"
         try:
             switched = view.rewards_service.switch_active_pet(interaction.user.id, pet_id)
             all_pets = view.rewards_service.get_user_pets(interaction.user.id)
             embed, file_att = build_pet_embed(switched, interaction.user.display_name, all_pets)
-            view.update_components(all_pets)
+            if hasattr(view, "update_components"):
+                view.update_components(all_pets)
 
             if file_att:
                 await interaction.response.edit_message(embed=embed, attachments=[file_att], view=view)
             else:
-                await interaction.response.edit_message(embed=embed, view=view)
+                await interaction.response.edit_message(embed=embed, attachments=[], view=view)
             await interaction.followup.send(
                 f"✨ Switched active companion to **{switched.nickname}** ({switched.display_name})!\n"
                 f"Active Perk: **{switched.perk_title}**",
@@ -1404,28 +1514,287 @@ class PetGuideButton(discord.ui.Button):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 
-class PetView(discord.ui.View):
-    """Interactive pet companion dashboard."""
+class PetStoreSelect(discord.ui.Select):
+    """Dropdown menu to browse any pet in the catalog."""
+
+    def __init__(self, rewards_service: RewardsDBService, user_id: int, selected_pet_id: str):
+        user_pets = rewards_service.get_user_pets(user_id)
+        owned_ids = {p.pet_id: p for p in user_pets}
+        user = rewards_service.get_or_create_user(user_id)
+
+        options = []
+        for pid, pdata in PET_CATALOG.items():
+            if pid in owned_ids:
+                p_rec = owned_ids[pid]
+                desc = f"⭐ Active (Lvl {p_rec.level})" if p_rec.is_active else f"✅ Owned (Lvl {p_rec.level})"
+            elif not user.has_claimed_starter and pid in ("tuxedo_cat", "golden_dog", "brown_bunny"):
+                desc = "🎁 FREE Starter Choice (0 pts)"
+            else:
+                desc = f"🏷️ {pdata['cost']:,} pts • {pdata['perk_title']}"[:95]
+
+            options.append(
+                discord.SelectOption(
+                    label=f"{pdata['name']} ({pdata['title']})"[:95],
+                    value=pid,
+                    description=desc,
+                    default=(pid == selected_pet_id),
+                )
+            )
+
+        super().__init__(
+            placeholder="🐾 Browse & select a pet companion...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            custom_id="pet_store_select",
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: "PetStoreView" = self.view  # type: ignore
+        if interaction.user.id != view.user_id:
+            await interaction.response.send_message("❌ This pet menu is not for you!", ephemeral=True)
+            return
+
+        if not self.values:
+            return
+
+        view.selected_pet_id = self.values[0]
+        view.update_components()
+        embed, file_att = build_pet_store_embed(
+            view.rewards_service, view.user_id, view.selected_pet_id, interaction.user.display_name
+        )
+        if file_att:
+            await interaction.response.edit_message(embed=embed, attachments=[file_att], view=view)
+        else:
+            await interaction.response.edit_message(embed=embed, attachments=[], view=view)
+
+
+class PetStoreView(discord.ui.View):
+    """Interactive, full-featured Pet Shelter & Companion Management Dashboard."""
 
     def __init__(
         self,
         rewards_service: RewardsDBService,
         user_id: int,
-        user_pets: list[PetRecord],
+        selected_pet_id: Optional[Union[str, list[PetRecord]]] = None,
+        user_pets: Optional[list[PetRecord]] = None,
     ):
         super().__init__(timeout=180.0)
         self.rewards_service = rewards_service
         self.user_id = user_id
-        self.update_components(user_pets)
 
-    def update_components(self, user_pets: list[PetRecord]) -> None:
+        if isinstance(selected_pet_id, list):
+            pets_list = selected_pet_id
+            sel_id = None
+        elif isinstance(selected_pet_id, str):
+            pets_list = user_pets
+            sel_id = selected_pet_id
+        else:
+            pets_list = user_pets
+            sel_id = None
+
+        if not sel_id:
+            active_pet = rewards_service.get_active_pet(user_id)
+            if active_pet:
+                self.selected_pet_id = active_pet.pet_id
+            else:
+                pets = pets_list if pets_list is not None else rewards_service.get_user_pets(user_id)
+                self.selected_pet_id = pets[0].pet_id if pets else "tuxedo_cat"
+        else:
+            self.selected_pet_id = sel_id
+
+        self.update_components(pets_list)
+
+    def update_components(self, user_pets: Optional[list[PetRecord]] = None) -> None:
         self.clear_items()
-        self.add_item(PetCareButton("feed", "Feed Snack", "🍖", discord.ButtonStyle.success))
-        self.add_item(PetCareButton("pet", "Cuddle & Pet", "💖", discord.ButtonStyle.primary))
+        # Row 0: Full Pet Catalog Select Menu
+        self.add_item(PetStoreSelect(self.rewards_service, self.user_id, self.selected_pet_id))
+
+        user = self.rewards_service.get_or_create_user(self.user_id)
+        pets = user_pets if user_pets is not None else self.rewards_service.get_user_pets(self.user_id)
+        owned_dict = {p.pet_id: p for p in pets}
+        pet_info = PET_CATALOG.get(self.selected_pet_id, PET_CATALOG["tuxedo_cat"])
+
+        # Row 1: Action buttons based on ownership state
+        if self.selected_pet_id not in owned_dict:
+            if not user.has_claimed_starter and self.selected_pet_id in ("tuxedo_cat", "golden_dog", "brown_bunny"):
+                btn_starter = discord.ui.Button(
+                    label="🎁 Adopt FREE Starter (0 pts)",
+                    style=discord.ButtonStyle.success,
+                    emoji="🐾",
+                    custom_id="btn_adopt_starter",
+                )
+                btn_starter.callback = self._on_adopt_starter
+                self.add_item(btn_starter)
+            else:
+                cost = pet_info["cost"]
+                btn_adopt = discord.ui.Button(
+                    label=f"🐾 Adopt {pet_info['name']} ({cost:,} pts)",
+                    style=discord.ButtonStyle.success,
+                    custom_id="btn_adopt_pet",
+                )
+                btn_adopt.callback = self._on_adopt_pet
+                self.add_item(btn_adopt)
+        else:
+            owned_pet = owned_dict[self.selected_pet_id]
+            if not owned_pet.is_active:
+                btn_equip = discord.ui.Button(
+                    label="⭐ Equip as Active Companion",
+                    style=discord.ButtonStyle.primary,
+                    emoji="✨",
+                    custom_id="btn_equip_pet",
+                )
+                btn_equip.callback = self._on_equip_pet
+                self.add_item(btn_equip)
+            else:
+                self.add_item(PetCareButton("feed", "Feed Snack (+15 XP)", "🍖", discord.ButtonStyle.primary))
+                self.add_item(PetCareButton("pet", "Cuddle & Pet", "💖", discord.ButtonStyle.success))
+
+            btn_sell = discord.ui.Button(
+                label="Sell Pet",
+                style=discord.ButtonStyle.secondary,
+                emoji="🪙",
+                custom_id="btn_sell_pet",
+            )
+            btn_sell.callback = self._on_sell_pet
+            self.add_item(btn_sell)
+
         self.add_item(PetGuideButton())
 
-        if len(user_pets) > 1:
-            self.add_item(PetSwitchSelect(user_pets))
+    async def _on_adopt_starter(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This menu is not for you!", ephemeral=True)
+            return
+
+        try:
+            pet_rec = self.rewards_service.claim_starter_pet(self.user_id, self.selected_pet_id)
+            self.update_components()
+            embed, file_att = build_pet_store_embed(
+                self.rewards_service, self.user_id, self.selected_pet_id, interaction.user.display_name
+            )
+            if file_att:
+                await interaction.response.edit_message(embed=embed, attachments=[file_att], view=self)
+            else:
+                await interaction.response.edit_message(embed=embed, attachments=[], view=self)
+            await interaction.followup.send(
+                f"🎉 **Welcome {pet_rec.nickname} ({pet_rec.display_name})!** You adopted your FREE starter companion!\n"
+                f"🌟 Active Perk: **{pet_rec.perk_title}**",
+                ephemeral=True,
+            )
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    async def _on_adopt_pet(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This menu is not for you!", ephemeral=True)
+            return
+
+        try:
+            res = self.rewards_service.adopt_pet(self.user_id, self.selected_pet_id)
+            self.update_components()
+            embed, file_att = build_pet_store_embed(
+                self.rewards_service, self.user_id, self.selected_pet_id, interaction.user.display_name
+            )
+            if file_att:
+                await interaction.response.edit_message(embed=embed, attachments=[file_att], view=self)
+            else:
+                await interaction.response.edit_message(embed=embed, attachments=[], view=self)
+            await interaction.followup.send(
+                f"🎉 **Congratulations!** You adopted **{res.nickname}** ({res.display_name})!\n"
+                f"🌟 Active Perk: **{res.perk_title}**",
+                ephemeral=True,
+            )
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    async def _on_equip_pet(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This menu is not for you!", ephemeral=True)
+            return
+
+        try:
+            switched = self.rewards_service.switch_active_pet(self.user_id, self.selected_pet_id)
+            self.update_components()
+            embed, file_att = build_pet_store_embed(
+                self.rewards_service, self.user_id, self.selected_pet_id, interaction.user.display_name
+            )
+            if file_att:
+                await interaction.response.edit_message(embed=embed, attachments=[file_att], view=self)
+            else:
+                await interaction.response.edit_message(embed=embed, attachments=[], view=self)
+            await interaction.followup.send(
+                f"✨ Switched active companion to **{switched.nickname}** ({switched.display_name})!\n"
+                f"Active Perk: **{switched.perk_title}**",
+                ephemeral=True,
+            )
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    async def _on_feed_pet(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This menu is not for you!", ephemeral=True)
+            return
+
+        try:
+            res = self.rewards_service.interact_pet(self.user_id, action="feed")
+            self.update_components()
+            embed, file_att = build_pet_store_embed(
+                self.rewards_service, self.user_id, self.selected_pet_id, interaction.user.display_name
+            )
+            if file_att:
+                await interaction.response.edit_message(embed=embed, attachments=[file_att], view=self)
+            else:
+                await interaction.response.edit_message(embed=embed, attachments=[], view=self)
+            await interaction.followup.send(res.message, ephemeral=True)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    async def _on_cuddle_pet(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This menu is not for you!", ephemeral=True)
+            return
+
+        try:
+            res = self.rewards_service.interact_pet(self.user_id, action="pet")
+            self.update_components()
+            embed, file_att = build_pet_store_embed(
+                self.rewards_service, self.user_id, self.selected_pet_id, interaction.user.display_name
+            )
+            if file_att:
+                await interaction.response.edit_message(embed=embed, attachments=[file_att], view=self)
+            else:
+                await interaction.response.edit_message(embed=embed, attachments=[], view=self)
+            await interaction.followup.send(res.message, ephemeral=True)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    async def _on_sell_pet(self, interaction: discord.Interaction) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This menu is not for you!", ephemeral=True)
+            return
+
+        try:
+            res = self.rewards_service.sell_pet(self.user_id, self.selected_pet_id)
+            active_pet = self.rewards_service.get_active_pet(self.user_id)
+            self.selected_pet_id = active_pet.pet_id if active_pet else "tuxedo_cat"
+            self.update_components()
+            embed, file_att = build_pet_store_embed(
+                self.rewards_service, self.user_id, self.selected_pet_id, interaction.user.display_name
+            )
+            if file_att:
+                await interaction.response.edit_message(embed=embed, attachments=[file_att], view=self)
+            else:
+                await interaction.response.edit_message(embed=embed, attachments=[], view=self)
+            await interaction.followup.send(
+                f"🪙 Released **{res['nickname']}** ({res['pet_name']}) back to shelter! Refunded **`+{res['refund_amount']:,} Uno Points`** (New Wallet: `{res['new_balance']:,} pts`)",
+                ephemeral=True,
+            )
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+
+# Compatibility alias
+PetView = PetStoreView
 
 
 def build_shop_embed(rewards_service: RewardsDBService, user_id: int, category: str = "home") -> discord.Embed:
@@ -1897,9 +2266,9 @@ class RewardsCog(commands.Cog):
 
     pet_group = app_commands.Group(name="pet", description="Manage, care for, and adopt pet companions.")
 
-    @pet_group.command(name="view", description="View and care for your active pet companion.")
+    @pet_group.command(name="view", description="Open the interactive Pet Shelter & Companion Store.")
     async def pet_view(self, interaction: discord.Interaction) -> None:
-        """Display pet companion dashboard."""
+        """Display comprehensive interactive pet shelter and companion dashboard."""
         all_pets = self.rewards_service.get_user_pets(interaction.user.id)
         user = self.rewards_service.get_or_create_user(interaction.user.id)
         if not all_pets and not user.has_claimed_starter:
@@ -1908,9 +2277,10 @@ class RewardsCog(commands.Cog):
             await interaction.response.send_message(embed=embed, view=view)
             return
 
-        active = self.rewards_service.get_active_pet(interaction.user.id)
-        embed, file_att = build_pet_embed(active, interaction.user.display_name, all_pets)
-        view = PetView(self.rewards_service, interaction.user.id, all_pets)
+        view = PetStoreView(self.rewards_service, interaction.user.id)
+        embed, file_att = build_pet_store_embed(
+            self.rewards_service, interaction.user.id, view.selected_pet_id, interaction.user.display_name
+        )
         if file_att:
             await interaction.response.send_message(embed=embed, file=file_att, view=view)
         else:
