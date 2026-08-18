@@ -659,8 +659,52 @@ def test_pet_sell_command_and_confirmation():
         interaction_btn.response.edit_message.assert_awaited_once()
         final_embed = interaction_btn.response.edit_message.call_args.kwargs["embed"]
         assert "Refund Processed" in final_embed.title
-        # Tuxedo cat (500 pts) refund is 300 pts. Starting points: 1000 - 500 + 300 = 800
-        assert service.get_balance(888) == 800
+        # Tuxedo cat (50 pts) refund is 30 pts. Starting points: 1000 - 50 + 30 = 980
+        assert service.get_balance(888) == 980
+
+    asyncio.run(_test())
+
+
+def test_starter_pet_flow():
+    """Test /pet view triggering starter modal for 0-pet users, and /pet starter choice."""
+    async def _test():
+        from discord import app_commands
+        cog, service, _ = _make_rewards_cog()
+
+        # 1. New user runs /pet view -> gets StarterPetSelectView
+        i_view = MagicMock()
+        i_view.user.id = 5555
+        i_view.user.display_name = "Newbie"
+        i_view.response.send_message = AsyncMock()
+
+        await cog.pet_view.callback(cog, i_view)
+        i_view.response.send_message.assert_awaited_once()
+        view_arg = i_view.response.send_message.call_args.kwargs.get("view")
+        assert view_arg is not None
+        assert len(view_arg.children) == 3
+
+        # 2. Click Tuxedo Cat button in StarterPetSelectView
+        btn_cat = view_arg.children[0]
+        i_click = MagicMock()
+        i_click.user.id = 5555
+        i_click.user.display_name = "Newbie"
+        i_click.response.edit_message = AsyncMock()
+
+        await btn_cat.callback(i_click)
+        i_click.response.edit_message.assert_awaited_once()
+        assert service.get_active_pet(5555).pet_id == "tuxedo_cat"
+        assert service.get_or_create_user(5555).has_claimed_starter is True
+
+        # 3. Direct slash command /pet starter by a second user
+        i_cmd = MagicMock()
+        i_cmd.user.id = 6666
+        i_cmd.user.display_name = "DogLover"
+        i_cmd.response.send_message = AsyncMock()
+
+        dog_choice = app_commands.Choice(name="Golden Retriever", value="golden_dog")
+        await cog.pet_starter.callback(cog, i_cmd, pet=dog_choice, nickname="Buddy")
+        i_cmd.response.send_message.assert_awaited_once()
+        assert service.get_active_pet(6666).nickname == "Buddy"
 
     asyncio.run(_test())
 

@@ -32,6 +32,7 @@ from bot.services.rewards_db import (
     WorkResult,
     ScavengeResult,
     DuelResult,
+    STARTER_PET_CHOICES,
 )
 
 logger = logging.getLogger(__name__)
@@ -551,6 +552,85 @@ class PetSellConfirmView(discord.ui.View):
             return
         self.stop()
         await interaction.response.edit_message(content="❌ Pet sale cancelled. Your companion remains safe with you!", embed=None, view=None)
+
+
+def build_starter_pet_embed(user_name: str) -> discord.Embed:
+    """Build welcoming embed showcasing free starter pet options."""
+    embed = discord.Embed(
+        title=f"🐾 Welcome to the Pet Shelter, {user_name}!",
+        description=(
+            f"Every student in BSCS 1-4 is gifted **1 Free Starter Companion (0 pts)** to assist in your academic journey!\n\n"
+            "Choose your loyal starter companion below:\n\n"
+            "🐱 **Tuxedo Cat** (*The Serene Feline*)\n"
+            "• **Perk**: `2x Daily Attendance Points` (Permanently doubles `/daily` points!)\n"
+            "• **Best for**: Consistent daily point accumulation & peaceful study vibes.\n\n"
+            "🐶 **Golden Retriever** (*The Faithful Guard Pup*)\n"
+            "• **Perk**: `Guard Dog Defense` (75% chance to catch & bite pickpockets!)\n"
+            "• **Best for**: Protecting your hard-earned wallet from classmate robbers.\n\n"
+            "🐰 **Lop-Eared Bunny** (*The Lucky Rabbit*)\n"
+            "• **Perk**: `Lucky Gambler` (+5% win rate in coinflips & boosted slots/bet odds!)\n"
+            "• **Best for**: Risk-takers and casino gamblers.\n\n"
+            "*(You can adopt other pets and variants later from the `/shop` or 3-day `/pet drop` rotation!)*"
+        ),
+        color=discord.Color.gold(),
+    )
+    embed.set_footer(text="Click a button below to adopt your free companion immediately!")
+    return embed
+
+
+class StarterPetSelectView(discord.ui.View):
+    """Interactive Discord UI view for picking a free starter pet."""
+
+    def __init__(self, rewards_service: RewardsDBService, user_id: int):
+        super().__init__(timeout=120.0)
+        self.rewards_service = rewards_service
+        self.user_id = user_id
+
+    async def _handle_starter_claim(self, interaction: discord.Interaction, pet_id: str) -> None:
+        if interaction.user.id != self.user_id:
+            await interaction.response.send_message("❌ This starter selection menu is not for you!", ephemeral=True)
+            return
+
+        try:
+            pet_rec = self.rewards_service.claim_starter_pet(self.user_id, pet_id)
+            self.stop()
+
+            embed = discord.Embed(
+                title=f"🎉 Welcome Your New Companion: {pet_rec.nickname}!",
+                description=(
+                    f"You have adopted **{pet_rec.nickname}** ({pet_rec.display_name}) for **FREE**!\n\n"
+                    f"🌟 **Active Perk:** **{pet_rec.perk_title}**\n"
+                    f"*{pet_rec.perk_desc}*\n\n"
+                    f"💬 *\"{pet_rec.quote}\"*\n\n"
+                    "Your companion is now equipped and ready for your daily campus adventures! Use `/pet` to care for them!"
+                ),
+                color=discord.Color.green(),
+            )
+            file_att = None
+            pet_img_path = Path("data/pets") / pet_rec.image_file
+            if pet_img_path.exists():
+                file_att = discord.File(str(pet_img_path), filename=pet_rec.image_file)
+                embed.set_thumbnail(url=f"attachment://{pet_rec.image_file}")
+
+            if file_att:
+                await interaction.response.edit_message(embed=embed, attachments=[file_att], view=None)
+            else:
+                await interaction.response.edit_message(embed=embed, view=None)
+
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @discord.ui.button(label="Adopt Tuxedo Cat", emoji="🐱", style=discord.ButtonStyle.primary, custom_id="starter_cat")
+    async def choose_cat(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._handle_starter_claim(interaction, "tuxedo_cat")
+
+    @discord.ui.button(label="Adopt Golden Retriever", emoji="🐶", style=discord.ButtonStyle.success, custom_id="starter_dog")
+    async def choose_dog(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._handle_starter_claim(interaction, "golden_dog")
+
+    @discord.ui.button(label="Adopt Lop-Eared Bunny", emoji="🐰", style=discord.ButtonStyle.secondary, custom_id="starter_bunny")
+    async def choose_bunny(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self._handle_starter_claim(interaction, "brown_bunny")
 
 
 def build_blackjack_embed(game: BlackjackGame, player_name: str) -> discord.Embed:
@@ -1405,8 +1485,15 @@ class RewardsCog(commands.Cog):
     @pet_group.command(name="view", description="View and care for your active pet companion.")
     async def pet_view(self, interaction: discord.Interaction) -> None:
         """Display pet companion dashboard."""
-        active = self.rewards_service.get_active_pet(interaction.user.id)
         all_pets = self.rewards_service.get_user_pets(interaction.user.id)
+        user = self.rewards_service.get_or_create_user(interaction.user.id)
+        if not all_pets and not user.has_claimed_starter:
+            embed = build_starter_pet_embed(interaction.user.display_name)
+            view = StarterPetSelectView(self.rewards_service, interaction.user.id)
+            await interaction.response.send_message(embed=embed, view=view)
+            return
+
+        active = self.rewards_service.get_active_pet(interaction.user.id)
         embed, file_att = build_pet_embed(active, interaction.user.display_name, all_pets)
         view = PetView(self.rewards_service, interaction.user.id, all_pets)
         if file_att:
@@ -1414,26 +1501,83 @@ class RewardsCog(commands.Cog):
         else:
             await interaction.response.send_message(embed=embed, view=view)
 
+    @pet_group.command(name="starter", description="Claim your 1 Free Starter Pet Companion (Tuxedo Cat, Golden Retriever, Lop-Eared Bunny)!")
+    @app_commands.describe(
+        pet="Your choice of free starter companion.",
+        nickname="Optional custom nickname for your starter companion.",
+    )
+    @app_commands.choices(
+        pet=[
+            app_commands.Choice(name="🐱 Tuxedo Cat (2x Daily Points)", value="tuxedo_cat"),
+            app_commands.Choice(name="🐶 Golden Retriever (Anti-Theft Defense)", value="golden_dog"),
+            app_commands.Choice(name="🐰 Lop-Eared Bunny (Casino & Coinflip Luck)", value="brown_bunny"),
+        ]
+    )
+    async def pet_starter(
+        self,
+        interaction: discord.Interaction,
+        pet: Optional[app_commands.Choice[str]] = None,
+        nickname: Optional[str] = None,
+    ) -> None:
+        """Claim free starter pet."""
+        user_id = interaction.user.id
+        user = self.rewards_service.get_or_create_user(user_id)
+        if user.has_claimed_starter:
+            await interaction.response.send_message("❌ You have already claimed your free starter companion! Adopt more companions from `/shop` or `/pet adopt`.", ephemeral=True)
+            return
+
+        if not pet:
+            embed = build_starter_pet_embed(interaction.user.display_name)
+            view = StarterPetSelectView(self.rewards_service, user_id)
+            await interaction.response.send_message(embed=embed, view=view)
+            return
+
+        try:
+            pet_rec = self.rewards_service.claim_starter_pet(user_id, pet.value, nickname=nickname)
+            embed = discord.Embed(
+                title=f"🎉 Welcome Your New Companion: {pet_rec.nickname}!",
+                description=(
+                    f"You have adopted **{pet_rec.nickname}** ({pet_rec.display_name}) for **FREE**!\n\n"
+                    f"🌟 **Active Perk:** **{pet_rec.perk_title}**\n"
+                    f"*{pet_rec.perk_desc}*\n\n"
+                    f"💬 *\"{pet_rec.quote}\"*\n\n"
+                    "Your companion is now equipped and ready for your daily campus adventures! Use `/pet` to care for them!"
+                ),
+                color=discord.Color.green(),
+            )
+            file_att = None
+            pet_img_path = Path("data/pets") / pet_rec.image_file
+            if pet_img_path.exists():
+                file_att = discord.File(str(pet_img_path), filename=pet_rec.image_file)
+                embed.set_thumbnail(url=f"attachment://{pet_rec.image_file}")
+
+            if file_att:
+                await interaction.response.send_message(embed=embed, file=file_att)
+            else:
+                await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
     @pet_group.command(name="adopt", description="Adopt a new pet companion from the shelter.")
     @app_commands.describe(
         pet="The species/variant of pet you want to adopt.",
         nickname="Optional custom nickname for your pet.",
     )
     @app_commands.choices(pet=[
-        app_commands.Choice(name="🐱 Tuxedo Cat (500 pts)", value="tuxedo_cat"),
-        app_commands.Choice(name="🐱 Fluffy Calico Cat (550 pts)", value="calico_cat"),
-        app_commands.Choice(name="🐶 Golden Retriever (550 pts)", value="golden_dog"),
-        app_commands.Choice(name="🐶 Shiba Inu (580 pts)", value="shiba_dog"),
-        app_commands.Choice(name="🐰 Lop-Eared Bunny (600 pts)", value="brown_bunny"),
-        app_commands.Choice(name="🐰 Moon Rabbit (650 pts)", value="white_bunny"),
-        app_commands.Choice(name="🦉 Scholar Owl (500 pts)", value="scholar_owl"),
-        app_commands.Choice(name="🦉 Frost Owl (550 pts)", value="ice_owl"),
-        app_commands.Choice(name="🐢 Master Oogway Turtle (600 pts)", value="oogway_turtle"),
-        app_commands.Choice(name="🦊 Trickster Fox (650 pts)", value="orange_fox"),
-        app_commands.Choice(name="🦊 Arctic Ice Fox (700 pts)", value="ice_fox"),
-        app_commands.Choice(name="🦎 Pastel Pink Axolotl (750 pts)", value="pink_axolotl"),
-        app_commands.Choice(name="🦎 Rainbow Axolotl (950 pts)", value="rainbow_axolotl"),
-        app_commands.Choice(name="🐠 Fiery Lucky Goldfish (800 pts)", value="fiery_goldfish"),
+        app_commands.Choice(name="🐱 Tuxedo Cat (50 pts)", value="tuxedo_cat"),
+        app_commands.Choice(name="🐱 Fluffy Calico Cat (100 pts)", value="calico_cat"),
+        app_commands.Choice(name="🐶 Golden Retriever (50 pts)", value="golden_dog"),
+        app_commands.Choice(name="🐶 Shiba Inu (100 pts)", value="shiba_dog"),
+        app_commands.Choice(name="🐰 Lop-Eared Bunny (150 pts)", value="brown_bunny"),
+        app_commands.Choice(name="🐰 Moon Rabbit (200 pts)", value="white_bunny"),
+        app_commands.Choice(name="🦉 Scholar Owl (150 pts)", value="scholar_owl"),
+        app_commands.Choice(name="🦉 Frost Owl (200 pts)", value="ice_owl"),
+        app_commands.Choice(name="🐢 Master Oogway Turtle (200 pts)", value="oogway_turtle"),
+        app_commands.Choice(name="🦊 Trickster Fox (200 pts)", value="orange_fox"),
+        app_commands.Choice(name="🦊 Arctic Ice Fox (250 pts)", value="ice_fox"),
+        app_commands.Choice(name="🦎 Pastel Pink Axolotl (150 pts)", value="pink_axolotl"),
+        app_commands.Choice(name="🦎 Rainbow Axolotl (250 pts)", value="rainbow_axolotl"),
+        app_commands.Choice(name="🐠 Fiery Lucky Goldfish (150 pts)", value="fiery_goldfish"),
     ])
     async def pet_adopt(
         self,

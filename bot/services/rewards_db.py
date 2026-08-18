@@ -534,7 +534,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "tuxedo_cat",
         "name": "🐱 Tuxedo Cat",
         "species": "cat",
-        "cost": 500,
+        "cost": 50,
         "image_file": "tuxedo-cat.jpg",
         "title": "The Serene Feline",
         "perk_title": "2x Daily Attendance Points",
@@ -550,7 +550,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "calico_cat",
         "name": "🐱 Fluffy Calico Cat",
         "species": "cat",
-        "cost": 550,
+        "cost": 100,
         "image_file": "talico-brown-cat.jpg",
         "title": "The Cozy Companion",
         "perk_title": "2x Daily Attendance Points",
@@ -565,7 +565,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "golden_dog",
         "name": "🐶 Golden Retriever",
         "species": "dog",
-        "cost": 550,
+        "cost": 50,
         "image_file": "golden-retriever-dog.jpg",
         "title": "The Faithful Guard Pup",
         "perk_title": "Guard Dog Defense (+40% Thief Bust)",
@@ -581,7 +581,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "shiba_dog",
         "name": "🐶 Shiba Inu",
         "species": "dog",
-        "cost": 580,
+        "cost": 100,
         "image_file": "shiba-inu-dog.jpg",
         "title": "The Alert Scout",
         "perk_title": "Guard Dog Defense (+40% Thief Bust)",
@@ -596,7 +596,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "brown_bunny",
         "name": "🐰 Lop-Eared Bunny",
         "species": "bunny",
-        "cost": 600,
+        "cost": 150,
         "image_file": "brown-bunny.jpg",
         "title": "The Lucky Rabbit",
         "perk_title": "Lucky Gambler (+15% Bet Win Rates)",
@@ -612,7 +612,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "white_bunny",
         "name": "🐰 Moon Rabbit",
         "species": "bunny",
-        "cost": 650,
+        "cost": 200,
         "image_file": "white-bunny.jpg",
         "title": "The Celestial Lucky Charm",
         "perk_title": "Lucky Gambler (+15% Bet Win Rates)",
@@ -627,7 +627,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "scholar_owl",
         "name": "🦉 Scholar Owl",
         "species": "owl",
-        "cost": 500,
+        "cost": 150,
         "image_file": "owl.jpg",
         "title": "The Academic Owl",
         "perk_title": "Quiz Master (+25 pts/quiz & 4th Attempt)",
@@ -643,7 +643,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "ice_owl",
         "name": "🦉 Frost Owl",
         "species": "owl",
-        "cost": 550,
+        "cost": 200,
         "image_file": "ice-owl.jpg",
         "title": "The Glacial Scholar",
         "perk_title": "Quiz Master (+25 pts/quiz & 4th Attempt)",
@@ -658,7 +658,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "oogway_turtle",
         "name": "🐢 Master Oogway Turtle",
         "species": "turtle",
-        "cost": 600,
+        "cost": 200,
         "image_file": "master-oogway-turtle.jpg",
         "title": "The Zen Grandmaster",
         "perk_title": "Permanent Streak Freeze & +2d Shield",
@@ -674,7 +674,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "orange_fox",
         "name": "🦊 Trickster Fox",
         "species": "fox",
-        "cost": 650,
+        "cost": 200,
         "image_file": "orange-fox.jpg",
         "title": "The Cunning Rogue",
         "perk_title": "Master Pickpocket (+15% Steal & +10 Airdrop)",
@@ -690,7 +690,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "ice_fox",
         "name": "🦊 Arctic Ice Fox",
         "species": "fox",
-        "cost": 700,
+        "cost": 250,
         "image_file": "ice-fox.jpg",
         "title": "The Glacial Phantom",
         "perk_title": "Master Pickpocket (+15% Steal & +10 Airdrop)",
@@ -705,7 +705,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "pink_axolotl",
         "name": "🦎 Pastel Pink Axolotl",
         "species": "axolotl",
-        "cost": 750,
+        "cost": 150,
         "image_file": "pink-axolotl.jpg",
         "title": "The Charming Mascot",
         "perk_title": "Economy Titan (5% Shop Cashback)",
@@ -720,7 +720,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "rainbow_axolotl",
         "name": "🦎 Rainbow Axolotl",
         "species": "axolotl",
-        "cost": 950,
+        "cost": 250,
         "image_file": "rainbow-axolotl.jpg",
         "title": "The Mythical Prismatic Mascot",
         "perk_title": "Economy Titan (5% Shop Cashback)",
@@ -735,7 +735,7 @@ PET_CATALOG: dict[str, dict] = {
         "id": "fiery_goldfish",
         "name": "🐠 Fiery Lucky Goldfish",
         "species": "goldfish",
-        "cost": 800,
+        "cost": 150,
         "image_file": "fiery-goldfish.jpg",
         "title": "The Fortune Fish",
         "perk_title": "Economy Titan (5% Shop Cashback)",
@@ -949,6 +949,7 @@ class UserRecord:
     bank_points: int = 0
     last_work_time: Optional[str] = None
     last_scavenge_time: Optional[str] = None
+    has_claimed_starter: bool = False
 
 
 @dataclass(frozen=True)
@@ -983,6 +984,10 @@ class UserProfile:
     badges: list[str]
     active_pet: Optional[PetRecord] = None
     bank_points: int = 0
+    has_claimed_starter: bool = False
+
+
+STARTER_PET_CHOICES: list[str] = ["tuxedo_cat", "golden_dog", "brown_bunny"]
 
 
 SLOTS_SYMBOLS: list[dict] = [
@@ -1214,6 +1219,8 @@ class RewardsDBService:
             conn.execute("ALTER TABLE users ADD COLUMN last_work_time TEXT")
         if "last_scavenge_time" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN last_scavenge_time TEXT")
+        if "has_claimed_starter" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN has_claimed_starter INTEGER DEFAULT 0")
         conn.commit()
 
     def get_or_create_user(self, user_id: int) -> UserRecord:
@@ -1243,6 +1250,7 @@ class RewardsDBService:
                 bank_points=row["bank_points"] if "bank_points" in keys else 0,
                 last_work_time=row["last_work_time"] if "last_work_time" in keys else None,
                 last_scavenge_time=row["last_scavenge_time"] if "last_scavenge_time" in keys else None,
+                has_claimed_starter=bool(row["has_claimed_starter"]) if "has_claimed_starter" in keys else False,
             )
 
     def get_balance(self, user_id: int) -> int:
@@ -1272,6 +1280,49 @@ class RewardsDBService:
             image_file=cat_info.get("image_file", "tuxedo-cat.jpg"),
             quote=random_quote,
         )
+
+    def claim_starter_pet(self, user_id: int, pet_id: str, nickname: Optional[str] = None) -> PetRecord:
+        """Claim a free starter companion (0 pts) from the starter trio (Tuxedo Cat, Golden Retriever, Lop-Eared Bunny)."""
+        clean_id = pet_id.strip().lower()
+        if clean_id not in STARTER_PET_CHOICES:
+            raise RewardsError(f"'{pet_id}' is not an eligible free starter! Choose: 🐱 Tuxedo Cat, 🐶 Golden Retriever, or 🐰 Lop-Eared Bunny.")
+
+        user = self.get_or_create_user(user_id)
+        if user.has_claimed_starter:
+            raise RewardsError("You have already claimed your free starter companion! Adopt more companions from `/shop` or `/pet adopt`.")
+
+        info = PET_CATALOG[clean_id]
+        species = info["species"]
+        chosen_name = nickname.strip() if nickname and nickname.strip() else info["name"]
+
+        with self._get_connection() as conn:
+            existing = conn.execute(
+                "SELECT id FROM user_pets WHERE user_id = ? AND pet_id = ?",
+                (user_id, clean_id),
+            ).fetchone()
+            if existing:
+                raise RewardsError(f"You already own **{info['name']}**!")
+
+            active_pet = conn.execute(
+                "SELECT id FROM user_pets WHERE user_id = ? AND is_active = 1",
+                (user_id,),
+            ).fetchone()
+            is_active = 1 if not active_pet else 0
+
+            now_str = datetime.now(timezone.utc).isoformat()
+            cursor = conn.execute(
+                """
+                INSERT INTO user_pets (user_id, pet_id, species, nickname, happiness, level, xp, is_active, adopted_at)
+                VALUES (?, ?, ?, ?, 100, 1, 0, ?, ?)
+                """,
+                (user_id, clean_id, species, chosen_name, is_active, now_str),
+            )
+            pet_db_id = cursor.lastrowid
+            conn.execute("UPDATE users SET has_claimed_starter = 1 WHERE user_id = ?", (user_id,))
+            conn.commit()
+
+            row = conn.execute("SELECT * FROM user_pets WHERE id = ?", (pet_db_id,)).fetchone()
+            return self._pet_row_to_record(row)
 
     def adopt_pet(self, user_id: int, pet_id: str, nickname: Optional[str] = None) -> PetRecord:
         """Adopt a pet companion from the pet catalog."""
@@ -1822,6 +1873,7 @@ class RewardsDBService:
             badges=badges,
             active_pet=active_pet,
             bank_points=user.bank_points,
+            has_claimed_starter=user.has_claimed_starter,
         )
 
     def record_redemption(self, user_id: int, item_id: str) -> dict:

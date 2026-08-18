@@ -303,6 +303,19 @@ class PrefixCommandsCog(commands.Cog):
         """Prefix alias for /pet view."""
         await self._invoke_app_command(context, "RewardsCog", "pet_view")
 
+    @pet_prefix.command(name="starter")
+    async def pet_starter_prefix(self, context: commands.Context, species: Optional[str] = None, *, nickname: Optional[str] = None) -> None:
+        """Prefix alias for /pet starter."""
+        choice = None
+        if species:
+            from bot.services.rewards_db import STARTER_PET_CHOICES, PET_CATALOG
+            clean = species.strip().lower()
+            alias_map = {"cat": "tuxedo_cat", "dog": "golden_dog", "bunny": "brown_bunny", "rabbit": "brown_bunny"}
+            resolved = alias_map.get(clean, clean)
+            if resolved in STARTER_PET_CHOICES:
+                choice = app_commands.Choice(name=PET_CATALOG[resolved]["name"], value=resolved)
+        await self._invoke_app_command(context, "RewardsCog", "pet_starter", choice, nickname)
+
     @pet_prefix.command(name="adopt")
     async def pet_adopt_prefix(self, context: commands.Context, species: str, *, nickname: Optional[str] = None) -> None:
         """Prefix alias for /pet adopt."""

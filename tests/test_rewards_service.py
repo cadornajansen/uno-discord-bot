@@ -431,13 +431,13 @@ def test_pet_adoption_and_switching(rewards_service: RewardsDBService):
     """Test adopting multiple pets, listing collection, switching active pet, and renaming."""
     rewards_service.add_points(1001, 2000, "START")
 
-    # 1. Adopt Tuxedo Cat
+    # 1. Adopt Tuxedo Cat (50 pts)
     pet1 = rewards_service.adopt_pet(1001, "tuxedo_cat", nickname="Oreo")
     assert pet1.nickname == "Oreo"
     assert pet1.is_active is True
-    assert rewards_service.get_balance(1001) == 2000 - 500
+    assert rewards_service.get_balance(1001) == 2000 - 50
 
-    # 2. Adopt Golden Retriever
+    # 2. Adopt Golden Retriever (50 pts)
     pet2 = rewards_service.adopt_pet(1001, "golden_dog", nickname="Buddy")
     assert pet2.nickname == "Buddy"
     assert pet2.is_active is False  # First adopted stays active by default
@@ -527,13 +527,13 @@ def test_pet_axolotl_cashback(rewards_service: RewardsDBService):
     """Test Axolotl granting 5% cashback on shop purchases."""
     rewards_service.add_points(1001, 2000, "START")
     rewards_service.adopt_pet(1001, "pink_axolotl")
-    # Cost was 750, balance is 1250
+    # Cost was 150, balance is 1850
 
     # Buy 1-week shield (150 pts) -> 5% cashback = 7 pts refund
     res = rewards_service.record_redemption(1001, "shield_1w")
     assert res["status"] == "DELIVERED"
-    # 1250 - 150 + 7 = 1107 pts
-    assert rewards_service.get_balance(1001) == 1107
+    # 1850 - 150 + 7 = 1707 pts
+    assert rewards_service.get_balance(1001) == 1707
 
 
 def test_pet_interactions(rewards_service: RewardsDBService):
@@ -553,7 +553,7 @@ def test_sell_pet_calculation_and_active_fallback(rewards_service: RewardsDBServ
     """Test selling pet calculates 60% refund + level bonuses, and re-assigns active companion."""
     rewards_service.add_points(1001, 3000, "START")
 
-    # 1. Adopt Tuxedo Cat (500 pts) and Golden Dog (550 pts)
+    # 1. Adopt Tuxedo Cat (50 pts) and Golden Dog (50 pts)
     rewards_service.adopt_pet(1001, "tuxedo_cat")
     rewards_service.adopt_pet(1001, "golden_dog")
     assert rewards_service.get_active_pet(1001).pet_id == "tuxedo_cat"
@@ -564,10 +564,10 @@ def test_sell_pet_calculation_and_active_fallback(rewards_service: RewardsDBServ
     active_cat = rewards_service.get_active_pet(1001)
     assert active_cat.level >= 2
 
-    # Tuxedo Cat base: 500 -> 60% = 300 pts. Level bonus: +25 pts per level above 1
+    # Tuxedo Cat base: 50 -> 60% = 30 pts. Level bonus: +25 pts per level above 1
     bal_before = rewards_service.get_balance(1001)
     res_sell = rewards_service.sell_pet(1001, "tuxedo_cat")
-    assert res_sell["base_refund"] == 300
+    assert res_sell["base_refund"] == 30
     assert res_sell["level_bonus"] >= 25
     assert res_sell["refund_amount"] == res_sell["base_refund"] + res_sell["level_bonus"]
     assert rewards_service.get_balance(1001) == bal_before + res_sell["refund_amount"]
@@ -581,6 +581,25 @@ def test_sell_pet_calculation_and_active_fallback(rewards_service: RewardsDBServ
     new_active = rewards_service.get_active_pet(1001)
     assert new_active is not None
     assert new_active.pet_id == "golden_dog"
+
+
+def test_claim_starter_pet_success_and_protection(rewards_service: RewardsDBService):
+    """Test claiming a free starter pet for 0 points and preventing duplicate claims."""
+    # New user with 0 points
+    assert rewards_service.get_balance(2001) == 0
+    assert rewards_service.get_or_create_user(2001).has_claimed_starter is False
+
+    # Claim free Tuxedo Cat
+    pet_rec = rewards_service.claim_starter_pet(2001, "tuxedo_cat", nickname="LuckyCat")
+    assert pet_rec.pet_id == "tuxedo_cat"
+    assert pet_rec.nickname == "LuckyCat"
+    assert pet_rec.is_active is True
+    assert rewards_service.get_balance(2001) == 0  # 0 points spent (FREE!)
+    assert rewards_service.get_or_create_user(2001).has_claimed_starter is True
+
+    # Attempting to claim another free starter raises RewardsError
+    with pytest.raises(RewardsError):
+        rewards_service.claim_starter_pet(2001, "golden_dog")
 
 
 def test_sell_nonexistent_pet_error(rewards_service: RewardsDBService):
