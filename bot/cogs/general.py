@@ -169,24 +169,31 @@ class GeneralCog(commands.Cog):
         )
 
         embed.add_field(
-            name="💰 Rewards, Economy & Side Hustles",
+            name="💰 Earning & Economy",
             value=(
                 "`/daily` or `!daily` - Claim daily attendance points and build streaks.\n"
-                "`/work` or `!work` - Work a campus shift (1hr cooldown, earn 40-120 pts + rare item drops).\n"
-                "`/beg` or `!beg` - Scavenge pocket change across campus (30m cooldown, 10-40 pts).\n"
-                "`/trivia` or `!trivia` - Answer daily CS/Tech trivia questions for +50 pts each.\n"
-                "`/balance` or `!bal` - Check wallet balance, streak, and shield status.\n"
-                "`/profile [member]` or `!profile` - View full student card, companion, rank, badges, and inventory.\n"
+                "`/work` or `!work` - Work a campus shift (1hr cooldown, 40-120 pts + rare drops).\n"
+                "`/beg` or `!beg` - Scavenge pocket change (30m cooldown, 10-40 pts).\n"
+                "`/trivia` or `!trivia` - Answer CS/Tech trivia for +50 pts each.\n"
+                "`/balance` or `!bal` - Check wallet, streak, and shield status.\n"
+                "`/profile [member]` or `!profile` - Full student card, companion, rank, and badges.\n"
                 "`/rank` or `!rank` - Quick Top 10 campus leaderboard.\n"
                 "`/leaderboard` or `!lb` - Interactive paginated server leaderboard.\n"
-                "`/bank <deposit|withdraw|view>` or `!bank` - Protected bank vault immune to theft and audits.\n"
-                "`/steal @member` or `!steal` - Consume Pickpocket Card to steal 40%-60% points.\n"
-                "`/shop` or `!shop` - Browse real-world prizes and active skill card items.\n"
+                "`/bank <deposit|withdraw|view>` or `!bank` - Bank vault immune to theft.\n"
+                "`/steal @member` or `!steal` - Pickpocket Card to steal 40%-60% points."
+            ),
+            inline=False,
+        )
+
+        embed.add_field(
+            name="🛒 Shop, Items & Guides",
+            value=(
+                "`/shop` or `!shop` - Browse prizes and skill card items.\n"
                 "`/redeem <item>` or `!redeem` - Redeem prizes (Coffee, GCash, Nitro, Survival Kit).\n"
-                "`/inventory` or `!inv` - View owned skill cards and consumable items.\n"
-                "`/use <item> [@target]` or `!use` - Activate skill cards (Shield Breaker, Tax Audit, Gacha, Coffee).\n"
+                "`/inventory` or `!inv` - View owned skill cards and consumables.\n"
+                "`/use <item> [@target]` or `!use` - Activate skill cards (Shield, Gacha, Audit, etc.).\n"
                 "`/guide` or `!guide` - Complete student guide and handbook.\n"
-                "`/milestone` or `!milestone` - View the official Uno Rewards launch announcement."
+                "`/milestone` or `!milestone` - Official Uno Rewards launch announcement."
             ),
             inline=False,
         )
