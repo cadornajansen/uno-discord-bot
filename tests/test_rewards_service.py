@@ -470,13 +470,13 @@ def test_coffee_bribe_and_gacha_box(rewards_service: RewardsDBService):
     # Coffee Bribe
     rewards_service.add_item(1001, "coffee_bribe", 1)
     res_coffee = rewards_service.use_item(1001, "coffee_bribe")
-    assert 100 <= res_coffee.points_awarded <= 180
+    assert 50 <= res_coffee.points_awarded <= 120
     assert rewards_service.get_balance(1001) == 100 + res_coffee.points_awarded
 
     # Gacha Box
     rewards_service.add_item(1001, "gacha_box", 1)
     res_gacha = rewards_service.use_item(1001, "gacha_box")
-    assert res_gacha.points_awarded >= 50
+    assert res_gacha.points_awarded >= 30
     assert res_gacha.bonus_item_name is not None
 
 

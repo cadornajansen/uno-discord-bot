@@ -3680,7 +3680,7 @@ class RewardsDBService:
 
         elif item_id == "coffee_bribe":
             self.remove_item(user_id, item_id, 1)
-            bribe_pts = random.randint(100, 180)
+            bribe_pts = random.randint(50, 120)
             new_balance = self.add_points(user_id, bribe_pts, "COFFEE_BRIBE", "Dean's Coffee Bribe Grant")
             points_awarded = bribe_pts
             desc = f"☕ You treated the CS Faculty to iced coffee and received an academic grant of **+{bribe_pts} Uno Points**!"
@@ -3690,19 +3690,19 @@ class RewardsDBService:
             roll = random.random()
             if roll < 0.50:
                 gacha_tier = "🥉 Common"
-                pts = random.randint(50, 90)
+                pts = random.randint(30, 60)
                 b_item = "pickpocket"
             elif roll < 0.80:
                 gacha_tier = "🥈 Rare"
-                pts = random.randint(150, 250)
+                pts = random.randint(70, 120)
                 b_item = "shield_1w"
             elif roll < 0.95:
                 gacha_tier = "🥇 Epic"
-                pts = random.randint(350, 500)
+                pts = random.randint(140, 200)
                 b_item = "uno_reverse"
             else:
                 gacha_tier = "💎 LEGENDARY"
-                pts = 1000
+                pts = 350
                 b_item = "uno_reverse"
 
             self.add_item(user_id, b_item, 1)
