@@ -4,7 +4,7 @@ import logging
 import math
 from pathlib import Path
 import random
-from typing import Any, Optional
+from typing import Any, Optional, Union
 import discord
 from discord import app_commands
 from discord.ext import commands
