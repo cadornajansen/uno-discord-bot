@@ -2454,26 +2454,36 @@ class RewardsCog(commands.Cog):
     async def milestone(self, interaction: discord.Interaction) -> None:
         """Display the official production milestone announcement."""
         embed = discord.Embed(
-            title="✅ PRODUCTION MILESTONE: UNO REWARDS & GAMIFICATION",
+            title="🎉 PRODUCTION MILESTONE: UNO CASINO, PETS & ECONOMY MEGA EXPANSION",
             description=(
-                "**Uno AI Gamification & Rewards System is officially live 🟢**\n\n"
-                "Earn Uno Points every day, answer daily trivia, climb the student leaderboards, roll the roulette, "
-                "protect your wallet with Immunity Shields, and redeem real-world student perks!\n\n"
-                "**ECONOMY FEATURES**\n"
-                "• 📅 Daily Attendance & Streak Bonus (`/daily` or `!daily`)\n"
-                "• 🧠 Daily CS Trivia Quizzes (`/trivia` or `!trivia` — +50 pts, max 3/day)\n"
-                "• 🎰 50pt Roulette Gambling (`/bet` or `!bet`)\n"
-                "• 🦹 Pickpocket Robberies & 1-Week Shields (`/steal`, `/use`)\n"
-                "• 🏆 Paginated Class Leaderboard (`/leaderboard` or `!lb`)\n"
-                "• 🏪 Prize Shop & Real Redemptions (`/shop`, `/redeem`)\n\n"
-                "**REDEEMABLE PERKS**\n"
-                "Intramuros Coffee · GCash ₱100 · 1-Month Printing · 3k Exam Kit · Discord Nitro\n\n"
-                "**GET STARTED**\n"
-                "Run `/guide` or `!guide` to learn all game mechanics and claim your first `/daily`!"
+                "**Uno AI Gamification, Casino & Pet Companion System is officially live 🟢**\n\n"
+                "Earn Uno Points daily, adopt pixel-art pet companions, grind campus side hustles, gamble high-stakes wagers, "
+                "challenge classmates in 1v1 PvP duels, secure your wealth in bank vaults, and redeem real-world student rewards!\n\n"
+                "**🐾 PET COMPANIONS & ADOPTION**\n"
+                "• 🐱 **Cats**: 2x permanent daily claim boost\n"
+                "• 🐶 **Dogs**: Guard dog protection against thieves & bite back\n"
+                "• 🐰 **Bunnies**: Passive luck edge in casino gambling & coinflips\n"
+                "• 🦉 **Owls**: 1.5x bonus trivia points\n"
+                "• 🔄 **3-Day Rotating Drops & Pet Shelter**: `/pet drop`, `/pet adopt`, `/pet sell`, `/pet guide`\n\n"
+                "**🎰 CASINO & HIGH-STAKES GAMBLING (UNLIMITED WAGERS)**\n"
+                "• 🎰 **Unlimited Roulette**: `/bet [amount]` (up to 5x Mega Jackpot!)\n"
+                "• 🍒 **3-Reel Slots**: `/slots [amount]` (up to 50x Uno Wild Jackpot!)\n"
+                "• 🃏 **Interactive Blackjack 21**: `/blackjack [amount]` (Hit, Stand, Double Down!)\n"
+                "• 📈 **High-Low Card Streak**: `/highlow [amount]` (Climb ladder up to 30x max win!)\n"
+                "• 🪙 **Coinflip 50/50**: `/coinflip <heads|tails> [amount]`\n\n"
+                "**💼 CAMPUS SIDE HUSTLES & DUELS**\n"
+                "• 💻 **Campus Shift / Work**: `/work` (earn 40–120 pts + rare card drops, 1h cooldown)\n"
+                "• 🎒 **Campus Scavenge**: `/beg` (find loose change across Intramuros, 30m cooldown)\n"
+                "• ⚔️ **1v1 PvP Dice Wager Duels**: `/duel @classmate [amount]` (winner takes all!)\n"
+                "• 🏦 **Piggy Bank Vault**: `/bank deposit|withdraw|view` (100% immune to theft & audits)\n\n"
+                "**🏪 REAL-WORLD SHOP & REDEMPTIONS**\n"
+                "• ☕ Intramuros Coffee · 💵 GCash ₱100 · 🖨️ 1-Month Printing · 🎒 3k Exam Kit · 💎 Discord Nitro (`/shop`, `/redeem`)\n\n"
+                "**🚀 GET STARTED**\n"
+                "Claim your first reward with `/daily` or `!daily`, check `/guide`, and adopt your first companion with `/pet drop`!"
             ),
             color=discord.Color.from_rgb(0, 114, 239),
         )
-        embed.set_footer(text="BSCS 1-4 · Built for the block. Now living in the cloud.")
+        embed.set_footer(text="BSCS 1-4 · Pamantasan ng Lungsod ng Maynila · Built by Jansen")
 
         view = discord.ui.View()
         view.add_item(discord.ui.Button(label="GitHub Repository ↗", url="https://github.com/cadornajansen/uno-discord-bot"))
