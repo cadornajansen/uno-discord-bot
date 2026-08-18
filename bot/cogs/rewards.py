@@ -797,8 +797,26 @@ class RewardsCog(commands.Cog):
             else:
                 physical_lines.append(line)
 
-        embed.add_field(name="🃏 Consumable Skill Cards", value="\n".join(consumable_lines), inline=False)
-        embed.add_field(name="🎁 Real-World & Server Prizes", value="\n".join(physical_lines), inline=False)
+        # Helper to safely split lines into fields <= 1000 characters
+        def _add_safe_fields(title: str, lines: list[str]):
+            chunks = []
+            curr = ""
+            for line in lines:
+                if len(curr) + len(line) + 2 > 950:
+                    chunks.append(curr)
+                    curr = line
+                else:
+                    curr = f"{curr}\n{line}" if curr else line
+            if curr:
+                chunks.append(curr)
+
+            for i, chunk in enumerate(chunks):
+                field_title = title if len(chunks) == 1 else f"{title} (Part {i+1})"
+                embed.add_field(name=field_title, value=chunk, inline=False)
+
+        _add_safe_fields("🃏 Consumable Skill Cards", consumable_lines)
+        _add_safe_fields("🎁 Real-World & Server Prizes", physical_lines)
+
         embed.add_field(
             name="🍫 Milestone Reward: Exams Survival Kit",
             value="*Auto-unlocked for free once you reach **3,000 Lifetime Points**!*",
@@ -813,6 +831,12 @@ class RewardsCog(commands.Cog):
         app_commands.Choice(name="🦹 Pickpocket Card (100 pts)", value="pickpocket"),
         app_commands.Choice(name="🛡️ 1-Week Immunity Shield (150 pts)", value="shield_1w"),
         app_commands.Choice(name="⚡ 2x Daily Booster Card (120 pts)", value="double_daily"),
+        app_commands.Choice(name="🔄 Uno Reverse Card (180 pts)", value="uno_reverse"),
+        app_commands.Choice(name="🌧️ Point Airdrop (120 pts)", value="airdrop"),
+        app_commands.Choice(name="📦 Mystery Gacha Box (150 pts)", value="gacha_box"),
+        app_commands.Choice(name="🔨 EMP Shield Breaker (140 pts)", value="shield_breaker"),
+        app_commands.Choice(name="🕵️ Class Treasurer Audit (200 pts)", value="tax_audit"),
+        app_commands.Choice(name="☕ Dean's Coffee Bribe (100 pts)", value="coffee_bribe"),
         app_commands.Choice(name="☕ Intramuros Coffee Treat (1,200 pts)", value="coffee"),
         app_commands.Choice(name="💳 GCash Gift Card ₱100 (2,200 pts)", value="gcash_100"),
         app_commands.Choice(name="🖨️ Free Printing Service 1 Month (2,800 pts)", value="printing_1m"),
