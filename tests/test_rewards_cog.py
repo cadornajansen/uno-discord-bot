@@ -499,3 +499,40 @@ def test_steal_reversed_by_uno():
 
     asyncio.run(_test())
 
+
+def test_interactive_shop_view():
+    """Test ShopView category button switching and Quick-Buy select menu purchase."""
+    async def _test():
+        from bot.cogs.rewards import ShopView, ShopCategoryButton, ShopQuickBuySelect
+        cog, service, _ = _make_rewards_cog()
+        service.add_points(999, 1000, "TEST")
+
+        view = ShopView(service, 999, cog=cog)
+        assert view.current_category == "home"
+
+        # 1. Switch to 'offense' category button
+        offense_btn = next(b for b in view.children if isinstance(b, ShopCategoryButton) and b.category_key == "offense")
+        interaction_cat = MagicMock()
+        interaction_cat.user.id = 999
+        interaction_cat.response.edit_message = AsyncMock()
+
+        await offense_btn.callback(interaction_cat)
+        interaction_cat.response.edit_message.assert_awaited_once()
+        assert view.current_category == "offense"
+
+        # 2. Use Quick-Buy to buy 'pickpocket' card (100 pts)
+        quick_buy = next(s for s in view.children if isinstance(s, ShopQuickBuySelect))
+        quick_buy._values = ["pickpocket"]
+
+        interaction_buy = MagicMock()
+        interaction_buy.user.id = 999
+        interaction_buy.response.send_message = AsyncMock()
+        interaction_buy.message.edit = AsyncMock()
+
+        await quick_buy.callback(interaction_buy)
+        interaction_buy.response.send_message.assert_awaited_once()
+        assert service.get_balance(999) == 900
+        assert service.get_inventory(999)["pickpocket"] == 1
+
+    asyncio.run(_test())
+

@@ -324,6 +324,233 @@ class AirdropCatchView(discord.ui.View):
         self.add_item(AirdropCatchButton())
 
 
+def build_shop_embed(rewards_service: RewardsDBService, user_id: int, category: str = "home") -> discord.Embed:
+    """Build a clean, structured, and interactive embed for the Uno Rewards Shop."""
+    user_points = rewards_service.get_balance(user_id)
+
+    if category == "home":
+        embed = discord.Embed(
+            title="🏪 BSCS 1-4 — Uno Rewards Shop",
+            description=(
+                f"💳 **Your Wallet:** `{user_points:,} Uno Points`\n\n"
+                "Welcome to the **Uno Student Rewards Shop**! Navigate categories using the buttons below, "
+                "or purchase directly with the **Quick-Buy dropdown**."
+            ),
+            color=discord.Color.gold(),
+        )
+
+        featured_text = (
+            "• **🔄 Uno Reverse Card** (`180 pts`) — *Passive trap! Counter-steals 40%–60% from pickpockets!*\n"
+            "• **📦 Mystery Gacha Box** (`150 pts`) — *Win up to 1,000 pts & exclusive High Roller badge!*\n"
+            "• **☕ Intramuros Coffee Treat** (`1,200 pts`) — *₱50–₱80 Lawson/7-Eleven drink treat around PLM!*"
+        )
+        embed.add_field(name="⭐ Featured Items Today", value=featured_text, inline=False)
+
+        dept_text = (
+            "• ⚔️ **Offense & Traps** — Pickpocket, Uno Reverse, EMP Breaker, Tax Audit\n"
+            "• 🛡️ **Defense & Boosters** — 1-Week Shield, 2x Daily Booster, Coffee Bribe\n"
+            "• 🎲 **Events & Gacha** — Point Airdrop, Mystery Gacha Box\n"
+            "• 🎁 **Real-World & Nitro** — Coffee Treat, GCash ₱100, Free Printing, Nitro 1M"
+        )
+        embed.add_field(name="📂 Shop Departments (Click Buttons Below)", value=dept_text, inline=False)
+
+        embed.add_field(
+            name="🍫 Free Milestone Unlock",
+            value="*Exams Survival Kit auto-unlocks for **FREE** at **3,000 Lifetime Points**!*",
+            inline=False,
+        )
+        embed.set_footer(text="Click a department button below • Earn points with /daily, /trivia & /bet")
+        return embed
+
+    categories_meta = {
+        "offense": {
+            "title": "⚔️ Uno Shop — Offense & Trap Cards",
+            "desc": "High-stakes cards to steal, counter-attack, and audit wealthy classmates!",
+            "color": discord.Color.red(),
+        },
+        "defense": {
+            "title": "🛡️ Uno Shop — Defense & Booster Cards",
+            "desc": "Protect your wallet from thieves and boost your daily attendance earnings!",
+            "color": discord.Color.blue(),
+        },
+        "events": {
+            "title": "🎲 Uno Shop — Community Events & Gacha",
+            "desc": "Launch community care packages in chat or roll for legendary lootbox rewards!",
+            "color": discord.Color.purple(),
+        },
+        "prizes": {
+            "title": "🎁 Uno Shop — Real-World & Server Prizes",
+            "desc": "Redeem real-world treats, GCash rewards, and Discord Nitro perks fulfilled by Jansen!",
+            "color": discord.Color.green(),
+        },
+    }
+
+    meta = categories_meta.get(category, categories_meta["offense"])
+    embed = discord.Embed(
+        title=meta["title"],
+        description=f"💳 **Your Wallet:** `{user_points:,} Uno Points`\n*{meta['desc']}*\n",
+        color=meta["color"],
+    )
+
+    items_in_cat = [
+        (item_id, item)
+        for item_id, item in SHOP_CATALOG.items()
+        if item.get("subcategory") == category
+    ]
+
+    for item_id, item in items_in_cat:
+        cost = item["cost"]
+        status_tag = "✅ Affordable" if user_points >= cost else f"🔒 Need {(cost - user_points):,} more pts"
+        embed.add_field(
+            name=f"{item['name']} — `{cost:,} pts` [{status_tag}]",
+            value=f"{item['description']}\n`/redeem {item_id}`",
+            inline=False,
+        )
+
+    embed.set_footer(text="Select an item in the Quick-Buy dropdown below or use /redeem <item>")
+    return embed
+
+
+class ShopCategoryButton(discord.ui.Button):
+    """Button to switch active shop category."""
+
+    def __init__(self, category_key: str, label: str, emoji: Optional[str] = None, row: int = 0):
+        super().__init__(
+            label=label,
+            emoji=emoji,
+            style=discord.ButtonStyle.secondary,
+            row=row,
+            custom_id=f"shop_cat_{category_key}",
+        )
+        self.category_key = category_key
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: "ShopView" = self.view  # type: ignore
+        view.current_category = self.category_key
+        view.update_components()
+        embed = build_shop_embed(view.rewards_service, interaction.user.id, self.category_key)
+        await interaction.response.edit_message(embed=embed, view=view)
+
+
+class ShopQuickBuySelect(discord.ui.Select):
+    """Quick-buy dropdown menu for shop items."""
+
+    def __init__(self, category: str = "home", row: int = 2):
+        options = []
+        if category == "home":
+            featured_keys = ["uno_reverse", "gacha_box", "shield_1w", "airdrop", "coffee", "nitro_1m"]
+            for k in featured_keys:
+                if k in SHOP_CATALOG:
+                    item = SHOP_CATALOG[k]
+                    options.append(
+                        discord.SelectOption(
+                            label=f"{item['name']} ({item['cost']:,} pts)",
+                            value=k,
+                            description=item["description"][:95],
+                        )
+                    )
+        else:
+            for k, item in SHOP_CATALOG.items():
+                if item.get("subcategory") == category:
+                    options.append(
+                        discord.SelectOption(
+                            label=f"{item['name']} ({item['cost']:,} pts)",
+                            value=k,
+                            description=item["description"][:95],
+                        )
+                    )
+
+        super().__init__(
+            placeholder="⚡ Quick-Buy: Select an item to purchase...",
+            min_values=1,
+            max_values=1,
+            options=options,
+            row=row,
+            custom_id="shop_quick_buy",
+        )
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        view: "ShopView" = self.view  # type: ignore
+        item_id = self.values[0]
+        user_id = interaction.user.id
+        try:
+            res = view.rewards_service.record_redemption(user_id, item_id)
+            new_bal = view.rewards_service.get_balance(user_id)
+
+            if res["category"] == "consumable":
+                confirm_embed = discord.Embed(
+                    title="🛍️ Consumable Purchased!",
+                    description=f"You purchased **{res['item_name']}** for **{res['points_spent']:,} pts**!\nItem has been added to your `/inventory`.",
+                    color=discord.Color.green(),
+                )
+                confirm_embed.add_field(name="Remaining Balance", value=f"**{new_bal:,} pts**", inline=True)
+                await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
+            else:
+                confirm_embed = discord.Embed(
+                    title="🎉 Prize Redemption Submitted!",
+                    description=(
+                        f"You submitted a redemption for **{res['item_name']}** for **{res['points_spent']:,} pts**!\n"
+                        f"Jansen has been notified in staff logs. You will receive your prize fulfillment shortly."
+                    ),
+                    color=discord.Color.gold(),
+                )
+                confirm_embed.add_field(name="Remaining Balance", value=f"**{new_bal:,} pts**", inline=True)
+                await interaction.response.send_message(embed=confirm_embed, ephemeral=True)
+
+                if view.cog:
+                    await view.cog._log_activity(
+                        title="🎁 Prize Redeemed",
+                        description=f"**{interaction.user.display_name}** redeemed **{res['item_name']}** for **{res['points_spent']:,} pts**.",
+                        color=discord.Color.gold(),
+                    )
+
+            # Update the main shop view with updated points
+            embed = build_shop_embed(view.rewards_service, user_id, view.current_category)
+            await interaction.message.edit(embed=embed, view=view)
+
+        except InsufficientPointsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+
+class ShopView(discord.ui.View):
+    """Interactive categorized shop view with buttons and quick-buy."""
+
+    def __init__(
+        self,
+        rewards_service: RewardsDBService,
+        user_id: int,
+        cog: Optional[Any] = None,
+    ):
+        super().__init__(timeout=180.0)
+        self.rewards_service = rewards_service
+        self.user_id = user_id
+        self.cog = cog
+        self.current_category = "home"
+        self.update_components()
+
+    def update_components(self) -> None:
+        self.clear_items()
+        buttons_data = [
+            ("home", "Featured", "🏠", 0),
+            ("offense", "Offense & Traps", "⚔️", 0),
+            ("defense", "Defense & Boosters", "🛡️", 0),
+            ("events", "Events & Gacha", "🎲", 1),
+            ("prizes", "Real Prizes & Nitro", "🎁", 1),
+        ]
+
+        for cat_key, label, emoji, row in buttons_data:
+            btn = ShopCategoryButton(cat_key, label, emoji, row=row)
+            if cat_key == self.current_category:
+                btn.style = discord.ButtonStyle.primary
+            else:
+                btn.style = discord.ButtonStyle.secondary
+            self.add_item(btn)
+
+        self.add_item(ShopQuickBuySelect(category=self.current_category, row=2))
+
+
 class RewardsCog(commands.Cog):
     """Cog managing student economy, daily attendance streaks, profiles, and leaderboard."""
 
@@ -774,56 +1001,16 @@ class RewardsCog(commands.Cog):
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
 
-    @app_commands.command(name="shop", description="Browse redeemable prizes and consumable skill cards.")
+    @app_commands.command(name="shop", description="Browse redeemable prizes and consumable skill cards by category.")
     async def shop(self, interaction: discord.Interaction) -> None:
-        """Display Uno Rewards prize shop."""
-        user_points = self.rewards_service.get_balance(interaction.user.id)
-        embed = discord.Embed(
-            title="🏪 BSCS 1-4 — Uno Rewards Shop",
-            description=(
-                f"Your Current Balance: **{user_points:,} Uno Points**\n"
-                "Redeem items using `/redeem <item>` below!"
-            ),
-            color=discord.Color.gold(),
+        """Display interactive categorized Uno Rewards shop."""
+        embed = build_shop_embed(self.rewards_service, interaction.user.id, category="home")
+        view = ShopView(
+            rewards_service=self.rewards_service,
+            user_id=interaction.user.id,
+            cog=self,
         )
-
-        consumable_lines = []
-        physical_lines = []
-
-        for item_id, item in SHOP_CATALOG.items():
-            line = f"• `{item['cost']:,} pts` — **{item['name']}**\n  *{item['description']}*"
-            if item.get("category") == "consumable":
-                consumable_lines.append(line)
-            else:
-                physical_lines.append(line)
-
-        # Helper to safely split lines into fields <= 1000 characters
-        def _add_safe_fields(title: str, lines: list[str]):
-            chunks = []
-            curr = ""
-            for line in lines:
-                if len(curr) + len(line) + 2 > 950:
-                    chunks.append(curr)
-                    curr = line
-                else:
-                    curr = f"{curr}\n{line}" if curr else line
-            if curr:
-                chunks.append(curr)
-
-            for i, chunk in enumerate(chunks):
-                field_title = title if len(chunks) == 1 else f"{title} (Part {i+1})"
-                embed.add_field(name=field_title, value=chunk, inline=False)
-
-        _add_safe_fields("🃏 Consumable Skill Cards", consumable_lines)
-        _add_safe_fields("🎁 Real-World & Server Prizes", physical_lines)
-
-        embed.add_field(
-            name="🍫 Milestone Reward: Exams Survival Kit",
-            value="*Auto-unlocked for free once you reach **3,000 Lifetime Points**!*",
-            inline=False,
-        )
-        embed.set_footer(text="Redeem with /redeem <item> • Earn points with /daily and /bet")
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, view=view)
 
     @app_commands.command(name="redeem", description="Redeem a prize or consumable item from the shop.")
     @app_commands.describe(item="The prize item you want to purchase.")
