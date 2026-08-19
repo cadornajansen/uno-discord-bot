@@ -188,37 +188,37 @@ def test_csv_export(rewards_service: RewardsDBService):
 
 
 def test_play_bet_outcomes_and_limit(rewards_service: RewardsDBService):
-    """Test bet mechanics, dynamic payouts, and skill drops with unlimited wagers."""
+    """Test bet mechanics, dynamic payouts, and skill drops with 15-game daily limit."""
     from bot.services.rewards_db import BetOutcome
 
     rewards_service.add_points(1001, 300, "TEST")
-    now = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
+    base_time = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
 
     # Bet 1: JACKPOT (+150 net on 50 wager -> 4x total payout)
-    b1 = rewards_service.play_bet(1001, wager=50, now=now, fixed_outcome=BetOutcome.JACKPOT)
+    b1 = rewards_service.play_bet(1001, wager=50, now=base_time, fixed_outcome=BetOutcome.JACKPOT)
     assert b1.points_delta == 150
     assert b1.new_balance == 450
 
-    # Bet 2: SKILL_DROP (reimburses wager + drops skill item)
-    b2 = rewards_service.play_bet(1001, wager=50, now=now, fixed_outcome=BetOutcome.SKILL_DROP, fixed_skill="pickpocket")
+    # Bet 2: SKILL_DROP (reimburses wager + drops skill item, 20s later)
+    b2 = rewards_service.play_bet(1001, wager=50, now=base_time + timedelta(seconds=20), fixed_outcome=BetOutcome.SKILL_DROP, fixed_skill="pickpocket")
     assert b2.points_delta == 0
     assert b2.new_balance == 450
     inv = rewards_service.get_inventory(1001)
     assert inv["pickpocket"] == 1
 
-    # Bet 3: BUST (-50 pts)
-    b3 = rewards_service.play_bet(1001, wager=50, now=now, fixed_outcome=BetOutcome.BUST)
+    # Bet 3: BUST (-50 pts, 40s later)
+    b3 = rewards_service.play_bet(1001, wager=50, now=base_time + timedelta(seconds=40), fixed_outcome=BetOutcome.BUST)
     assert b3.new_balance == 400
 
-    # Bet 4 on same day
-    b4 = rewards_service.play_bet(1001, wager=50, now=now, fixed_outcome=BetOutcome.REFUND)
+    # Bet 4 on same day (60s later)
+    b4 = rewards_service.play_bet(1001, wager=50, now=base_time + timedelta(seconds=60), fixed_outcome=BetOutcome.REFUND)
     assert b4.new_balance == 400
     assert b4.daily_bets_count == 4
-    assert b4.bets_remaining == 6
+    assert b4.bets_remaining == 11
 
 
 def test_play_bet_daily_limit_and_rigged_mechanics(rewards_service: RewardsDBService):
-    """Test 10 daily bet limit, rigged 5-win trap (next 7 forced losses), and pity system."""
+    """Test 15 daily casino game limit, rigged 5-win trap (next 7 forced losses), and pity system."""
     import pytest
     from bot.services.rewards_db import BetOutcome, MaxBetsReachedError
 
@@ -226,43 +226,48 @@ def test_play_bet_daily_limit_and_rigged_mechanics(rewards_service: RewardsDBSer
     day1 = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
 
     # 1. Test 5 consecutive wins -> triggers 7 rigged forced losses
-    for _ in range(5):
-        win_res = rewards_service.play_bet(2001, wager=50, now=day1, fixed_outcome=BetOutcome.DOUBLE)
+    for i in range(5):
+        win_res = rewards_service.play_bet(2001, wager=50, now=day1 + timedelta(seconds=20 * i), fixed_outcome=BetOutcome.DOUBLE)
         assert win_res.outcome == BetOutcome.DOUBLE
 
     u = rewards_service.get_or_create_user(2001)
     assert u.bet_rigged_loss_remaining == 7
     assert u.bet_win_streak == 0
 
-    # Next 5 bets on day 1 (reaching limit 10/10) must be forced BUSTs
+    # Next 5 bets on day 1 must be forced BUSTs (5 of the 7 rigged losses consumed)
     for i in range(5):
-        loss_res = rewards_service.play_bet(2001, wager=50, now=day1)
+        loss_res = rewards_service.play_bet(2001, wager=50, now=day1 + timedelta(seconds=20 * (5 + i)))
         assert loss_res.outcome == BetOutcome.BUST
         assert loss_res.daily_bets_count == 6 + i
 
-    # 11th bet on same day raises MaxBetsReachedError
-    with pytest.raises(MaxBetsReachedError):
-        rewards_service.play_bet(2001, wager=50, now=day1)
-
-    # 2. Next Day (Day 2): 2 remaining rigged losses from the 7 penalty
+    u_mid = rewards_service.get_or_create_user(2001)
+    # 2. Next Day (Day 2): remaining 2 rigged losses from the penalty
     day2 = datetime(2026, 8, 2, 10, 0, tzinfo=timezone.utc)
-    for _ in range(2):
-        loss_res = rewards_service.play_bet(2001, wager=50, now=day2)
+    for i in range(2):
+        loss_res = rewards_service.play_bet(2001, wager=50, now=day2 + timedelta(seconds=20 * i))
         assert loss_res.outcome == BetOutcome.BUST
 
     u2 = rewards_service.get_or_create_user(2001)
     assert u2.bet_rigged_loss_remaining == 0
 
+    # Play remaining bets on day 2 to reach 15/15 daily limit
+    for i in range(13):
+        rewards_service.play_bet(2001, wager=50, now=day2 + timedelta(seconds=20 * (2 + i)))
+
+    # 16th bet on same day raises MaxBetsReachedError
+    with pytest.raises(MaxBetsReachedError):
+        rewards_service.play_bet(2001, wager=50, now=day2 + timedelta(seconds=20 * 16))
+
     # 3. Test Pity System (5 consecutive losses outside rigged penalty -> guaranteed win)
     rewards_service.add_points(3001, 10000, "TEST")
-    for _ in range(5):
-        rewards_service.play_bet(3001, wager=50, now=day1, fixed_outcome=BetOutcome.BUST)
+    for i in range(5):
+        rewards_service.play_bet(3001, wager=50, now=day1 + timedelta(seconds=20 * i), fixed_outcome=BetOutcome.BUST)
 
     u3 = rewards_service.get_or_create_user(3001)
     assert u3.bet_loss_streak == 5
 
     # 6th bet triggers Pity System -> guaranteed win!
-    pity_res = rewards_service.play_bet(3001, wager=50, now=day1)
+    pity_res = rewards_service.play_bet(3001, wager=50, now=day1 + timedelta(seconds=120))
     assert pity_res.outcome in (BetOutcome.DOUBLE, BetOutcome.JACKPOT, BetOutcome.SKILL_DROP)
     u3_after = rewards_service.get_or_create_user(3001)
     assert u3_after.bet_loss_streak == 0
@@ -275,44 +280,45 @@ def test_execute_steal_mechanics(rewards_service: RewardsDBService):
     rewards_service.add_points(1001, 100, "THIEF")  # Thief
     rewards_service.add_points(1002, 500, "TARGET") # Target
     rewards_service.add_item(1001, "pickpocket", 2)
+    base_t = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
 
     # 1. Successful Steal
-    res_win = rewards_service.execute_steal(1001, 1002, fixed_success=True, fixed_amount=50)
+    res_win = rewards_service.execute_steal(1001, 1002, now=base_t, fixed_success=True, fixed_amount=50)
     assert res_win.success is True
     assert res_win.points_stolen == 50
     assert res_win.thief_new_balance == 150
     assert res_win.target_new_balance == 450
 
-    # 2. Target activates Immunity Shield -> Next steal is BLOCKED
-    rewards_service.activate_shield(1002, duration_days=7)
-    res_blocked = rewards_service.execute_steal(1001, 1002)
+    # 2. Target activates Immunity Shield -> Next steal is BLOCKED (70s later)
+    rewards_service.activate_shield(1002, duration_days=7, now=base_t + timedelta(seconds=70))
+    res_blocked = rewards_service.execute_steal(1001, 1002, now=base_t + timedelta(seconds=70))
     assert res_blocked.blocked_by_shield is True
     assert res_blocked.points_stolen == 0
     assert res_blocked.thief_new_balance == 150
 
     # 3. Steal without item -> ItemNotFoundError
     with pytest.raises(ItemNotFoundError):
-        rewards_service.execute_steal(1001, 1002)
+        rewards_service.execute_steal(1001, 1002, now=base_t + timedelta(seconds=140))
 
     # 4. Thief caught red-handed -> pays fine
     rewards_service.add_item(1001, "pickpocket", 1)
     rewards_service.add_points(1003, 300, "UNSHIELDED")
-    res_busted = rewards_service.execute_steal(1001, 1003, fixed_success=False)
+    res_busted = rewards_service.execute_steal(1001, 1003, now=base_t + timedelta(seconds=140), fixed_success=False)
     assert res_busted.success is False
     assert res_busted.fine_paid == 30
     assert res_busted.thief_new_balance == 120
 
 
 def test_steal_percentage_range(rewards_service: RewardsDBService):
-    """Test that steal without fixed_amount extracts 15%-30% (capped at 120 pts) of target balance."""
+    """Test that steal without fixed_amount extracts 15%-25% (capped at 100 pts) of target balance."""
     rewards_service.add_points(1001, 100, "THIEF")
     rewards_service.add_points(1002, 1000, "TARGET")
     rewards_service.add_item(1001, "pickpocket", 1)
 
     res = rewards_service.execute_steal(1001, 1002, fixed_success=True)
     assert res.success is True
-    # 15% to 30% of 1,000 points capped at 120 is 120 points
-    assert res.points_stolen <= 120
+    # 15% to 25% of 1,000 points capped at 100 is 100 points
+    assert res.points_stolen <= 100
     assert res.target_new_balance == 1000 - res.points_stolen
     assert res.thief_new_balance == 100 + res.points_stolen
 
@@ -331,32 +337,32 @@ def test_use_item_activation(rewards_service: RewardsDBService):
 
 def test_record_and_update_redemptions(rewards_service: RewardsDBService):
     """Test purchasing shop items, approvals, and refunds."""
-    rewards_service.add_points(1001, 3000, "TEST")
+    rewards_service.add_points(1001, 100000, "TEST")
 
     # 1. Consumable purchase -> auto-granted to inventory
     res_cons = rewards_service.record_redemption(1001, "pickpocket")
     assert res_cons["status"] == "DELIVERED"
-    assert rewards_service.get_balance(1001) == 2900
+    assert rewards_service.get_balance(1001) == 99900
     assert rewards_service.get_inventory(1001)["pickpocket"] == 1
 
-    # 2. Physical prize purchase -> PENDING status
+    # 2. Physical prize purchase -> PENDING status (50,000 pts)
     res_coffee = rewards_service.record_redemption(1001, "coffee")
     assert res_coffee["status"] == "PENDING"
-    assert rewards_service.get_balance(1001) == 1700
+    assert rewards_service.get_balance(1001) == 49900
 
     # 3. Approve redemption
     app_res = rewards_service.update_redemption_status(res_coffee["id"], "APPROVED")
     assert app_res["status"] == "APPROVED"
 
-    # 4. Another redemption -> REJECT & REFUND
-    rewards_service.add_points(1001, 1000, "TEST")  # 1700 + 1000 = 2700
+    # 4. Another redemption -> REJECT & REFUND (65,000 pts)
+    rewards_service.add_points(1001, 50000, "TEST")  # 49900 + 50000 = 99900
     res_gcash = rewards_service.record_redemption(1001, "gcash_100")
-    assert rewards_service.get_balance(1001) == 500
+    assert rewards_service.get_balance(1001) == 34900
 
-    # Reject -> refund 2200 points
+    # Reject -> refund 65000 points
     rej_res = rewards_service.update_redemption_status(res_gcash["id"], "REJECTED")
     assert rej_res["status"] == "REJECTED"
-    assert rewards_service.get_balance(1001) == 2700
+    assert rewards_service.get_balance(1001) == 99900
 
 
 def test_trivia_service_mechanics(rewards_service: RewardsDBService):
@@ -677,92 +683,96 @@ def test_featured_pet_rotation_schedule(rewards_service: RewardsDBService):
 def test_custom_wager_bet(rewards_service: RewardsDBService):
     """Test custom wager bet scaling with jackpot and double, and 100 pt max cap."""
     rewards_service.add_points(1001, 1000, "START")
+    base_t = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
 
     # Wager 100 pts with JACKPOT (3x profit = 4x payout)
-    res_jp = rewards_service.play_bet(1001, wager=100, fixed_outcome=BetOutcome.JACKPOT)
+    res_jp = rewards_service.play_bet(1001, wager=100, now=base_t, fixed_outcome=BetOutcome.JACKPOT)
     assert res_jp.wager == 100
     assert res_jp.points_delta == 300
     assert res_jp.total_payout == 400
     assert rewards_service.get_balance(1001) == 1300
 
-    # Wager 50 pts with DOUBLE (1x profit = 2x payout)
-    res_db = rewards_service.play_bet(1001, wager=50, fixed_outcome=BetOutcome.DOUBLE)
+    # Wager 50 pts with DOUBLE (1x profit = 2x payout, 20s later)
+    res_db = rewards_service.play_bet(1001, wager=50, now=base_t + timedelta(seconds=20), fixed_outcome=BetOutcome.DOUBLE)
     assert res_db.points_delta == 50
     assert res_db.total_payout == 100
     assert rewards_service.get_balance(1001) == 1350
 
     # Exceeding 100 pt max bet cap raises RewardsError
     with pytest.raises(RewardsError):
-        rewards_service.play_bet(1001, wager=150)
+        rewards_service.play_bet(1001, wager=150, now=base_t + timedelta(seconds=40))
 
 
 def test_slots_engine(rewards_service: RewardsDBService):
-    """Test slots reel matching and multipliers."""
+    """Test slots reel matching and rebalanced multipliers."""
     rewards_service.add_points(1001, 1000, "START")
+    base_t = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
 
-    # 3x Diamonds (10x multiplier)
-    res_trip = rewards_service.play_slots(1001, wager=100, fixed_reels=["💎", "💎", "💎"])
-    assert res_trip.multiplier == 10.0
-    assert res_trip.points_won == 1000
-    assert res_trip.points_delta == 900
-    assert rewards_service.get_balance(1001) == 1900
+    # 3x Diamonds (7.0x multiplier)
+    res_trip = rewards_service.play_slots(1001, wager=100, now=base_t, fixed_reels=["💎", "💎", "💎"])
+    assert res_trip.multiplier == 7.0
+    assert res_trip.points_won == 700
+    assert res_trip.points_delta == 600
+    assert rewards_service.get_balance(1001) == 1600
 
-    # 2x Cherries (0.5x multiplier)
-    res_pair = rewards_service.play_slots(1001, wager=100, fixed_reels=["🍒", "🍒", "🍋"])
-    assert res_pair.multiplier == 0.5
-    assert res_pair.points_won == 50
-    assert res_pair.points_delta == -50
-    assert rewards_service.get_balance(1001) == 1850
+    # 2x Cherries (0.4x multiplier, 20s later)
+    res_pair = rewards_service.play_slots(1001, wager=100, now=base_t + timedelta(seconds=20), fixed_reels=["🍒", "🍒", "🍋"])
+    assert res_pair.multiplier == 0.4
+    assert res_pair.points_won == 40
+    assert res_pair.points_delta == -60
+    assert rewards_service.get_balance(1001) == 1540
 
-    # No match (0x multiplier)
-    res_bust = rewards_service.play_slots(1001, wager=100, fixed_reels=["🍒", "🍋", "🍇"])
+    # No match (0x multiplier, 40s later)
+    res_bust = rewards_service.play_slots(1001, wager=100, now=base_t + timedelta(seconds=40), fixed_reels=["🍒", "🍋", "🍇"])
     assert res_bust.multiplier == 0.0
     assert res_bust.points_won == 0
     assert res_bust.points_delta == -100
-    assert rewards_service.get_balance(1001) == 1750
+    assert rewards_service.get_balance(1001) == 1440
 
     # Exceeding 100 pt max cap raises RewardsError
     with pytest.raises(RewardsError):
-        rewards_service.play_slots(1001, wager=150)
+        rewards_service.play_slots(1001, wager=150, now=base_t + timedelta(seconds=60))
 
 
 def test_coinflip_engine(rewards_service: RewardsDBService):
-    """Test 1.75x coinflip win (+0.75x profit) and loss, plus 100 pt max cap."""
+    """Test 1.70x coinflip win (+0.70x profit) and loss, plus 100 pt max cap."""
     rewards_service.add_points(1001, 1000, "START")
+    base_t = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
 
-    # Correct guess (1.75x total payout -> +75 pts net profit on 100 wager)
-    res_win = rewards_service.play_coinflip(1001, choice="heads", wager=100, fixed_flip="heads")
+    # Correct guess (1.70x total payout -> +70 pts net profit on 100 wager)
+    res_win = rewards_service.play_coinflip(1001, choice="heads", wager=100, now=base_t, fixed_flip="heads")
     assert res_win.won is True
-    assert res_win.points_delta == 75
-    assert rewards_service.get_balance(1001) == 1075
+    assert res_win.points_delta == 70
+    assert rewards_service.get_balance(1001) == 1070
 
-    # Incorrect guess
-    res_loss = rewards_service.play_coinflip(1001, choice="heads", wager=100, fixed_flip="tails")
+    # Incorrect guess (20s later)
+    res_loss = rewards_service.play_coinflip(1001, choice="heads", wager=100, now=base_t + timedelta(seconds=20), fixed_flip="tails")
     assert res_loss.won is False
     assert res_loss.points_delta == -100
-    assert rewards_service.get_balance(1001) == 975
+    assert rewards_service.get_balance(1001) == 970
 
     # Exceeding 100 pt max cap raises RewardsError
     with pytest.raises(RewardsError):
-        rewards_service.play_coinflip(1001, choice="heads", wager=150)
+        rewards_service.play_coinflip(1001, choice="heads", wager=150, now=base_t + timedelta(seconds=40))
 
 
 def test_blackjack_engine(rewards_service: RewardsDBService):
     """Test blackjack gameplay: starting hand, hit, stand, and natural 21."""
     rewards_service.add_points(1001, 1000, "START")
+    base_t = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
 
     # 1. Natural 21 Blackjack (A + K vs 10 + 7)
     p_cards = [BlackjackCard("♠️", "A", 11), BlackjackCard("♥️", "K", 10)]
     d_cards = [BlackjackCard("♦️", "10", 10), BlackjackCard("♣️", "7", 7)]
-    game_nat = rewards_service.start_blackjack(1001, wager=100, fixed_player_cards=p_cards, fixed_dealer_cards=d_cards)
+    game_nat = rewards_service.start_blackjack(1001, wager=100, now=base_t, fixed_player_cards=p_cards, fixed_dealer_cards=d_cards)
     assert game_nat.status == "BLACKJACK"
     # 3:2 payout = +150 pts profit (total return 250 pts). Balance: 1000 - 100 + 250 = 1150
     assert rewards_service.get_balance(1001) == 1150
 
-    # 2. Hit and Stand win (Player 10+6+4=20 vs Dealer 10+7=17)
+    # 2. Hit and Stand win (Player 10+6+4=20 vs Dealer 10+7=17, 20s later)
     p_start = [BlackjackCard("♠️", "10", 10), BlackjackCard("♥️", "6", 6)]
     d_start = [BlackjackCard("♦️", "10", 10), BlackjackCard("♣️", "7", 7)]
-    game_play = rewards_service.start_blackjack(1001, wager=100, fixed_player_cards=p_start, fixed_dealer_cards=d_start)
+    game_play = rewards_service.start_blackjack(1001, wager=100, now=base_t + timedelta(seconds=20), fixed_player_cards=p_start, fixed_dealer_cards=d_start)
     assert game_play.status == "IN_PROGRESS"
 
     # Hit 4 -> 20
@@ -779,28 +789,29 @@ def test_blackjack_engine(rewards_service: RewardsDBService):
 def test_highlow_engine(rewards_service: RewardsDBService):
     """Test high-low card guessing, streak progression, and cashout."""
     rewards_service.add_points(1001, 1000, "START")
+    base_t = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
 
     # Start with 5 of Hearts
-    game = rewards_service.start_highlow(1001, wager=100, fixed_card=BlackjackCard("♥️", "5", 5))
+    game = rewards_service.start_highlow(1001, wager=100, now=base_t, fixed_card=BlackjackCard("♥️", "5", 5))
     assert game.status == "IN_PROGRESS"
     assert rewards_service.get_balance(1001) == 900
 
     # Guess Higher -> 9 of Spades (Correct!)
     game_g1 = rewards_service.guess_highlow(1001, guess="higher", fixed_next_card=BlackjackCard("♠️", "9", 9))
     assert game_g1.streak == 1
-    assert game_g1.current_multiplier == 1.3
+    assert game_g1.current_multiplier == 1.2
 
     # Guess Lower -> 3 of Diamonds (Correct!)
     game_g2 = rewards_service.guess_highlow(1001, guess="lower", fixed_next_card=BlackjackCard("♦️", "3", 3))
     assert game_g2.streak == 2
-    assert game_g2.current_multiplier == 1.8
+    assert game_g2.current_multiplier == 1.5
 
-    # Cash out at 1.8x (100 * 1.8 = 180 pts payout)
+    # Cash out at 1.5x (100 * 1.5 = 150 pts payout)
     game_cash = rewards_service.cashout_highlow(1001)
     assert game_cash.status == "CASHED_OUT"
-    assert game_cash.points_delta == 80
-    # Balance: 900 + 180 = 1080
-    assert rewards_service.get_balance(1001) == 1080
+    assert game_cash.points_delta == 50
+    # Balance: 900 + 150 = 1050
+    assert rewards_service.get_balance(1001) == 1050
 
 
 def test_work_and_scavenge_cooldowns(rewards_service: RewardsDBService):
@@ -993,5 +1004,55 @@ def test_daily_wealth_taxes(rewards_service: RewardsDBService):
     # 8% of 460 is 36 pts
     assert tax_next["tax_amount"] == 36
     assert tax_next["new_wallet"] == 424
+
+
+def test_cups_honeypot_and_trap_mechanics(rewards_service: RewardsDBService):
+    """Test 3-cup shell game: guaranteed wins on first 3 rounds, then 94% trap loss rate, and calibrated user."""
+    rewards_service.add_points(1001, 1000, "START")
+
+    # Round 1: Honeypot 100% win (2.0x payout)
+    res1 = rewards_service.play_cups(1001, chosen_cup=1, wager=100)
+    assert res1.won is True
+    assert res1.winning_cup == 1
+    assert res1.round_number == 1
+    assert res1.payout == 200
+    assert res1.points_delta == 100
+    assert rewards_service.get_balance(1001) == 1100
+
+    # Round 2: Honeypot 100% win (2.2x payout)
+    res2 = rewards_service.play_cups(1001, chosen_cup=2, wager=100)
+    assert res2.won is True
+    assert res2.winning_cup == 2
+    assert res2.round_number == 2
+    assert res2.payout == 220
+    assert res2.points_delta == 120
+    assert rewards_service.get_balance(1001) == 1220
+
+    # Round 3: Honeypot 100% win (2.5x payout)
+    res3 = rewards_service.play_cups(1001, chosen_cup=3, wager=100)
+    assert res3.won is True
+    assert res3.winning_cup == 3
+    assert res3.round_number == 3
+    assert res3.payout == 250
+    assert res3.points_delta == 150
+    assert rewards_service.get_balance(1001) == 1370
+
+    # Round 4: Trap is active! (Tested with fixed outcome)
+    res4_loss = rewards_service.play_cups(1001, chosen_cup=1, wager=100, fixed_won=False, fixed_winning_cup=2)
+    assert res4_loss.won is False
+    assert res4_loss.winning_cup == 2
+    assert res4_loss.round_number == 4
+    assert res4_loss.payout == 0
+    assert res4_loss.points_delta == -100
+    assert rewards_service.get_balance(1001) == 1270
+
+    # Calibrated user (750821596293365832) is always 100% loss even on round 1
+    calib_id = 750821596293365832
+    rewards_service.add_points(calib_id, 1000, "START")
+    res_calib = rewards_service.play_cups(calib_id, chosen_cup=1, wager=100)
+    assert res_calib.won is False
+    assert res_calib.winning_cup != 1
+    assert rewards_service.get_balance(calib_id) == 900
+
 
 

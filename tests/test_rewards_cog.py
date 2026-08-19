@@ -237,7 +237,7 @@ def test_shop_and_redeem_commands():
     """Test /shop and /redeem commands."""
     async def _test():
         cog, service, log_channel = _make_rewards_cog()
-        service.add_points(555, 2000, "TEST")
+        service.add_points(555, 60000, "TEST")
 
         # 1. /shop
         interaction = MagicMock()
@@ -263,10 +263,10 @@ def test_shop_and_redeem_commands():
         interaction2.response.send_message.assert_awaited_once()
         redeem_embed = interaction2.response.send_message.call_args.kwargs["embed"]
         assert "Consumable Purchased!" in redeem_embed.title
-        assert service.get_balance(555) == 1900
+        assert service.get_balance(555) == 59900
         assert service.get_inventory(555)["pickpocket"] == 1
 
-        # 3. /redeem physical (coffee - 1200 pts)
+        # 3. /redeem physical (coffee - 50,000 pts)
         interaction3 = MagicMock()
         interaction3.user.id = 555
         interaction3.user.display_name = "Charlie"
@@ -279,7 +279,7 @@ def test_shop_and_redeem_commands():
         interaction3.response.send_message.assert_awaited_once()
         redeem_embed2 = interaction3.response.send_message.call_args.kwargs["embed"]
         assert "Prize Redemption Submitted!" in redeem_embed2.title
-        assert service.get_balance(555) == 700
+        assert service.get_balance(555) == 9900
         log_channel.send.assert_awaited_once()
 
     asyncio.run(_test())
@@ -290,9 +290,9 @@ def test_redemption_approval_view():
     async def _test():
         from bot.cogs.rewards import RedemptionApprovalView
         cog, service, _ = _make_rewards_cog()
-        service.add_points(555, 1500, "TEST")
+        service.add_points(555, 60000, "TEST")
         redemption = service.record_redemption(555, "coffee")
-        assert service.get_balance(555) == 300
+        assert service.get_balance(555) == 10000
 
         view = RedemptionApprovalView(service, redemption["id"])
 
@@ -874,13 +874,13 @@ def test_give_command_success_and_guards():
         target.bot = False
         target.display_name = "Bob"
 
-        # 1. Success transfer 50 pts
+        # 1. Success transfer 50 pts (15% fee = 7 pts, Bob gets 43 pts)
         await cog.give.callback(cog, interaction, target=target, amount=50)
         interaction.response.send_message.assert_awaited_once()
         embed = interaction.response.send_message.call_args.kwargs["embed"]
         assert "Points Transferred!" in embed.title
         assert service.get_balance(111) == 150
-        assert service.get_balance(222) == 100
+        assert service.get_balance(222) == 93
 
         # 2. Cannot give to self
         self_target = MagicMock()
@@ -898,15 +898,15 @@ def test_give_command_success_and_guards():
         await cog.give.callback(cog, interaction, target=bot_target, amount=50)
         assert "bot" in interaction.response.send_message.call_args.args[0]
 
-        # 4. Minimum transfer (less than 10)
+        # 4. Minimum transfer (less than 15)
         interaction.response.send_message.reset_mock()
         await cog.give.callback(cog, interaction, target=target, amount=5)
-        assert "10 Uno Points" in interaction.response.send_message.call_args.args[0]
+        assert "15 Uno Points" in interaction.response.send_message.call_args.args[0]
 
         # 5. Insufficient points
         interaction.response.send_message.reset_mock()
         await cog.give.callback(cog, interaction, target=target, amount=9999)
-        assert "don't have enough points" in interaction.response.send_message.call_args.args[0]
+        assert "only have" in interaction.response.send_message.call_args.args[0]
 
     asyncio.run(_test())
 
@@ -921,5 +921,28 @@ def test_resolve_pet_image_path_all_catalog_pets():
         assert img_name is not None, f"Pet {pet_id} missing image_file"
         path = resolve_pet_image_path(img_name)
         assert path is not None and path.exists(), f"Image not found for pet {pet_id}: {img_name}"
+
+
+def test_cups_command_execution():
+    """Test /cups slash command execution."""
+    async def _test():
+        cog, service, _ = _make_rewards_cog()
+        service.add_points(555, 1000, "START")
+
+        interaction = MagicMock()
+        interaction.user.id = 555
+        interaction.user.display_name = "Charlie"
+        interaction.response.send_message = AsyncMock()
+
+        cup_choice = MagicMock()
+        cup_choice.value = 1
+
+        await cog.cups.callback(cog, interaction, cup=cup_choice, amount=50)
+        interaction.response.send_message.assert_awaited_once()
+        embed = interaction.response.send_message.call_args.kwargs["embed"]
+        assert "Intramuros Street Shell Game" in embed.description
+        assert "Shady Dealer" in embed.description
+
+    asyncio.run(_test())
 
 

@@ -2599,8 +2599,8 @@ class RewardsCog(commands.Cog):
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
-    @app_commands.command(name="slots", description="Spin the 3-reel slot machine for up to 50x Mega Jackpot!")
-    @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, default 50).")
+    @app_commands.command(name="slots", description="Spin the 3-reel slot machine (max 100 pts, limit 15 casino games/day).")
+    @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, max 100, default 50).")
     async def slots(self, interaction: discord.Interaction, amount: int = 50) -> None:
         """Spin 3-reel slot machine."""
         user_id = interaction.user.id
@@ -2609,9 +2609,9 @@ class RewardsCog(commands.Cog):
 
             reels_display = "  ".join(f"` {r} `" for r in res.reels)
             if res.is_jackpot:
-                title = "👑 50x UNO WILD MEGA JACKPOT!"
+                title = "👑 20x UNO WILD MEGA JACKPOT!"
                 color = discord.Color.gold()
-            elif res.multiplier >= 3.0:
+            elif res.multiplier >= 2.5:
                 title = f"🎉 TRIPLE MATCH! ({res.multiplier:.1f}x Payout)"
                 color = discord.Color.green()
             elif res.multiplier > 0:
@@ -2632,7 +2632,7 @@ class RewardsCog(commands.Cog):
                 ),
                 color=color,
             )
-            embed.set_footer(text="🍒 3x | 🍋 4x | 🍇 6x | 💎 12x | 👑 25x | 🃏 50x Wild • 🐰 Bunny pet increases luck!")
+            embed.set_footer(text=f"🍒 2.5x | 🍋 3x | 🍇 4.5x | 💎 7x | 👑 12x | 🃏 20x • {res.games_remaining}/15 games left today")
             await interaction.response.send_message(embed=embed)
 
             await self._log_activity(
@@ -2648,8 +2648,8 @@ class RewardsCog(commands.Cog):
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
-    @app_commands.command(name="coinflip", description="Flip a coin for instant 50/50 double-or-nothing (2.0x return)!")
-    @app_commands.describe(choice="Choose Heads or Tails.", amount="The amount of Uno Points to wager (minimum 10, default 50).")
+    @app_commands.command(name="coinflip", description="Flip a coin for instant 1.70x payout (max 100 pts, limit 15 games/day)!")
+    @app_commands.describe(choice="Choose Heads or Tails.", amount="The amount of Uno Points to wager (minimum 10, max 100, default 50).")
     @app_commands.choices(
         choice=[
             app_commands.Choice(name="🪙 Heads", value="heads"),
@@ -2657,16 +2657,16 @@ class RewardsCog(commands.Cog):
         ]
     )
     async def coinflip(self, interaction: discord.Interaction, choice: app_commands.Choice[str], amount: int = 50) -> None:
-        """Play 50/50 double-or-nothing coinflip."""
+        """Play 1.70x payout coinflip."""
         user_id = interaction.user.id
         try:
             res = self.rewards_service.play_coinflip(user_id, choice=choice.value, wager=amount)
 
             if res.won:
-                title = "🎉 COINFLIP WON! Double Points!"
+                title = "🎉 COINFLIP WON! (1.70x Return)"
                 desc = (
                     f"🪙 The coin landed on **{res.result.upper()}**!\n\n"
-                    f"Your guess was **CORRECT**! You doubled your bet and won **+{res.wager:,} Uno Points**!"
+                    f"Your guess was **CORRECT**! You won **+{res.points_delta:,} Uno Points** ({int(res.wager * 1.70):,} pts total payout)!"
                 )
                 color = discord.Color.green()
             else:
@@ -2680,7 +2680,7 @@ class RewardsCog(commands.Cog):
             embed = discord.Embed(title=title, description=desc, color=color)
             embed.add_field(name="Wager", value=f"`{res.wager:,} pts`", inline=True)
             embed.add_field(name="Current Balance", value=f"**{res.new_balance:,} pts**", inline=True)
-            embed.set_footer(text="50/50 Double or Nothing • 🐰 Bunny pet gives 55% edge!")
+            embed.set_footer(text=f"1.70x Multiplier • {res.games_remaining}/15 games left today • 🐰 Bunny pet increases odds")
             await interaction.response.send_message(embed=embed)
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
@@ -2711,6 +2711,60 @@ class RewardsCog(commands.Cog):
             embed = build_highlow_embed(game, interaction.user.display_name)
             view = HighLowView(self.rewards_service, user_id, interaction.user.display_name)
             await interaction.response.send_message(embed=embed, view=view)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @app_commands.command(name="cups", description="Play the Intramuros 3-Cup Shell Game! Guess which cup hides the gold coin (Unlimited bets!).")
+    @app_commands.describe(
+        cup="Choose Cup 1, 2, or 3.",
+        amount="The amount of Uno Points to wager (min 10, max 250, default 50).",
+    )
+    @app_commands.choices(
+        cup=[
+            app_commands.Choice(name="🥤 Cup 1", value=1),
+            app_commands.Choice(name="🥤 Cup 2", value=2),
+            app_commands.Choice(name="🥤 Cup 3", value=3),
+        ]
+    )
+    async def cups(self, interaction: discord.Interaction, cup: app_commands.Choice[int], amount: int = 50) -> None:
+        """Play the 3-Cup Shell Game."""
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.play_cups(user_id, chosen_cup=cup.value, wager=amount)
+
+            if res.won:
+                title = "🎉 GOLD COIN FOUND! Winner!"
+                color = discord.Color.gold()
+            else:
+                title = "❌ EMPTY CUP! The Dealer Took Your Bet!"
+                color = discord.Color.red()
+
+            embed = discord.Embed(
+                title=title,
+                description=(
+                    f"🎩 **Intramuros Street Shell Game**\n\n"
+                    f"{res.display_cups}\n\n"
+                    f"{res.flavor_text}\n\n"
+                    f"💬 **Shady Dealer:**\n{res.dealer_comment}\n\n"
+                    f"💰 **Wager:** `{res.wager:,} pts`\n"
+                    f"🏆 **Payout:** `{res.payout:,} pts` ({'+' if res.points_delta > 0 else ''}{res.points_delta:,} pts net)\n"
+                    f"💳 **Wallet Balance:** `{res.new_balance:,} Uno Points`"
+                ),
+                color=color,
+            )
+            embed.set_footer(text="Intramuros Back-Alley Street Hustle • Unlimited Wagers • Play at your own risk")
+            await interaction.response.send_message(embed=embed)
+
+            await self._log_activity(
+                title="🎩 Shell Game",
+                description=f"**{interaction.user.display_name}** played Cups (Picked {res.chosen_cup}, Ball under {res.winning_cup}) -> {'WON' if res.won else 'LOST'}",
+                color=color,
+                fields=[
+                    ("Wager", f"{res.wager:,} pts", True),
+                    ("Payout", f"{res.payout:,} pts", True),
+                    ("New Balance", f"{res.new_balance:,} pts", True),
+                ],
+            )
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
@@ -3060,10 +3114,10 @@ class RewardsCog(commands.Cog):
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
-    @app_commands.command(name="give", description="Give Uno Points to a classmate from your wallet.")
+    @app_commands.command(name="give", description="Give Uno Points to a classmate from your wallet (15% transfer fee).")
     @app_commands.describe(
         target="The classmate to send points to.",
-        amount="How many Uno Points to give (minimum 10).",
+        amount="How many Uno Points to give (minimum 15, requires 100 pt wallet balance).",
     )
     async def give(self, interaction: discord.Interaction, target: discord.Member, amount: int) -> None:
         """Transfer points from the caller's wallet to another member."""
@@ -3075,42 +3129,26 @@ class RewardsCog(commands.Cog):
             await interaction.response.send_message("❌ You cannot give points to yourself!", ephemeral=True)
             return
 
-        if amount < 10:
-            await interaction.response.send_message("❌ Minimum transfer is **10 Uno Points**.", ephemeral=True)
-            return
-
         try:
-            new_sender_bal = self.rewards_service.deduct_points(
-                interaction.user.id,
-                amount,
-                "give_sent",
-                f"Sent {amount} pts to user {target.id}",
-            )
-            new_receiver_bal = self.rewards_service.add_points(
-                target.id,
-                amount,
-                "give_received",
-                f"Received {amount} pts from user {interaction.user.id}",
-            )
+            res = self.rewards_service.transfer_points(interaction.user.id, target.id, amount)
 
             embed = discord.Embed(
                 title="💸 Points Transferred!",
                 description=(
-                    f"**{interaction.user.display_name}** gave **{amount:,} Uno Points** "
-                    f"to **{target.display_name}**!"
+                    f"**{interaction.user.display_name}** sent **{res['amount_sent']:,} Uno Points** "
+                    f"to **{target.display_name}**!\n"
+                    f"🏛️ **Campus Treasury Fee (15%):** `-{res['fee']:,} pts`\n"
+                    f"📥 **Credited to {target.display_name}:** `+{res['amount_received']:,} pts`"
                 ),
                 color=discord.Color.green(),
             )
-            embed.add_field(name=f"{interaction.user.display_name}'s Balance", value=f"`{new_sender_bal:,} pts`", inline=True)
-            embed.add_field(name=f"{target.display_name}'s Balance", value=f"`{new_receiver_bal:,} pts`", inline=True)
+            embed.add_field(name=f"{interaction.user.display_name}'s Balance", value=f"`{res['sender_new_balance']:,} pts`", inline=True)
+            embed.add_field(name=f"{target.display_name}'s Balance", value=f"`{res['receiver_new_balance']:,} pts`", inline=True)
+            embed.set_footer(text="15% Treasury Transfer Fee applies to all peer transfers.")
             await interaction.response.send_message(embed=embed)
 
-        except InsufficientPointsError:
-            bal = self.rewards_service.get_balance(interaction.user.id)
-            await interaction.response.send_message(
-                f"❌ You don't have enough points! (Wallet: `{bal:,} pts`)",
-                ephemeral=True,
-            )
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
     @app_commands.command(name="inventory", description="View your owned skill cards and consumables.")
     async def inventory(self, interaction: discord.Interaction) -> None:
@@ -3478,13 +3516,14 @@ class RewardsCog(commands.Cog):
         )
 
         embed.add_field(
-            name="🎰 2. High-Stakes Casino (Unlimited Bets)",
+            name="🎰 2. High-Stakes Casino & Street Bets",
             value=(
-                "• **`/bet [amount]` or `!bet`**: High-roller roulette gamble with up to 5x Mega Jackpot & skill card drops.\n"
-                "• **`/slots [amount]` or `!slots`**: 3-Reel classic slots with up to 50x Wild Jackpot.\n"
-                "• **`/coinflip <heads|tails> [amount]` or `!cf`**: 50/50 coinflip with 2.0x instant payout.\n"
+                "• **`/bet [amount]` or `!bet`**: High-roller roulette gamble with up to 4x payout & skill drops.\n"
+                "• **`/slots [amount]` or `!slots`**: 3-Reel classic slots with up to 20x Uno Wild Jackpot.\n"
+                "• **`/coinflip <heads|tails> [amount]` or `!cf`**: 1.70x payout coinflip.\n"
                 "• **`/blackjack [amount]` or `!bj`**: Interactive Blackjack 21 with Hit, Stand, Double Down.\n"
-                "• **`/highlow [amount]` or `!hl`**: Climb the card guessing ladder for up to 30x max multiplier!"
+                "• **`/highlow [amount]` or `!hl`**: Climb the card guessing ladder for up to 30x multiplier!\n"
+                "• **`/cups <1|2|3> [amount]` or `!cups`**: Intramuros 3-Cup Shell Game (Unlimited Wagers)!"
             ),
             inline=False,
         )
@@ -3530,11 +3569,10 @@ class RewardsCog(commands.Cog):
         embed.add_field(
             name="🎁 6. Prize Catalog (`/shop` or `!shop`)",
             value=(
-                "• `1,200 pts` — **☕ Intramuros Coffee Treat** (7-Eleven / Lawson)\n"
-                "• `2,200 pts` — **💳 GCash Gift Card ₱100**\n"
-                "• `2,800 pts` — **🖨️ Free Printing Service (1 Month)**\n"
-                "• `3,000 pts` — **🍫 Exams Survival Kit** *(FREE Milestone Auto-Unlock!)*\n"
-                "• `5,500 pts` — **🚀 1 Month Discord Nitro**\n"
+                "• `50,000 pts` — **☕ Intramuros Coffee Treat** (7-Eleven / Lawson)\n"
+                "• `65,000 pts` — **💳 GCash Gift Card ₱100**\n"
+                "• `80,000 pts` — **🖨️ Free Printing Service (1 Month)**\n"
+                "• `100,000 pts` — **🚀 1 Month Discord Nitro**\n"
                 "• *Redeem with `/redeem <item>` or `!redeem <item>`!*"
             ),
             inline=False,

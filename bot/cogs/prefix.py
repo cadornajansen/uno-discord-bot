@@ -244,6 +244,12 @@ class PrefixCommandsCog(commands.Cog):
         """Prefix alias for /highlow."""
         await self._invoke_app_command(context, "RewardsCog", "highlow", amount)
 
+    @commands.command(name="cups", aliases=["shell", "cup"])
+    async def cups_prefix(self, context: commands.Context, cup: int = 1, amount: int = 50) -> None:
+        """Prefix alias for /cups."""
+        choice_obj = app_commands.Choice(name=f"Cup {cup}", value=cup)
+        await self._invoke_app_command(context, "RewardsCog", "cups", choice_obj, amount)
+
     @commands.command(name="work", aliases=["job", "shift"])
     async def work_prefix(self, context: commands.Context) -> None:
         """Prefix alias for /work."""

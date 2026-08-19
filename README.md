@@ -63,11 +63,11 @@ Uno AI supports both **Slash Commands (`/`)** and **Prefix Commands (`!`)**. Com
 | `/leaderboard` | `!leaderboard` | Browse top students on the global Uno Points leaderboard. |
 | `/starter` | `!starter` | Claim free starter grant (+50 pts & adopt your first companion pet). |
 | `/bank [action] [amount]` | `!bank` | Deposit or withdraw points from your secure bank vault (*10% fee on deposits/withdrawals, immune to pickpocketing*). |
-| `/shop` | `!shop` | Open the campus store to buy consumable cards, pet snacks, and real physical prizes. |
+| `/shop` | `!shop` | Open the campus store to buy consumable cards, pet snacks, and real physical prizes (50,000–100,000 pts). |
 | `/inventory` | `!inventory` | Browse owned skill cards, shields, and items. |
 | `/use item:<name>` | `!use <item>` | Activate an inventory item (*pickpocket, 1-week shield, uno reverse, gacha box, coffee bribe*). |
-| `/give target:<user> amount:<pts>` | `!give <user> <pts>` | Transfer points to a classmate (*10% transfer tax*). |
-| `/steal target:<user>` | `!steal <user>` | Pickpocket 15%–30% (max 120 pts) from a classmate (*requires Pickpocket card, beware of Guard Dogs & Uno Reverses!*). |
+| `/give target:<user> amount:<pts>` | `!give <user> <pts>` | Transfer points to a classmate (*15% transfer tax, requires 100 pt wallet*). |
+| `/steal target:<user>` | `!steal <user>` | Pickpocket 15%–25% (max 100 pts) from a classmate (*60s cooldown, requires Pickpocket card, beware of Guard Dogs & Uno Reverses!*). |
 
 ### 💼 Work & Campus Activities
 | Slash Command | Prefix Alias | What It Does |
@@ -76,14 +76,15 @@ Uno AI supports both **Slash Commands (`/`)** and **Prefix Commands (`!`)**. Com
 | `/work` | `!work` | Work a 1-hour campus shift (earns 18–45 pts + 15% chance of consumable skill card drop). |
 | `/scavenge` or `/beg` | `!scavenge`, `!beg` | Scavenge around Intramuros/CET for loose points (5–18 pts, 30-min cooldown). |
 
-### 🎰 Casino & Gambling Games (Max 100 pt Bet Caps)
+### 🎰 Casino & Gambling Games
 | Slash Command | Prefix Alias | What It Does |
 |---|---|---|
-| `/bet amount:<pts>` | `!bet <pts>` | Spin the roulette wheel (*5% Jackpot for 4x return, 12% Double, 15% Skill Drop, 55% Bust; 10 bets/day limit*). |
-| `/coinflip choice:<h/t> wager:<pts>` | `!coinflip <h/t> <pts>` | Double-or-nothing coin toss (*46% win chance, 1.75x payout*). |
-| `/slots wager:<pts>` | `!slots <pts>` | Spin the 3-reel slot machine (consolation matching from 0.5x up to 35x Uno Wild jackpot). |
-| `/blackjack wager:<pts>` | `!blackjack <pts>` | Play 21 against the dealer (*3:2 natural blackjack payout, supports hit, stand, and double down*). |
-| `/highlow wager:<pts>` | `!highlow <pts>` | Guess higher or lower cards on a streak ladder from 1.3x up to 16.0x multiplier cashout. |
+| `/bet amount:<pts>` | `!bet <pts>` | Spin the roulette wheel (*4x Jackpot, 2x Double, Skill Drop, Bust; 15 casino games/day limit*). |
+| `/coinflip choice:<h/t> wager:<pts>` | `!coinflip <h/t> <pts>` | Coin toss (*45% win chance, 1.70x payout, 15 games/day*). |
+| `/slots wager:<pts>` | `!slots <pts>` | Spin the 3-reel slot machine (consolation matching from 0.4x up to 20x Uno Wild jackpot, 15 games/day). |
+| `/blackjack wager:<pts>` | `!blackjack <pts>` | Play 21 against the dealer (*3:2 natural blackjack payout, supports hit, stand, double down, 15 games/day*). |
+| `/highlow wager:<pts>` | `!highlow <pts>` | Guess higher or lower cards on a streak ladder up to 30.0x multiplier cashout (15 games/day). |
+| `/cups cup:<1/2/3> wager:<pts>` | `!cups <1/2/3> <pts>` | Intramuros 3-Cup Shell Game (*Unlimited wagers; 2.0x–2.5x payout*). |
 
 ### 🐾 Companion Pets
 | Slash Command | Prefix Alias | What It Does |
@@ -97,7 +98,7 @@ Uno AI supports both **Slash Commands (`/`)** and **Prefix Commands (`!`)**. Com
 ### ⚔️ PvP Duels & Wanted Bounty Board
 | Slash Command | Prefix Alias | What It Does |
 |---|---|---|
-| `/duel target:<user> wager:<pts>` | `!duel <user> <pts>` | Challenge a classmate to a 1v1 PvP dice wager roll (*5% server rake to eliminate collusion*). |
+| `/duel target:<user> wager:<pts>` | `!duel <user> <pts>` | Challenge a classmate to a 1v1 PvP dice wager roll (*5% server rake, 60s cooldown*). |
 | `/bounty place target:<user> amount:<pts>` | `!bounty place` | Place a wanted bounty on a classmate (awarded to whoever defeats them in a duel!). |
 | `/bounty board` | `!bounty board` | View the top 10 wanted classroom bounty targets. |
 
@@ -116,20 +117,25 @@ Uno AI supports both **Slash Commands (`/`)** and **Prefix Commands (`!`)**. Com
 
 Uno AI features a balanced classroom economy designed so that accumulating points and redeeming real-world physical prizes (coffee treats, GCash gift cards, free printing services, Discord Nitro) requires **weeks of consistent participation**.
 
+### 🎁 Real-World Prize Catalog (50,000 – 100,000 pts)
+- **☕ Intramuros Coffee Treat**: `50,000 pts` (7-Eleven / Lawson beverage treat)
+- **💳 GCash Gift Card ₱100**: `65,000 pts` (Direct mobile cash transfer)
+- **🖨️ Free Printing Service (1 Month)**: `80,000 pts` (Academic reviewer/project printing)
+- **🚀 1 Month Discord Nitro**: `100,000 pts` (Discord Nitro gift link)
+
 ### 🏦 Banking & Wealth Taxes
 - **10% Banking Fees**: A **10% transaction fee** applies to all `/bank deposit` and `/bank withdraw` operations. Deposited bank points are 100% immune to `/steal` pickpockets.
+- **15% Peer Transfer Fee**: A **15% treasury tax** applies to `/give` transfers with a 100 pt minimum sender wallet balance requirement.
 - **24-Hour Wealth Taxes**: Every 24 hours, the campus treasury collects wealth taxes on total net worth (*wallet + bank vault*):
   - **8% Tax**: Standard accounts under 1,000 Uno Points.
   - **10% Tax**: Wealthy accounts holding 1,000+ Uno Points.
   - Accounts with under 10 points are fully tax-exempt.
 
-### 🎲 Gambling Safeguards & House Edge
-- **Strict 100 pt Wager Caps**: Maximum bet is capped at **100 Uno Points** across `/bet`, `/coinflip`, `/slots`, `/blackjack`, and `/highlow` (max 200 pts on `/duel`). High rollers cannot instantly double large bankrolls.
-- **`/bet` Daily Limit & Anti-Streak Trap**:
-  - Limited to **10 bets per calendar day** (PHT).
-  - **5-Win Rigged House Trap**: Hitting 5 consecutive wins forces the next **7 bets into guaranteed BUST losses**.
-  - **5-Loss Pity**: Losing 5 consecutive bets outside the trap guarantees a win on the next spin.
-- **Coinflip Payout**: Coinflip awards a **1.75x total payout** (+0.75x net profit) with a **46% win rate** (50% with Bunny) to eliminate infinite Martingale doubling exploits.
+### 🎲 Gambling Safeguards & Casino Limits
+- **Strict 100 pt Wager Caps**: Maximum bet is capped at **100 Uno Points** across casino games (max 200 pts on `/duel`, max 250 pts on `/cups`).
+- **Shared Daily Casino Cap**: Maximum **15 casino games per calendar day** across `/bet`, `/slots`, `/coinflip`, `/blackjack`, and `/highlow` with a **15-second cooldown** between plays.
+- **Anti-Streak Trap**: Hitting 5 consecutive wins in `/bet` triggers 7 guaranteed BUST losses. In `/slots`, 2 wins trigger 4 losses. In `/coinflip`, 3 wins trigger 4 losses.
+- **3-Cup Shell Game (`/cups`)**: Unlimited play street game. First 3 rounds provide 100% win rate (2.0x–2.5x payout), after which sleight-of-hand lowers win rate to 6% forever.
 
 ### 🐾 Companion Pet Perks
 - 🐱 **Tuxedo Cat**: Doubles `/daily` attendance reward points (up to 80 pts/day).
