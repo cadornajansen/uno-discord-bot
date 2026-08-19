@@ -19,6 +19,11 @@ def test_today_command_formatting():
         bot = MagicMock(spec=[])
         cog = AcademicsCog(bot)
 
+        # Mock Monday datetime (BSCS 1-4 has classes on Monday)
+        tz = zoneinfo.ZoneInfo("Asia/Manila")
+        monday_dt = datetime(2026, 8, 17, 10, 0, tzinfo=tz)
+        cog.schedule_service._get_now_in_tz = MagicMock(return_value=monday_dt)
+
         interaction = MagicMock()
         interaction.response.send_message = AsyncMock()
         interaction.followup.send = AsyncMock()

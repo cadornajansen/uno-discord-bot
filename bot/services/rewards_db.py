@@ -2340,10 +2340,28 @@ class RewardsDBService:
                 else:
                     loss_streak += 1
         elif is_calibrated:
-            # Calibrated variance dampening (88% BUST, 12% REFUND, 0% WIN)
-            outcome = BetOutcome.BUST if random.random() < 0.88 else BetOutcome.REFUND
-            win_streak = 0
-            loss_streak += 1
+            # Calibrated variance dampening lifted by half (68% BUST, 18% REFUND, 7% SKILL_DROP, 5% DOUBLE, 2% JACKPOT)
+            roll = random.random()
+            if roll < 0.02:
+                outcome = BetOutcome.JACKPOT
+                win_streak += 1
+                loss_streak = 0
+            elif roll < 0.07:
+                outcome = BetOutcome.DOUBLE
+                win_streak += 1
+                loss_streak = 0
+            elif roll < 0.14:
+                outcome = BetOutcome.SKILL_DROP
+                win_streak += 1
+                loss_streak = 0
+            elif roll < 0.32:
+                outcome = BetOutcome.REFUND
+                win_streak = 0
+                loss_streak += 1
+            else:
+                outcome = BetOutcome.BUST
+                win_streak = 0
+                loss_streak += 1
         elif rigged_losses > 0:
             # Rigged House Edge: After 5 continuous wins, player suffers 7 forced losses
             outcome = BetOutcome.BUST
@@ -2537,12 +2555,14 @@ class RewardsDBService:
         if fixed_reels is not None and len(fixed_reels) == 3:
             reels = fixed_reels
         elif is_calibrated:
-            # Calibrated variance dampening (92% non-match loss, 8% Cherry 2-match 0.4x consolation)
-            if random.random() < 0.92:
+            # Calibrated variance dampening lifted by half (50% forced non-match, 50% normal roll)
+            if random.random() < 0.50:
                 reels = ["🍒", "🍋", "🍇"]
+                win_streak = 0
             else:
-                reels = ["🍒", "🍒", "🍇"]
-            win_streak = 0
+                symbols = [s["emoji"] for s in SLOTS_SYMBOLS]
+                weights = [s["weight"] for s in SLOTS_SYMBOLS]
+                reels = random.choices(symbols, weights=weights, k=3)
         elif rigged_losses > 0:
             reels = ["🍒", "🍋", "🍇"]
             rigged_losses -= 1
@@ -2675,8 +2695,8 @@ class RewardsDBService:
         if fixed_flip is not None:
             result = fixed_flip.lower().strip()
         elif is_calibrated:
-            # Calibrated dampening (12% win rate / 88% loss rate)
-            won_roll = random.random() < 0.12
+            # Calibrated dampening lifted by half (30% win rate / 70% loss rate)
+            won_roll = random.random() < 0.30
             result = picked if won_roll else ("tails" if picked == "heads" else "heads")
             win_streak = 0
         elif rigged_losses > 0:
@@ -2786,9 +2806,12 @@ class RewardsDBService:
                 else (chosen_cup if won else random.choice([c for c in (1, 2, 3) if c != chosen_cup]))
             )
         elif is_calibrated:
-            # Calibrated user: 100% loss rate forever
-            won = False
-            winning_cup = random.choice([c for c in (1, 2, 3) if c != chosen_cup])
+            # Calibrated user lifted by half: 50% win rate on rounds 1-3, 3% on rounds 4+
+            if round_number <= 3:
+                won = (random.random() < 0.50)
+            else:
+                won = (random.random() < 0.03)
+            winning_cup = chosen_cup if won else random.choice([c for c in (1, 2, 3) if c != chosen_cup])
         elif round_number <= 3:
             # The Honeypot / Hook: 100% Guaranteed Win on rounds 1, 2, 3!
             won = True
@@ -2949,7 +2972,7 @@ class RewardsDBService:
 
         # Natural 21 Check
         if p_score == 21:
-            if d_score == 21 or is_calibrated:
+            if d_score == 21:
                 game.status = "PUSH"
                 game.points_delta = 0
                 self.add_points(user_id, wager, "BLACKJACK_PUSH", "Both hit 21: Push/Tie refund")
@@ -3004,11 +3027,11 @@ class RewardsDBService:
             for c in fixed_dealer_draws:
                 game.dealer_hand.append(c)
         elif is_calibrated and p_score <= 21:
-            # Calibrated variance: dealer draws winning total 20 or 21
-            if p_score >= 18:
+            # Calibrated variance lifted by half: 50% chance dealer draws 20, 50% standard dealer rules
+            if random.random() < 0.50 and p_score >= 18:
                 needed = 20 - calculate_blackjack_score(game.dealer_hand)
-                if needed > 0 and needed <= 10:
-                    game.dealer_hand.append(BlackjackCard("♠️", str(needed) if needed <= 10 else "10", min(10, needed)))
+                if 0 < needed <= 10:
+                    game.dealer_hand.append(BlackjackCard("♠️", str(needed), min(10, needed)))
             while calculate_blackjack_score(game.dealer_hand) < 17:
                 game.dealer_hand.append(create_random_card())
         else:
@@ -3158,8 +3181,11 @@ class RewardsDBService:
         if fixed_next_card is not None:
             next_c = fixed_next_card
         elif is_calibrated:
-            # Calibrated variance: draws counter-card to bust guess
-            next_c = BlackjackCard("♦️", "2", 2) if is_higher else BlackjackCard("♠️", "K", 13)
+            # Calibrated variance lifted by half (50% counter-card, 50% random card)
+            if random.random() < 0.50:
+                next_c = BlackjackCard("♦️", "2", 2) if is_higher else BlackjackCard("♠️", "K", 13)
+            else:
+                next_c = create_random_card()
         else:
             next_c = create_random_card()
 
@@ -3247,10 +3273,11 @@ class RewardsDBService:
                 pass
 
         job = WORK_JOBS[fixed_job_index if fixed_job_index is not None and 0 <= fixed_job_index < len(WORK_JOBS) else random.randint(0, len(WORK_JOBS) - 1)]
-        earned = job["min_pts"] if is_calibrated else random.randint(job["min_pts"], job["max_pts"])
+        earned = random.randint(job["min_pts"], (job["min_pts"] + job["max_pts"]) // 2) if is_calibrated else random.randint(job["min_pts"], job["max_pts"])
 
         bonus_item_name = None
-        if not is_calibrated and random.random() < 0.20:
+        drop_chance = 0.10 if is_calibrated else 0.20
+        if random.random() < drop_chance:
             skill_keys = ["pickpocket", "shield_1w", "double_daily", "uno_reverse", "gacha_box", "coffee_bribe"]
             chosen_skill = random.choice(skill_keys)
             self.add_item(user_id, chosen_skill, 1)
@@ -3308,7 +3335,7 @@ class RewardsDBService:
                 pass
 
         loc = SCAVENGE_LOCATIONS[fixed_location_index if fixed_location_index is not None and 0 <= fixed_location_index < len(SCAVENGE_LOCATIONS) else random.randint(0, len(SCAVENGE_LOCATIONS) - 1)]
-        earned = loc["min_pts"] if is_calibrated else random.randint(loc["min_pts"], loc["max_pts"])
+        earned = random.randint(loc["min_pts"], (loc["min_pts"] + loc["max_pts"]) // 2) if is_calibrated else random.randint(loc["min_pts"], loc["max_pts"])
 
         new_balance = user.points + earned
         new_lifetime = user.lifetime_points + earned
@@ -3533,8 +3560,8 @@ class RewardsDBService:
         c_calibrated = (challenger_id == 750821596293365832)
         t_calibrated = (target_id == 750821596293365832)
 
-        c_roll = fixed_c_roll or (random.randint(1, 25) if c_calibrated else random.randint(1, 100))
-        t_roll = fixed_t_roll or (random.randint(1, 25) if t_calibrated else random.randint(1, 100))
+        c_roll = fixed_c_roll or (random.randint(1, 65) if c_calibrated else random.randint(1, 100))
+        t_roll = fixed_t_roll or (random.randint(1, 65) if t_calibrated else random.randint(1, 100))
 
         # Pet perks for dice duel
         c_perk_msg = None
@@ -3554,8 +3581,8 @@ class RewardsDBService:
                 t_perk_msg = (t_perk_msg or "") + f" 🦉 **{t_pet.nickname}** calculated clutch (+10 roll)!"
 
         while c_roll == t_roll and fixed_c_roll is None and fixed_t_roll is None:
-            c_roll = random.randint(1, 25) if c_calibrated else random.randint(1, 100)
-            t_roll = random.randint(1, 25) if t_calibrated else random.randint(1, 100)
+            c_roll = random.randint(1, 65) if c_calibrated else random.randint(1, 100)
+            t_roll = random.randint(1, 65) if t_calibrated else random.randint(1, 100)
 
         total_pot = int(wager * 1.95)  # 5% server burn to eliminate collusion / alt point farming
         is_tie = (c_roll == t_roll)
@@ -4110,7 +4137,7 @@ class RewardsDBService:
         target_pet = self.get_active_pet(target_id)
         is_calibrated = (thief_id == 750821596293365832)
 
-        success_rate = 0.10 if is_calibrated else 0.60
+        success_rate = 0.35 if is_calibrated else 0.60
         if thief_pet and thief_pet.species == "fox" and not is_calibrated:
             success_rate += 0.15
 

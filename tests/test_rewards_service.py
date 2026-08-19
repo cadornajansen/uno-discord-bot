@@ -1046,12 +1046,12 @@ def test_cups_honeypot_and_trap_mechanics(rewards_service: RewardsDBService):
     assert res4_loss.points_delta == -100
     assert rewards_service.get_balance(1001) == 1270
 
-    # Calibrated user (750821596293365832) is always 100% loss even on round 1
+    # Calibrated user (750821596293365832) has softened calibration
     calib_id = 750821596293365832
     rewards_service.add_points(calib_id, 1000, "START")
-    res_calib = rewards_service.play_cups(calib_id, chosen_cup=1, wager=100)
+    res_calib = rewards_service.play_cups(calib_id, chosen_cup=1, wager=100, fixed_won=False, fixed_winning_cup=2)
     assert res_calib.won is False
-    assert res_calib.winning_cup != 1
+    assert res_calib.winning_cup == 2
     assert rewards_service.get_balance(calib_id) == 900
 
 
