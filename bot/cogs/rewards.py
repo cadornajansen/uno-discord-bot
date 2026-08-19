@@ -368,86 +368,387 @@ class AirdropCatchView(discord.ui.View):
 def build_pet_guide_embed() -> discord.Embed:
     """Build comprehensive student handbook for the Pet Companion System."""
     embed = discord.Embed(
-        title="📖 Uno Bot — Pet Companion Handbook & Guide",
+        title="Uno AI — Pet Companion Handbook & Guide",
         description=(
-            "Welcome to the **Pet Companion System**! Adopt loyal pixel-art companions that provide "
-            "**permanent passive economic multipliers**, **PvP duel battle perks**, daily care rewards, and vibrant profile aesthetics."
+            "Welcome to the **Pet Companion System**! Adopt loyal companions that grant "
+            "permanent passive economic multipliers, PvP duel battle perks, and daily care rewards."
         ),
         color=discord.Color.teal(),
     )
 
     embed.add_field(
-        name="🎁 1. FREE Starter Companion (0 pts)",
+        name="1. Free Starter Companion (0 pts)",
         value=(
-            "• Every student can claim **1 Free Starter Pet** using **`/pet starter`** or by opening **`/pet`**!\n"
-            "• Choose between **🐱 Tuxedo Cat**, **🐶 Golden Retriever**, or **🐰 Lop-Eared Bunny** at **0 pts cost** with 100% happiness!"
+            "• Claim **1 Free Starter Pet** using `/pet starter` or by opening `/pet`.\n"
+            "• Select from **Tuxedo Cat**, **Golden Retriever**, or **Lop-Eared Bunny** at **0 pts cost**."
         ),
         inline=False,
     )
 
     embed.add_field(
-        name="🐾 2. How Companions Work & 50%+ Discount Catalog",
+        name="2. Companion Catalog & Adoption",
         value=(
-            "• Each pet variant grants a **permanent passive buff** while equipped as your active companion.\n"
-            "• **🐱 Cats**: Tuxedo (`50 pts`), Calico (`100 pts`)\n"
-            "• **🐶 Dogs**: Golden (`50 pts`), Shiba Inu (`100 pts`)\n"
-            "• **🐰 Bunnies**: Brown (`150 pts`), White (`200 pts`)\n"
-            "• **🦉 Owls**: Scholar (`150 pts`), Ice Owl (`200 pts`)\n"
-            "• **🐢 Turtles**: Master Oogway (`200 pts`)\n"
-            "• **🦊 Foxes**: Orange Trickster (`200 pts`), Arctic (`250 pts`)\n"
-            "• **🦎 Axolotls**: Pink (`150 pts`), Rainbow (`250 pts`)\n"
-            "• **🐠 Goldfish**: Fiery Goldfish (`150 pts`)\n"
-            "• Adopt via **`/pet adopt <species>`** or in the **`/shop`** Pet Shelter tab!"
+            "• Each equipped companion grants a permanent passive perk.\n"
+            "• **Cats**: Tuxedo (`50 pts`), Calico (`100 pts`)\n"
+            "• **Dogs**: Golden (`50 pts`), Shiba Inu (`100 pts`)\n"
+            "• **Bunnies**: Brown (`150 pts`), White (`200 pts`)\n"
+            "• **Owls**: Scholar (`150 pts`), Ice Owl (`200 pts`)\n"
+            "• **Turtles**: Master Oogway (`200 pts`)\n"
+            "• **Foxes**: Orange Trickster (`200 pts`), Arctic (`250 pts`)\n"
+            "• **Axolotls**: Pink (`150 pts`), Rainbow (`250 pts`)\n"
+            "• **Goldfish**: Fiery Goldfish (`150 pts`)\n"
+            "• Adopt via `/pet adopt <species>` or in the `/shop` Pet Shelter tab."
         ),
         inline=False,
     )
 
     embed.add_field(
-        name="🌟 3. Passive Economic Perks",
+        name="3. Passive Economic Perks",
         value=(
-            "• 🐱 **Cats** — **2x Daily Attendance Points** on `/daily` permanently.\n"
-            "• 🐶 **Dogs** — **Guard Dog**: 75% thief catch rate & inflicts a 50 pt bite fine on pickpockets.\n"
-            "• 🐰 **Bunnies** — **Lucky Gambler**: +15% Jackpot & Double win rates in `/bet` and `/slots`.\n"
-            "• 🦉 **Owls** — **Quiz Master**: +75 pts per correct trivia quiz and 4th attempt/day.\n"
-            "• 🐢 **Turtles** — **Streak Freeze**: Prevents daily streak resets on missed days & +2d shield boost.\n"
-            "• 🦊 **Foxes** — **Pickpocket Master**: +15% steal rate & +10 pt bonus per airdrop catch.\n"
-            "• 🦎/🐠 **Axolotls & Goldfish** — **5% Cashback**: Instant 5% refund on all shop redemptions."
+            "• **Cats** — **2x Daily Attendance Points** on `/daily` permanently.\n"
+            "• **Dogs** — **Guard Dog**: 75% thief catch rate & 50 pt bite fine on thieves.\n"
+            "• **Bunnies** — **Lucky Gambler**: +15% Jackpot & Double win rates in `/bet` and `/slots`.\n"
+            "• **Owls** — **Quiz Master**: +75 pts per correct trivia quiz and 4th attempt/day.\n"
+            "• **Turtles** — **Streak Freeze**: Protects daily streaks from resetting & +2d shield boost.\n"
+            "• **Foxes** — **Pickpocket Master**: +15% steal rate & +10 pt bonus per airdrop catch.\n"
+            "• **Axolotls & Goldfish** — **5% Cashback**: Instant 5% refund on all shop redemptions."
         ),
         inline=False,
     )
 
     embed.add_field(
-        name="⚔️ 4. PvP Duel Combat Perks (`/duel`)",
+        name="4. PvP Duel Combat Perks (/duel)",
         value=(
-            "• 🐶 **Dogs** (*Intimidating Bark*) — 20% chance to bark fiercely, reducing opponent's roll/damage by 15.\n"
-            "• 🐰 **Bunnies** (*Lucky Reroll*) — Automatically rerolls duel dice if under 30, and +15% hit rate on RPG Ultimates.\n"
-            "• 🦉 **Owls** (*Calculated Strike*) — +10 clutch roll bonus when roll is within 5 points of the opponent.\n"
-            "• 🦊 **Foxes** (*Consolation Siphon*) — 25% chance on losing a duel to sneakily siphon back 20% of your lost wager."
+            "• **Dogs** (*Intimidating Bark*) — 20% chance to reduce opponent's roll by 15.\n"
+            "• **Bunnies** (*Lucky Reroll*) — Automatically rerolls duel dice if under 30.\n"
+            "• **Owls** (*Calculated Strike*) — +10 clutch roll bonus when within 5 points of opponent.\n"
+            "• **Foxes** (*Consolation Siphon*) — 25% chance on defeat to siphon back 20% of lost wager."
         ),
         inline=False,
     )
 
     embed.add_field(
-        name="🍖 5. Care, Happiness & Leveling Up",
+        name="5. Care, Leveling & Shelter Resale",
         value=(
-            "• Open your pet dashboard with **`/pet`** (or `/pet view`).\n"
-            "• Use **`[ 🍖 Feed Snack ]`** & **`[ 💖 Cuddle & Pet ]`** to increase happiness (up to 100%) and gain +15 XP.\n"
-            "• Level up your companion to unlock higher resale value and stronger bond!"
+            "• Open your pet dashboard with `/pet` to feed and cuddle your companion.\n"
+            "• Gain XP to level up your companion and increase bond strength.\n"
+            "• `/pet sell <species>` refunds **60% base cost** + **+25 pts** per level above Level 1.\n"
+            "• `/pet drop` displays the currently spotlighted 3-day rotating companion."
         ),
         inline=False,
     )
 
-    embed.add_field(
-        name="🪙 6. Selling & Rotating Drops",
-        value=(
-            "• **Sell Companion**: `/pet sell <species>` refunds `60% base cost` + `+25 pts` per level above Level 1!\n"
-            "• **Rotating 3-Day Drops**: Use **`/pet drop`** to view the currently featured drop, its timer, and 1-click adoption."
-        ),
-        inline=False,
-    )
-
-    embed.set_footer(text="Adopt from /shop (Pet Shelter) • View your pet with /pet • /pet starter for free claim")
+    embed.set_footer(text="Adopt from /shop • Manage with /pet • Claim free starter with /pet starter")
     return embed
+
+
+def build_student_guide_embed(category: str = "overview") -> discord.Embed:
+    """Build modular, categorized student guide embeds for Uno Rewards."""
+    if category == "earning":
+        embed = discord.Embed(
+            title="Uno Rewards Guide — 1. Earning Points & Side Hustles",
+            description="All active methods to earn Uno Points across campus.",
+            color=discord.Color.blue(),
+        )
+        embed.add_field(
+            name="Daily Attendance (/daily)",
+            value="Claim daily attendance points: `+20 base pts` + streak bonuses. Equipped Cat companions grant permanent `2x daily` points.",
+            inline=False,
+        )
+        embed.add_field(
+            name="Campus Shift (/work)",
+            value="Work a campus shift (1-hour cooldown). Earns `18–45 pts` with a `15% chance` to find rare skill cards.",
+            inline=False,
+        )
+        embed.add_field(
+            name="Scavenge Pocket Change (/beg)",
+            value="Search for loose change across campus (30-minute cooldown). Earns `5–18 pts`.",
+            inline=False,
+        )
+        embed.add_field(
+            name="CS & Tech Trivia (/trivia)",
+            value="Answer Computer Science, Mathematics, and PLM trivia quizzes for `+25 pts` each (3 attempts/day, +50% with Owl companion).",
+            inline=False,
+        )
+        embed.add_field(
+            name="Classmate Transfers (/give)",
+            value="Transfer points directly to a classmate. Requires at least 100 pts in wallet; a 15% campus transfer tax applies.",
+            inline=False,
+        )
+        embed.add_field(
+            name="Pickpocketing (/steal)",
+            value="Attempt to steal points from an unshielded classmate (60s cooldown, max 100 pts). Watch out for Guard Dogs and Uno Reverse Cards!",
+            inline=False,
+        )
+        embed.set_footer(text="Use the dropdown menu below to explore other chapters.")
+        return embed
+
+    if category == "casino":
+        embed = discord.Embed(
+            title="Uno Rewards Guide — 2. Casino Rules, Odds & Cups",
+            description="High-stakes campus gambling mechanics, limits, and payout rates.",
+            color=discord.Color.gold(),
+        )
+        embed.add_field(
+            name="Casino Guardrails",
+            value="• **Wager Limit:** Max `100 pts` per bet across casino games.\n• **Daily Cap:** `15 games/day` shared across casino games.\n• **Dealer Delay:** `15-second cooldown` between spins.",
+            inline=False,
+        )
+        embed.add_field(
+            name="Roulette Wheel (/bet)",
+            value="Spin the roulette wheel:\n• 4% Jackpot (`4.0x payout`)\n• 10% Double (`2.0x payout`)\n• 15% Skill Card Drop (`1.0x refund + item`)\n• 36% Push (`1.0x refund`)\n• 35% Bust (`0x payout`)",
+            inline=False,
+        )
+        embed.add_field(
+            name="3-Reel Slots (/slots)",
+            value="Classic 3-reel slot machine with consolation payouts up to `20x Uno Wild Jackpot`.",
+            inline=False,
+        )
+        embed.add_field(
+            name="Coinflip (/coinflip)",
+            value="Call Heads or Tails for a flat `1.70x payout` on a successful toss.",
+            inline=False,
+        )
+        embed.add_field(
+            name="Blackjack 21 (/blackjack)",
+            value="Interactive Blackjack with Hit, Stand, and Double Down. Natural 21 pays `3:2`.",
+            inline=False,
+        )
+        embed.add_field(
+            name="High-Low Ladder (/highlow)",
+            value="Guess card values in sequence to climb the payout ladder up to `30.0x multiplier`.",
+            inline=False,
+        )
+        embed.add_field(
+            name="Street Game: 3-Cup Shell Game (/cups)",
+            value="Intramuros street game with **unlimited plays** (no daily limit). Guess which cup hides the ball for `2.0x–2.5x payout`.",
+            inline=False,
+        )
+        embed.set_footer(text="Use the dropdown menu below to explore other chapters.")
+        return embed
+
+    if category == "pvp":
+        embed = discord.Embed(
+            title="Uno Rewards Guide — 3. 1v1 PvP Duels & Bounties",
+            description="Head-to-head wager battles and classroom bounty hunting.",
+            color=discord.Color.red(),
+        )
+        embed.add_field(
+            name="1v1 PvP Duels (/duel)",
+            value="Challenge a classmate to a 1v1 dice duel (1-100 roll). Winner takes the pot minus a standard `5% house rake`. 60-second cooldown applies.",
+            inline=False,
+        )
+        embed.add_field(
+            name="Classroom Bounties (/bounty place)",
+            value="Place a bounty on any classmate with points from your wallet (minimum 50 pts). The bounty pot accumulates publicly.",
+            inline=False,
+        )
+        embed.add_field(
+            name="Bounty Board (/bounty board)",
+            value="View the top 10 Most Wanted students. Defeating a bountied player in a `/duel` awards `100% of their accumulated bounty pool`!",
+            inline=False,
+        )
+        embed.set_footer(text="Use the dropdown menu below to explore other chapters.")
+        return embed
+
+    if category == "pets":
+        embed = discord.Embed(
+            title="Uno Rewards Guide — 4. Pet Companions & Perks",
+            description="Adopt and raise pixel-art companions for permanent passive boosts.",
+            color=discord.Color.teal(),
+        )
+        embed.add_field(
+            name="Free Starter Pet (/pet starter)",
+            value="Every student can claim **1 Free Starter Pet** (Tuxedo Cat, Golden Retriever, or Lop-Eared Bunny) at **0 pts cost**.",
+            inline=False,
+        )
+        embed.add_field(
+            name="Companion Roster (50–250 pts)",
+            value=(
+                "• **Cats** (Tuxedo, Calico) — `2x Daily Attendance Points`\n"
+                "• **Dogs** (Golden, Shiba) — `Guard Dog anti-theft & 50 pt bite fine`\n"
+                "• **Bunnies** (Brown, White) — `+15% Jackpot & Double casino luck`\n"
+                "• **Owls** (Scholar, Ice) — `+50% Trivia points & 4th daily quiz`\n"
+                "• **Turtles** (Oogway) — `Streak Freeze protection & +2d shield boost`\n"
+                "• **Foxes** (Trickster, Arctic) — `+15% Steal rate & +10 pt airdrop bonus`\n"
+                "• **Axolotls & Goldfish** — `5% Instant Shop Cashback`"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Care & Leveling (/pet)",
+            value="Feed snacks and cuddle your active pet to increase happiness and earn XP. Higher level pets yield higher resale returns.",
+            inline=False,
+        )
+        embed.set_footer(text="Use the dropdown menu below to explore other chapters.")
+        return embed
+
+    if category == "bank":
+        embed = discord.Embed(
+            title="Uno Rewards Guide — 5. Bank Vault, Taxes & Skill Items",
+            description="Financial safety, campus taxation, and consumable skill cards.",
+            color=discord.Color.purple(),
+        )
+        embed.add_field(
+            name="Bank Vault (/bank)",
+            value="Deposit wallet funds into your vault for 100% protection against thieves and audits. A standard `10% deposit fee` applies.",
+            inline=False,
+        )
+        embed.add_field(
+            name="Progressive Wealth Taxes",
+            value="To keep the economy balanced, high net-worth accounts are subject to daily wealth maintenance:\n• Wallets above `5,000 pts`: `8% daily tax`\n• Wallets above `20,000 pts`: `10% daily tax`\n*Store points safely in your bank vault to mitigate tax liability.*",
+            inline=False,
+        )
+        embed.add_field(
+            name="Consumable Skill Cards",
+            value=(
+                "• **1-Week Immunity Shield** — Blocks all `/steal` robbery attempts for 7 days.\n"
+                "• **Uno Reverse Card** — Passive trap that counter-steals 40%–60% from pickpockets.\n"
+                "• **Point Airdrop** — Drops a 100 pt community care package in chat for 4 quick catchers.\n"
+                "• **EMP Shield Breaker** — Shatters a classmate's active Immunity Shield.\n"
+                "• **Class Treasurer Audit** — Audits 5% tax from a top leaderboard player.\n"
+                "• **Mystery Gacha Box** — High-roller lootbox with prizes up to 1,000 points."
+            ),
+            inline=False,
+        )
+        embed.set_footer(text="Use the dropdown menu below to explore other chapters.")
+        return embed
+
+    if category == "prizes":
+        embed = discord.Embed(
+            title="Uno Rewards Guide — 6. Real-World Prize Redemption",
+            description="Redeem your earned points for physical treats, GCash, and Discord Nitro.",
+            color=discord.Color.green(),
+        )
+        embed.add_field(
+            name="Prize Catalog (/shop & /redeem)",
+            value=(
+                "• `50,000 pts` — **☕ Intramuros Coffee Treat** (7-Eleven / Lawson)\n"
+                "• `65,000 pts` — **💳 GCash Gift Card ₱100**\n"
+                "• `80,000 pts` — **🖨️ Free Printing Service (1 Month)**\n"
+                "• `100,000 pts` — **🚀 1 Month Discord Nitro**"
+            ),
+            inline=False,
+        )
+        embed.add_field(
+            name="Redemption Process",
+            value="Use `/redeem item:<name>` to place a redemption order. A notification will be dispatched to bot administration for fulfillment.",
+            inline=False,
+        )
+        embed.set_footer(text="Use the dropdown menu below to explore other chapters.")
+        return embed
+
+    # Default: Overview
+    embed = discord.Embed(
+        title="🎮 Uno AI Rewards, Casino, Pets & PvP — Complete Student Guide",
+        description=(
+            "Welcome to the **BSCS 1-4 Uno Rewards & Gamification Universe**! Earn points, "
+            "adopt companions, test your luck in the casino, clash in 1v1 PvP duels, and redeem real-world prizes."
+        ),
+        color=discord.Color.blue(),
+    )
+
+    embed.add_field(
+        name="1. How to Earn Points",
+        value=(
+            "• `/daily` or `!daily` — Daily attendance check-in (20 base + streak bonus, 2x with Cat).\n"
+            "• `/work` or `!work` — Work a campus shift (1h cooldown, 18–45 pts + rare card drops).\n"
+            "• `/beg` or `!beg` — Scavenge pocket change across campus (30m cooldown, 5–18 pts).\n"
+            "• `/trivia` or `!trivia` — Answer CS/Tech quizzes for +25 pts each (3 attempts/day).\n"
+            "• `/give @user <amount>` or `!give` — Transfer points to a classmate (15% tax).\n"
+            "• `/steal @user` or `!steal` — Pickpocket points from an unshielded classmate (60s cooldown)."
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="2. High-Stakes Casino & Street Games",
+        value=(
+            "• `/bet [amount]` or `!bet` — Roulette gamble with up to 4.0x payout (15/day cap, 15s cooldown).\n"
+            "• `/slots [amount]` or `!slots` — 3-Reel classic slots with up to 20x Wild Jackpot.\n"
+            "• `/coinflip <heads|tails> [amount]` or `!cf` — 1.70x payout coin toss.\n"
+            "• `/blackjack [amount]` or `!bj` — Blackjack 21 with Hit, Stand, and Double Down.\n"
+            "• `/highlow [amount]` or `!hl` — Card guessing ladder with up to 30.0x multiplier.\n"
+            "• `/cups <1|2|3> [amount]` or `!cups` — Intramuros 3-Cup Shell Game (Unlimited Plays)!"
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="3. 1v1 PvP Duels & Classroom Bounties",
+        value=(
+            "• `/duel @user [amount]` — Challenge a classmate to a 1v1 dice duel (5% rake).\n"
+            "• `/bounty place @target <amount>` — Place a wanted bounty on a classmate (min 50 pts).\n"
+            "• `/bounty board` — View the top 10 Most Wanted board. Defeating a target awards 100% of their bounty!"
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="4. Pet Companions & Shelter",
+        value=(
+            "• `/pet starter` — Claim 1 Free Starter Companion (Tuxedo Cat, Golden Dog, or Lop Bunny)!\n"
+            "• `/pet adopt <species>` — Adopt companions with permanent perks (Cats, Dogs, Bunnies, Owls, Turtles, Foxes, Axolotls).\n"
+            "• `/pet` — Pet dashboard to feed, cuddle, level up, and manage companions."
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="5. Bank Vault, Taxes & Skill Cards",
+        value=(
+            "• `/bank <deposit|withdraw|view>` — Protected bank vault 100% immune to theft (10% fee).\n"
+            "• Progressive wealth taxes (8%–10%) apply daily on large unbanked wallets.\n"
+            "• Skill cards: 1-Week Immunity Shield, Uno Reverse Card, Point Airdrops, EMP Breakers, Tax Audits."
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="6. Real-World Prize Catalog (/shop or !shop)",
+        value=(
+            "• `50,000 pts` — **☕ Intramuros Coffee Treat** (7-Eleven / Lawson)\n"
+            "• `65,000 pts` — **💳 GCash Gift Card ₱100**\n"
+            "• `80,000 pts` — **🖨️ Free Printing Service (1 Month)**\n"
+            "• `100,000 pts` — **🚀 1 Month Discord Nitro**\n"
+            "• *Redeem with `/redeem <item>` or `!redeem <item>`!*"
+        ),
+        inline=False,
+    )
+
+    embed.set_footer(text="Use the dropdown menu below to browse in-depth chapters.")
+    return embed
+
+
+class GuideCategorySelect(discord.ui.Select):
+    """Dropdown selector to view specific student guide chapters."""
+
+    def __init__(self):
+        options = [
+            discord.SelectOption(label="Complete Guide Overview", value="overview", description="Full guide summary", emoji="📖", default=True),
+            discord.SelectOption(label="1. Earning & Side Hustles", value="earning", description="Daily, shifts, scavenging, and trivia", emoji="💼"),
+            discord.SelectOption(label="2. Casino & Shell Game", value="casino", description="Roulette, slots, coinflip, blackjack, cups", emoji="🎰"),
+            discord.SelectOption(label="3. PvP Duels & Bounties", value="pvp", description="1v1 wagers and wanted bounty hunting", emoji="⚔️"),
+            discord.SelectOption(label="4. Pet Companions & Shelter", value="pets", description="Companion roster, care, and passive buffs", emoji="🐾"),
+            discord.SelectOption(label="5. Banking, Taxes & Cards", value="bank", description="Theft-proof vault, wealth tax, and skill cards", emoji="🏦"),
+            discord.SelectOption(label="6. Real-World Prizes", value="prizes", description="50k-100k physical treats, GCash, and Nitro", emoji="🎁"),
+        ]
+        super().__init__(placeholder="Select a guide chapter to read...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        selected_cat = self.values[0]
+        for opt in self.options:
+            opt.default = (opt.value == selected_cat)
+        embed = build_student_guide_embed(selected_cat)
+        await interaction.response.edit_message(embed=embed, view=self.view)
+
+
+class GuideView(discord.ui.View):
+    """Interactive view for the /guide command with chapter dropdown."""
+
+    def __init__(self):
+        super().__init__(timeout=180.0)
+        self.add_item(GuideCategorySelect())
 
 
 class PetDropAdoptButton(discord.ui.Button):
@@ -2168,21 +2469,23 @@ class RewardsCog(commands.Cog):
         profile = self.rewards_service.get_profile(interaction.user.id)
 
         shield_status = (
-            f"🛡️ Active (<t:{int(profile.shield_until.timestamp())}:R>)"
+            f"Active (<t:{int(profile.shield_until.timestamp())}:R>)"
             if profile.has_shield and profile.shield_until
-            else "❌ No Active Shield"
+            else "None"
         )
 
         embed = discord.Embed(
-            title=f"💰 Balance — {interaction.user.display_name}",
+            title=f"Balance — {interaction.user.display_name}",
             color=discord.Color.blue(),
         )
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
-        embed.add_field(name="Current Points", value=f"**{profile.points:,} pts**", inline=True)
-        embed.add_field(name="Daily Streak", value=f"**{profile.daily_streak} days** 🔥", inline=True)
-        embed.add_field(name="Server Rank", value=f"**#{profile.rank}** 🏆", inline=True)
-        embed.add_field(name="Immunity Shield", value=shield_status, inline=False)
-        embed.set_footer(text="Use /daily to earn points • /bet to gamble • /shop to redeem prizes")
+        embed.add_field(name="Wallet Balance", value=f"**{profile.points:,} pts**", inline=True)
+        embed.add_field(name="Bank Vault", value=f"**{profile.bank_points:,} pts**", inline=True)
+        embed.add_field(name="Net Worth", value=f"**{profile.points + profile.bank_points:,} pts**", inline=True)
+        embed.add_field(name="Daily Streak", value=f"**{profile.daily_streak} days**", inline=True)
+        embed.add_field(name="Server Rank", value=f"**#{profile.rank}**", inline=True)
+        embed.add_field(name="1-Week Shield", value=shield_status, inline=True)
+        embed.set_footer(text="Use /daily to earn points • /bank to protect funds • /shop to redeem")
 
         await interaction.response.send_message(embed=embed)
 
@@ -2198,20 +2501,21 @@ class RewardsCog(commands.Cog):
         profile = self.rewards_service.get_profile(target.id)
 
         shield_status = (
-            f"🛡️ Active (<t:{int(profile.shield_until.timestamp())}:R>)"
+            f"Active (<t:{int(profile.shield_until.timestamp())}:R>)"
             if profile.has_shield and profile.shield_until
-            else "❌ None"
+            else "None"
         )
 
         embed = discord.Embed(
-            title=f"👤 Student Profile — {target.display_name}",
+            title=f"Student Profile — {target.display_name}",
             color=discord.Color.purple(),
         )
         embed.set_thumbnail(url=target.display_avatar.url)
         embed.add_field(name="Wallet Balance", value=f"**{profile.points:,} pts**", inline=True)
-        embed.add_field(name="Lifetime Earned", value=f"**{profile.lifetime_points:,} pts**", inline=True)
-        embed.add_field(name="Daily Streak", value=f"**{profile.daily_streak}d** 🔥", inline=True)
-        embed.add_field(name="Server Rank", value=f"**#{profile.rank}** 🏆", inline=True)
+        embed.add_field(name="Bank Vault", value=f"**{profile.bank_points:,} pts**", inline=True)
+        embed.add_field(name="Net Worth", value=f"**{profile.points + profile.bank_points:,} pts**", inline=True)
+        embed.add_field(name="Daily Streak", value=f"**{profile.daily_streak} days**", inline=True)
+        embed.add_field(name="Server Rank", value=f"**#{profile.rank}**", inline=True)
         embed.add_field(name="1-Week Shield", value=shield_status, inline=True)
 
         file_attachment = None
@@ -3492,94 +3796,10 @@ class RewardsCog(commands.Cog):
 
     @app_commands.command(name="guide", description="Complete guide on how to earn points, gamble, duel, adopt pets, and redeem prizes!")
     async def guide(self, interaction: discord.Interaction) -> None:
-        """Display the complete student game guide for Uno Rewards."""
-        embed = discord.Embed(
-            title="🎮 Uno AI Rewards, Casino, Pets & PvP — Complete Student Guide",
-            description=(
-                "Welcome to the **BSCS 1-4 Uno Rewards & Gamification Universe**! Earn points, "
-                "adopt companions, gamble in the casino, clash in 1v1 PvP duels, place student bounties, and redeem real-world prizes!"
-            ),
-            color=discord.Color.blue(),
-        )
-
-        embed.add_field(
-            name="📅 1. How to Earn Points & Side Hustles",
-            value=(
-                "• **`/daily` or `!daily`**: Daily attendance check-in (+30 base + streak bonus up to +35 pts, 2x with Cat companion!).\n"
-                "• **`/work` or `!work`**: Work a campus shift (1h cooldown, earn 40–120 pts + rare card drops).\n"
-                "• **`/beg` or `!beg`**: Scavenge pocket change across campus (30m cooldown, 10–40 pts).\n"
-                "• **`/trivia` or `!trivia`**: Answer CS & Tech quizzes for **`+50 Uno Points`** each (max 3/day, +75 pts with Owl companion)!\n"
-                "• **`/give @user <amount>` or `!give`**: Transfer points directly to a classmate from your wallet (min 10 pts).\n"
-                "• **`/steal @user` or `!steal`**: Use a *Pickpocket Card* to steal 40%–60% points from an unshielded classmate!"
-            ),
-            inline=False,
-        )
-
-        embed.add_field(
-            name="🎰 2. High-Stakes Casino & Street Bets",
-            value=(
-                "• **`/bet [amount]` or `!bet`**: High-roller roulette gamble with up to 4x payout & skill drops.\n"
-                "• **`/slots [amount]` or `!slots`**: 3-Reel classic slots with up to 20x Uno Wild Jackpot.\n"
-                "• **`/coinflip <heads|tails> [amount]` or `!cf`**: 1.70x payout coinflip.\n"
-                "• **`/blackjack [amount]` or `!bj`**: Interactive Blackjack 21 with Hit, Stand, Double Down.\n"
-                "• **`/highlow [amount]` or `!hl`**: Climb the card guessing ladder for up to 30x multiplier!\n"
-                "• **`/cups <1|2|3> [amount]` or `!cups`**: Intramuros 3-Cup Shell Game (Unlimited Wagers)!"
-            ),
-            inline=False,
-        )
-
-        embed.add_field(
-            name="⚔️ 3. 1v1 PvP Duels & Classroom Bounties",
-            value=(
-                "• **`/duel @user [amount] [mode]`**: Challenge a classmate across 4 game modes:\n"
-                "  🎲 **Dice Roll** · ✂️ **Rock-Paper-Scissors** · 🃏 **Uno Russian Roulette** · ⚔️ **100 HP RPG Arena**\n"
-                "• **`/bounty place @target <amount>`**: Place a wanted bounty on a classmate (min 50 pts).\n"
-                "• **`/bounty list`**: View the Most Wanted board. Defeating a bountied classmate in ANY duel awards **100% of their bounty pool**!\n"
-                "• **🔁 Double-or-Nothing**: Defeated duelists get a 20s rematch button to double the stakes!"
-            ),
-            inline=False,
-        )
-
-        embed.add_field(
-            name="🐾 4. Pet Companions & Shelter",
-            value=(
-                "• **`/pet starter`**: Claim **1 FREE Starter Companion (0 pts)** (Tuxedo Cat, Golden Dog, or Lop-Eared Bunny)!\n"
-                "• **Discounted Adoption**: 🐱 Cats & 🐶 Dogs (`50 pts`), Calico/Shiba (`100 pts`), Bunnies/Owls/Turtles/Foxes/Axolotls (`150-250 pts`).\n"
-                "• **Passive Perks**: 2x daily claims, guard dog anti-theft, casino luck boosts, cashback, and trivia bonuses.\n"
-                "• **Duel Battle Perks**: Dog intimidation (-15 roll/DMG), Bunny lucky rerolls, Owl clutch roll bonus, Fox loss siphon!\n"
-                "• **Care & Shelter**: `/pet view` (feed & cuddle), `/pet switch`, `/pet sell`, `/pet drop`, `/pet guide`."
-            ),
-            inline=False,
-        )
-
-        embed.add_field(
-            name="🛡️ 5. Bank Vault & Special Skill Cards",
-            value=(
-                "• **`/bank <deposit|withdraw|view>`**: Protected bank vault 100% immune to theft and audits.\n"
-                "• **`🛡️ 1-Week Immunity Shield`**: Deflects all `/steal` robbery attempts for 7 days!\n"
-                "• **`🔄 Uno Reverse Card`**: Counter-steals 40%–60% from anyone who attempts to steal from you!\n"
-                "• **`🌧️ Point Airdrop`**: Launches a 100 pt community care package in chat (+25 pts each for 4 catchers)!\n"
-                "• **`📦 Mystery Gacha Box`**: Lucky lootbox with rewards up to 1,000 points and rare cards!\n"
-                "• **`🔨 EMP Shield Breaker`**: Shatter a classmate's active Immunity Shield (`/use shield_breaker @user`)!\n"
-                "• **`🕵️ Class Treasurer Audit`**: Audit a 5% Class Tax from a Top-3 Leaderboard player (`/use tax_audit @user`)!"
-            ),
-            inline=False,
-        )
-
-        embed.add_field(
-            name="🎁 6. Prize Catalog (`/shop` or `!shop`)",
-            value=(
-                "• `50,000 pts` — **☕ Intramuros Coffee Treat** (7-Eleven / Lawson)\n"
-                "• `65,000 pts` — **💳 GCash Gift Card ₱100**\n"
-                "• `80,000 pts` — **🖨️ Free Printing Service (1 Month)**\n"
-                "• `100,000 pts` — **🚀 1 Month Discord Nitro**\n"
-                "• *Redeem with `/redeem <item>` or `!redeem <item>`!*"
-            ),
-            inline=False,
-        )
-
-        embed.set_footer(text="BSCS 1-4 • Pamantasan ng Lungsod ng Maynila • Built by Jansen")
-        await interaction.response.send_message(embed=embed)
+        """Display the complete student game guide for Uno Rewards with interactive chapter navigation."""
+        embed = build_student_guide_embed("overview")
+        view = GuideView()
+        await interaction.response.send_message(embed=embed, view=view)
 
     @app_commands.command(name="milestone", description="Display the official Uno AI Rewards & Economy launch announcement milestone.")
     async def milestone(self, interaction: discord.Interaction) -> None:
