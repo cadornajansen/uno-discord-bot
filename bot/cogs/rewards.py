@@ -1787,7 +1787,7 @@ def build_shop_embed(rewards_service: RewardsDBService, user_id: int, category: 
             f"• **⭐ 3-Day Drop Spotlight: {feat_p['name']}** (`{feat_p['cost']:,} pts`) — *{feat_p['perk_title']} (Rotation: <t:{drop_info['next_drop_timestamp']}:R>)*\n"
             "• **🔄 Uno Reverse Card** (`180 pts`) — *Passive trap! Counter-steals 40%–60% from pickpockets!*\n"
             "• **📦 Mystery Gacha Box** (`150 pts`) — *Win up to 1,000 pts & exclusive High Roller badge!*\n"
-            "• **☕ Intramuros Coffee Treat** (`1,200 pts`) — *₱50–₱80 Lawson/7-Eleven drink treat around PLM!*"
+            "• **☕ Intramuros Coffee Treat** (`50,000 pts`) — *₱50–₱80 Lawson/7-Eleven drink treat around PLM!*"
         )
         embed.add_field(name="⭐ Featured Items Today", value=featured_text, inline=False)
 
@@ -3265,10 +3265,10 @@ class RewardsCog(commands.Cog):
         app_commands.Choice(name="🔨 EMP Shield Breaker (140 pts)", value="shield_breaker"),
         app_commands.Choice(name="🕵️ Class Treasurer Audit (200 pts)", value="tax_audit"),
         app_commands.Choice(name="☕ Dean's Coffee Bribe (100 pts)", value="coffee_bribe"),
-        app_commands.Choice(name="☕ Intramuros Coffee Treat (1,200 pts)", value="coffee"),
-        app_commands.Choice(name="💳 GCash Gift Card ₱100 (2,200 pts)", value="gcash_100"),
-        app_commands.Choice(name="🖨️ Free Printing Service 1 Month (2,800 pts)", value="printing_1m"),
-        app_commands.Choice(name="🚀 1 Month Discord Nitro (5,500 pts)", value="nitro_1m"),
+        app_commands.Choice(name="☕ Intramuros Coffee Treat (50,000 pts)", value="coffee"),
+        app_commands.Choice(name="💳 GCash Gift Card ₱100 (65,000 pts)", value="gcash_100"),
+        app_commands.Choice(name="🖨️ Free Printing Service 1 Month (80,000 pts)", value="printing_1m"),
+        app_commands.Choice(name="🚀 1 Month Discord Nitro (100,000 pts)", value="nitro_1m"),
     ])
     async def redeem(self, interaction: discord.Interaction, item: app_commands.Choice[str]) -> None:
         """Redeem a shop item."""
