@@ -94,6 +94,15 @@ class PrefixCommandsCog(commands.Cog):
             await context.send("That command is currently unavailable.")
             return
 
+        if cog_name == "RewardsCog":
+            locked_until = target_cog.rewards_service.is_economy_locked()
+            read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild_view", "quests"}
+            if locked_until and command_attribute not in read_only:
+                await context.reply(
+                    f"☢️ **Global Economic Crisis in effect.** Economic actions resume <t:{int(locked_until.timestamp())}:R>."
+                )
+                return
+
         app_command = getattr(type(target_cog), command_attribute)
         interaction = PrefixInteraction(context)
         await app_command.callback(target_cog, interaction, *args)

@@ -12,6 +12,7 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 PHT = timezone(timedelta(hours=8))
+OWNER_ECONOMY_OVERRIDE_USER_ID = 1522620190142107746
 
 
 class RewardsError(Exception):
@@ -432,6 +433,11 @@ ITEM_DEFINITIONS = {
         "description": "Instant lucky grant of +100 to +180 Uno Points from the CS Faculty coffee fund!",
         "usable": True,
     },
+    "nuke": {
+        "name": "☢️ Nuke Card",
+        "description": "Launches a 20-second public strike that removes 30% of a target's wallet and freezes economic actions for one minute.",
+        "usable": False,
+    },
 }
 
 
@@ -542,7 +548,7 @@ PET_CATALOG: dict[str, dict] = {
         "friendly_with": "Golden Retriever, Scholar Owl",
         "rival_with": "Trickster Fox, Pickpockets",
         "favorite_snack": "Fresh Tuna Treats",
-        "duel_perk": "Feline Agility: +10% Dodge in RPG Arena",
+        "duel_perk": "Feline Fortune: +3% luck in roulette, slots, coinflip, and cups.",
         "quotes": [
             "Purring peacefully next to your reviewer notebooks~",
             "Meow! Don't forget to take a study break!",
@@ -562,7 +568,7 @@ PET_CATALOG: dict[str, dict] = {
         "friendly_with": "Lop-Eared Bunny, Pink Axolotl",
         "rival_with": "Arctic Ice Fox, Serpents",
         "favorite_snack": "Warm Milk Biscuits",
-        "duel_perk": "Feline Agility: +10% Dodge in RPG Arena",
+        "duel_perk": "Feline Fortune: +3% luck in roulette, slots, coinflip, and cups.",
         "quotes": [
             "Curled up in a warm fluffy ball beside your laptop.",
             "Soft purrs echo across your study desk~",
@@ -698,7 +704,7 @@ PET_CATALOG: dict[str, dict] = {
         "friendly_with": "Tuxedo Cat, Golden Retriever, Scholar Owl",
         "rival_with": "Impatient Rerollers, Haste",
         "favorite_snack": "Sacred Peach Blossoms",
-        "duel_perk": "Zen Fortitude: +20 Parry Block reduction in RPG Arena",
+        "duel_perk": "Zen Fortitude: preserves daily streaks and extends shields by 2 days.",
         "quotes": [
             "Yesterday is history, tomorrow is a mystery, today is a gift~",
             "Slow and steady wins the semester.",
@@ -757,7 +763,7 @@ PET_CATALOG: dict[str, dict] = {
         "friendly_with": "Calico Cat, Lop-Eared Bunny, Fiery Goldfish",
         "rival_with": "Point Drains, Market Crashes",
         "favorite_snack": "Hydro Gel Shrimp",
-        "duel_perk": "Bubble Shield: Absorbs first 15 DMG in RPG Arena",
+        "duel_perk": "Economy Titan: 5% cashback on shop redemptions.",
         "quotes": [
             "Floating cheerfully with fluffy pink gills!",
             "Bringing vibrant financial blessings to your wallet~",
@@ -776,7 +782,7 @@ PET_CATALOG: dict[str, dict] = {
         "friendly_with": "Trickster Fox, Fiery Goldfish, Moon Rabbit",
         "rival_with": "Monotone Voids, Point Audits",
         "favorite_snack": "Prismatic Star Drops",
-        "duel_perk": "Bubble Shield: Absorbs first 15 DMG in RPG Arena",
+        "duel_perk": "Economy Titan: 5% cashback on shop redemptions.",
         "quotes": [
             "Shimmering with majestic iridescent colors!",
             "Radiating a mythical aura of supreme prestige and wealth.",
@@ -795,7 +801,7 @@ PET_CATALOG: dict[str, dict] = {
         "friendly_with": "Pink Axolotl, Lop-Eared Bunny, Trickster Fox",
         "rival_with": "Frost Owl, Ice Creatures",
         "favorite_snack": "Fortune Pellets",
-        "duel_perk": "Lucky Splash: 10% chance to double dice roll clutch",
+        "duel_perk": "Economy Titan: 5% cashback on shop redemptions.",
         "quotes": [
             "Swimming in golden currents of endless good fortune!",
             "Glowing brightly with blazing prosperity!",
@@ -1403,6 +1409,42 @@ class RewardsDBService:
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
                 CREATE INDEX IF NOT EXISTS idx_bounties_target ON bounties(target_id);
+
+                CREATE TABLE IF NOT EXISTS guilds (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    server_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    name_key TEXT NOT NULL,
+                    owner_id INTEGER NOT NULL,
+                    xp INTEGER NOT NULL DEFAULT 0,
+                    level INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(server_id, name_key)
+                );
+                CREATE TABLE IF NOT EXISTS guild_members (
+                    guild_id INTEGER NOT NULL,
+                    server_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    joined_at TEXT NOT NULL,
+                    PRIMARY KEY(server_id, user_id),
+                    FOREIGN KEY (guild_id) REFERENCES guilds(id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_guild_members_guild ON guild_members(guild_id);
+
+                CREATE TABLE IF NOT EXISTS daily_quests (
+                    user_id INTEGER NOT NULL,
+                    quest_date TEXT NOT NULL,
+                    quest_key TEXT NOT NULL,
+                    target INTEGER NOT NULL,
+                    progress INTEGER NOT NULL DEFAULT 0,
+                    reward_claimed INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(user_id, quest_date, quest_key)
+                );
+
+                CREATE TABLE IF NOT EXISTS economy_state (
+                    state_key TEXT PRIMARY KEY,
+                    state_value TEXT NOT NULL
+                );
                 """
         )
         # Migration: ensure extra columns exist
@@ -1885,6 +1927,7 @@ class RewardsDBService:
             )
             conn.commit()
 
+        self.record_quest_progress(user_id, "daily", current_time)
         return DailyClaimResult(
             points_awarded=total_points,
             base_points=base_points,
@@ -2028,6 +2071,181 @@ class RewardsDBService:
                 (user_id,),
             ).fetchall()
             return {row["item_id"]: row["quantity"] for row in rows}
+
+    def _quest_date(self, now: Optional[datetime] = None) -> str:
+        current_time = now or datetime.now(PHT)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=PHT)
+        return current_time.astimezone(PHT).strftime("%Y-%m-%d")
+
+    def _ensure_daily_quests(self, user_id: int, now: Optional[datetime] = None) -> str:
+        quest_date = self._quest_date(now)
+        with self._get_connection() as conn:
+            for quest_key in ("daily", "work", "trivia"):
+                conn.execute(
+                    """INSERT OR IGNORE INTO daily_quests
+                    (user_id, quest_date, quest_key, target) VALUES (?, ?, ?, 1)""",
+                    (user_id, quest_date, quest_key),
+                )
+            conn.commit()
+        return quest_date
+
+    def get_daily_quests(self, user_id: int, now: Optional[datetime] = None) -> list[dict[str, object]]:
+        """Return the three small daily goals, creating today's set on first use."""
+        quest_date = self._ensure_daily_quests(user_id, now)
+        labels = {
+            "daily": "Claim your daily attendance",
+            "work": "Complete one campus shift",
+            "trivia": "Attempt one trivia quiz",
+        }
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT quest_key, target, progress, reward_claimed FROM daily_quests WHERE user_id = ? AND quest_date = ? ORDER BY quest_key",
+                (user_id, quest_date),
+            ).fetchall()
+        return [
+            {"key": row["quest_key"], "label": labels[row["quest_key"]], "target": row["target"], "progress": row["progress"], "claimed": bool(row["reward_claimed"])}
+            for row in rows
+        ]
+
+    def record_quest_progress(self, user_id: int, quest_key: str, now: Optional[datetime] = None) -> None:
+        quest_date = self._ensure_daily_quests(user_id, now)
+        with self._get_connection() as conn:
+            conn.execute(
+                """UPDATE daily_quests SET progress = MIN(target, progress + 1)
+                WHERE user_id = ? AND quest_date = ? AND quest_key = ? AND progress < target""",
+                (user_id, quest_date, quest_key),
+            )
+            conn.commit()
+
+    def claim_quest_rewards(self, user_id: int, now: Optional[datetime] = None) -> tuple[int, int]:
+        """Claim 20 points for each completed, unclaimed daily quest."""
+        quest_date = self._ensure_daily_quests(user_id, now)
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """SELECT quest_key FROM daily_quests WHERE user_id = ? AND quest_date = ?
+                AND progress >= target AND reward_claimed = 0""",
+                (user_id, quest_date),
+            ).fetchall()
+            if not rows:
+                raise RewardsError("Complete a daily quest before claiming its reward.")
+            conn.execute(
+                """UPDATE daily_quests SET reward_claimed = 1 WHERE user_id = ? AND quest_date = ?
+                AND progress >= target AND reward_claimed = 0""",
+                (user_id, quest_date),
+            )
+            conn.commit()
+        reward = len(rows) * 20
+        self.add_points(user_id, reward, "QUEST_REWARD", f"Claimed {len(rows)} daily quest reward(s)")
+        return reward, len(rows)
+
+    def create_guild(self, server_id: int, owner_id: int, name: str, now: Optional[datetime] = None) -> dict[str, object]:
+        clean_name = name.strip()
+        if not 3 <= len(clean_name) <= 24:
+            raise RewardsError("Guild names must be 3–24 characters long.")
+        name_key = clean_name.casefold()
+        created_at = (now or datetime.now(timezone.utc)).isoformat()
+        with self._get_connection() as conn:
+            if conn.execute("SELECT 1 FROM guild_members WHERE server_id = ? AND user_id = ?", (server_id, owner_id)).fetchone():
+                raise RewardsError("Leave your current guild before creating another one.")
+            try:
+                cursor = conn.execute(
+                    "INSERT INTO guilds (server_id, name, name_key, owner_id, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (server_id, clean_name, name_key, owner_id, created_at),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise RewardsError("A guild with that name already exists in this server.") from exc
+            guild_id = cursor.lastrowid
+            conn.execute(
+                "INSERT INTO guild_members (guild_id, server_id, user_id, joined_at) VALUES (?, ?, ?, ?)",
+                (guild_id, server_id, owner_id, created_at),
+            )
+            conn.commit()
+        return self.get_guild_for_user(server_id, owner_id) or {}
+
+    def join_guild(self, server_id: int, user_id: int, name: str, now: Optional[datetime] = None) -> dict[str, object]:
+        with self._get_connection() as conn:
+            if conn.execute("SELECT 1 FROM guild_members WHERE server_id = ? AND user_id = ?", (server_id, user_id)).fetchone():
+                raise RewardsError("You are already in a guild. Leave it before joining another.")
+            guild = conn.execute("SELECT * FROM guilds WHERE server_id = ? AND name_key = ?", (server_id, name.strip().casefold())).fetchone()
+            if not guild:
+                raise RewardsError("No guild with that name exists in this server.")
+            count = conn.execute("SELECT COUNT(*) AS count FROM guild_members WHERE guild_id = ?", (guild["id"],)).fetchone()["count"]
+            if count >= 20:
+                raise RewardsError("That guild already has the 20-member limit.")
+            conn.execute("INSERT INTO guild_members (guild_id, server_id, user_id, joined_at) VALUES (?, ?, ?, ?)", (guild["id"], server_id, user_id, (now or datetime.now(timezone.utc)).isoformat()))
+            conn.commit()
+        return self.get_guild_for_user(server_id, user_id) or {}
+
+    def leave_guild(self, server_id: int, user_id: int) -> None:
+        with self._get_connection() as conn:
+            member = conn.execute("SELECT guild_id FROM guild_members WHERE server_id = ? AND user_id = ?", (server_id, user_id)).fetchone()
+            if not member:
+                raise RewardsError("You are not in a guild.")
+            guild = conn.execute("SELECT owner_id FROM guilds WHERE id = ?", (member["guild_id"],)).fetchone()
+            if guild and guild["owner_id"] == user_id:
+                raise RewardsError("Guild leaders cannot leave. Transfer ownership is not available yet; disbanding is intentionally disabled.")
+            conn.execute("DELETE FROM guild_members WHERE server_id = ? AND user_id = ?", (server_id, user_id))
+            conn.commit()
+
+    def get_guild_for_user(self, server_id: int, user_id: int) -> Optional[dict[str, object]]:
+        with self._get_connection() as conn:
+            row = conn.execute(
+                """SELECT g.id, g.name, g.owner_id, g.xp, g.level, COUNT(m2.user_id) AS member_count
+                FROM guild_members m JOIN guilds g ON g.id = m.guild_id
+                LEFT JOIN guild_members m2 ON m2.guild_id = g.id
+                WHERE m.server_id = ? AND m.user_id = ? GROUP BY g.id""",
+                (server_id, user_id),
+            ).fetchone()
+        return dict(row) if row else None
+
+    def apply_guild_activity_bonus(self, server_id: Optional[int], user_id: int, base_points: int, action: str) -> tuple[int, Optional[dict[str, object]]]:
+        """Give guild members a 1–5% bonus and contribute activity XP to their guild."""
+        if server_id is None or base_points <= 0:
+            return 0, None
+        guild = self.get_guild_for_user(server_id, user_id)
+        if not guild:
+            return 0, None
+        new_xp = int(guild["xp"]) + 10
+        level = min(5, 1 + new_xp // 500)
+        bonus = max(1, int(base_points * level / 100))
+        with self._get_connection() as conn:
+            conn.execute("UPDATE guilds SET xp = ?, level = ? WHERE id = ?", (new_xp, level, guild["id"]))
+            conn.commit()
+        self.add_points(user_id, bonus, "GUILD_BONUS", f"Level {level} guild bonus from {action}")
+        guild["xp"] = new_xp
+        guild["level"] = level
+        return bonus, guild
+
+    def is_economy_locked(self, now: Optional[datetime] = None) -> Optional[datetime]:
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT state_value FROM economy_state WHERE state_key = 'economy_lock_until'").fetchone()
+        if not row:
+            return None
+        try:
+            locked_until = datetime.fromisoformat(row["state_value"])
+            if locked_until.tzinfo is None:
+                locked_until = locked_until.replace(tzinfo=timezone.utc)
+            current_time = now or datetime.now(timezone.utc)
+            return locked_until if locked_until > current_time else None
+        except ValueError:
+            return None
+
+    def begin_nuke(self, user_id: int, target_id: int) -> None:
+        if user_id == target_id:
+            raise RewardsError("You cannot target yourself with a Nuke Card.")
+        if user_id != OWNER_ECONOMY_OVERRIDE_USER_ID:
+            self.remove_item(user_id, "nuke", 1)
+
+    def detonate_nuke(self, user_id: int, target_id: int, now: Optional[datetime] = None) -> tuple[int, int, datetime]:
+        target = self.get_or_create_user(target_id)
+        loss = int(target.points * 0.30)
+        new_balance = self.deduct_points(target_id, loss, "NUKE_STRIKE", f"Nuked by user {user_id}") if loss else target.points
+        locked_until = (now or datetime.now(timezone.utc)) + timedelta(minutes=1)
+        with self._get_connection() as conn:
+            conn.execute("INSERT INTO economy_state (state_key, state_value) VALUES ('economy_lock_until', ?) ON CONFLICT(state_key) DO UPDATE SET state_value = excluded.state_value", (locked_until.isoformat(),))
+            conn.commit()
+        return loss, new_balance, locked_until
 
     def get_leaderboard(self, limit: int = 10, offset: int = 0) -> tuple[list[UserLeaderboardEntry], int]:
         """Fetch sorted leaderboard entries with pagination."""
@@ -3196,6 +3414,7 @@ class RewardsDBService:
             )
             conn.commit()
 
+        self.record_quest_progress(user_id, "work", current_time)
         return WorkResult(
             job_title=job["title"],
             company_or_prof=job["company"],
@@ -4089,13 +4308,16 @@ class RewardsDBService:
         """Transfer points between classmates with a 15% transfer fee (30s cooldown, requires 100 pt wallet balance)."""
         if sender_id == receiver_id:
             raise RewardsError("You cannot transfer points to yourself!")
-        if amount < 15:
+        is_owner_override = sender_id == OWNER_ECONOMY_OVERRIDE_USER_ID
+        if amount <= 0:
+            raise RewardsError("Transfer amount must be a positive number of Uno Points.")
+        if amount < 15 and not is_owner_override:
             raise RewardsError("Minimum transfer amount is 15 Uno Points!")
 
         sender = self.get_or_create_user(sender_id)
-        if sender.points < 100:
+        if sender.points < 100 and not is_owner_override:
             raise RewardsError("You need a minimum wallet balance of 100 Uno Points to unlock point transfers!")
-        if sender.points < amount:
+        if sender.points < amount and not is_owner_override:
             raise InsufficientPointsError(f"You only have {sender.points:,} pts in your wallet to transfer!")
 
         current_time = now or datetime.now(timezone.utc)
@@ -4112,11 +4334,15 @@ class RewardsDBService:
             except ValueError:
                 pass
 
-        fee = max(2, int(amount * 0.15))
+        fee = 0 if is_owner_override else max(2, int(amount * 0.15))
         credited = amount - fee
 
-        new_sender = self.deduct_points(sender_id, amount, "GIVE_SENT", f"Transferred {amount:,} pts to user {receiver_id} (Fee: {fee:,} pts)")
-        new_receiver = self.add_points(receiver_id, credited, "GIVE_RECEIVED", f"Received {credited:,} pts from user {sender_id}")
+        if is_owner_override:
+            new_sender = sender.points
+            new_receiver = self.add_points(receiver_id, credited, "GIVE_RECEIVED", f"Received {credited:,} pts from user {sender_id}")
+        else:
+            new_sender = self.deduct_points(sender_id, amount, "GIVE_SENT", f"Transferred {amount:,} pts to user {receiver_id} (Fee: {fee:,} pts)")
+            new_receiver = self.add_points(receiver_id, credited, "GIVE_RECEIVED", f"Received {credited:,} pts from user {sender_id}")
 
         with self._get_connection() as conn:
             conn.execute(
@@ -4378,6 +4604,7 @@ class RewardsDBService:
             )
             conn.commit()
 
+        self.record_quest_progress(user_id, "trivia", current_time)
         return TriviaResult(
             is_correct=is_correct,
             points_awarded=points_awarded,

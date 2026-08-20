@@ -10,6 +10,7 @@ from bot.services.rewards_db import (
     MaxTriviaReachedError,
     BetOutcome,
     BlackjackCard,
+    OWNER_ECONOMY_OVERRIDE_USER_ID,
 )
 
 
@@ -1015,6 +1016,68 @@ def test_cups_low_stakes_probability_and_wager_cap(rewards_service: RewardsDBSer
 
     with pytest.raises(RewardsError):
         rewards_service.play_cups(1001, chosen_cup=1, wager=51)
+
+
+def test_guild_membership_levels_and_awards_activity_bonus(rewards_service: RewardsDBService):
+    """Guilds are server-scoped and award a small, level-based activity bonus."""
+    guild = rewards_service.create_guild(123, 1001, "Study Squad")
+    assert guild["name"] == "Study Squad"
+    joined = rewards_service.join_guild(123, 1002, "study squad")
+    assert joined["member_count"] == 2
+
+    rewards_service.add_points(1002, 100, "TEST")
+    bonus, updated_guild = rewards_service.apply_guild_activity_bonus(123, 1002, 100, "test action")
+    assert bonus == 1
+    assert updated_guild is not None
+    assert updated_guild["xp"] == 10
+    assert rewards_service.get_balance(1002) == 101
+
+    with pytest.raises(RewardsError):
+        rewards_service.leave_guild(123, 1001)
+    rewards_service.leave_guild(123, 1002)
+    assert rewards_service.get_guild_for_user(123, 1002) is None
+
+
+def test_daily_quests_and_nuke_crisis_state(rewards_service: RewardsDBService):
+    """Completed quests pay once, and a nuke removes 30% then locks the economy for one minute."""
+    now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+    quests = rewards_service.get_daily_quests(1001, now=now)
+    assert len(quests) == 3
+    for key in ("daily", "work", "trivia"):
+        rewards_service.record_quest_progress(1001, key, now=now)
+    reward, count = rewards_service.claim_quest_rewards(1001, now=now)
+    assert (reward, count) == (60, 3)
+    assert rewards_service.get_balance(1001) == 60
+    with pytest.raises(RewardsError):
+        rewards_service.claim_quest_rewards(1001, now=now)
+
+    rewards_service.add_points(1002, 1_000, "TEST")
+    rewards_service.add_item(1001, "nuke")
+    rewards_service.begin_nuke(1001, 1002)
+    assert "nuke" not in rewards_service.get_inventory(1001)
+    loss, balance, locked_until = rewards_service.detonate_nuke(1001, 1002, now=now)
+    assert (loss, balance) == (300, 700)
+    assert locked_until == now + timedelta(minutes=1)
+    assert rewards_service.is_economy_locked(now=now) == locked_until
+    assert rewards_service.is_economy_locked(now=locked_until) is None
+
+
+def test_owner_economy_override_has_unlimited_nukes_and_zero_balance_grants(rewards_service: RewardsDBService):
+    """Only the configured owner ID can bypass Nuke Card and transfer-balance requirements."""
+    owner_id = OWNER_ECONOMY_OVERRIDE_USER_ID
+    rewards_service.begin_nuke(owner_id, 1002)
+    assert rewards_service.get_inventory(owner_id) == {}
+
+    result = rewards_service.transfer_points(owner_id, 1002, 1_000_000)
+    assert result["fee"] == 0
+    assert result["sender_new_balance"] == 0
+    assert result["amount_received"] == 1_000_000
+    assert rewards_service.get_balance(1002) == 1_000_000
+
+    with pytest.raises(ItemNotFoundError):
+        rewards_service.begin_nuke(1001, 1002)
+    with pytest.raises(RewardsError):
+        rewards_service.transfer_points(1001, 1002, 100)
 
 
 

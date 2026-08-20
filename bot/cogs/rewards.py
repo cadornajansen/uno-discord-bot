@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 import io
 import logging
@@ -63,6 +64,10 @@ def resolve_pet_image_path(image_file: Optional[str]) -> Optional[Path]:
         if p.is_file():
             return p
     return None
+
+
+def resolve_gif_path(filename: str) -> Path:
+    return Path(__file__).resolve().parents[2] / "data" / "gifs" / filename
 
 
 async def build_leaderboard_embed(
@@ -2358,6 +2363,21 @@ class RewardsCog(commands.Cog):
                 if isinstance(p, (str, Path)):
                     db_path = str(p)
             self.rewards_service = RewardsDBService(db_path)
+        self._active_nukes: set[int] = set()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Pause reward-changing slash commands during a Nuke Card crisis."""
+        locked_until = self.rewards_service.is_economy_locked()
+        command = getattr(interaction, "command", None)
+        command_name = getattr(command, "qualified_name", "")
+        read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild view", "quests", "nuke"}
+        if locked_until and command_name not in read_only:
+            await interaction.response.send_message(
+                f"☢️ **Global Economic Crisis in effect.** Economic actions resume <t:{int(locked_until.timestamp())}:R>.",
+                ephemeral=True,
+            )
+            return False
+        return True
 
     async def cog_load(self) -> None:
         self.daily_tax_loop.start()
@@ -2392,6 +2412,11 @@ class RewardsCog(commands.Cog):
         if perms and (getattr(perms, "administrator", False) or getattr(perms, "manage_guild", False)):
             return True
         return False
+
+    @staticmethod
+    def _server_id(interaction: discord.Interaction) -> Optional[int]:
+        server_id = getattr(getattr(interaction, "guild", None), "id", None)
+        return server_id if isinstance(server_id, int) else None
 
     async def _log_activity(
         self,
@@ -2428,12 +2453,134 @@ class RewardsCog(commands.Cog):
         except Exception as e:
             logger.warning(f"[rewards_log] Failed to send log to channel {log_channel_id}: {e}")
 
+    guild_group = app_commands.Group(name="guild", description="Create or join a server team with shared progression bonuses.")
+
+    @guild_group.command(name="create", description="Create a public guild for this server.")
+    async def guild_create(self, interaction: discord.Interaction, name: str) -> None:
+        if not interaction.guild:
+            await interaction.response.send_message("Guilds can only be created inside a server.", ephemeral=True)
+            return
+        try:
+            guild = self.rewards_service.create_guild(interaction.guild.id, interaction.user.id, name)
+            await interaction.response.send_message(
+                f"🏰 **{guild['name']}** created! You are its leader. Members earn a `1%–5%` bonus on daily and work rewards as the guild levels.",
+            )
+        except RewardsError as exc:
+            await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
+
+    @guild_group.command(name="join", description="Join a public guild in this server.")
+    async def guild_join(self, interaction: discord.Interaction, name: str) -> None:
+        if not interaction.guild:
+            await interaction.response.send_message("Guilds can only be joined inside a server.", ephemeral=True)
+            return
+        try:
+            guild = self.rewards_service.join_guild(interaction.guild.id, interaction.user.id, name)
+            await interaction.response.send_message(f"🏰 You joined **{guild['name']}** at Guild Level **{guild['level']}**!")
+        except RewardsError as exc:
+            await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
+
+    @guild_group.command(name="leave", description="Leave your current guild.")
+    async def guild_leave(self, interaction: discord.Interaction) -> None:
+        if not interaction.guild:
+            await interaction.response.send_message("Guilds can only be managed inside a server.", ephemeral=True)
+            return
+        try:
+            self.rewards_service.leave_guild(interaction.guild.id, interaction.user.id)
+            await interaction.response.send_message("You left your guild.")
+        except RewardsError as exc:
+            await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
+
+    @guild_group.command(name="view", description="View your current guild and its bonus.")
+    async def guild_view(self, interaction: discord.Interaction) -> None:
+        if not interaction.guild:
+            await interaction.response.send_message("Guilds are server-specific.", ephemeral=True)
+            return
+        guild = self.rewards_service.get_guild_for_user(interaction.guild.id, interaction.user.id)
+        if not guild:
+            await interaction.response.send_message("You are not in a guild yet. Use `/guild create` or `/guild join`.", ephemeral=True)
+            return
+        level = int(guild["level"])
+        embed = discord.Embed(title=f"🏰 {guild['name']}", color=discord.Color.blurple())
+        embed.add_field(name="Level", value=str(level), inline=True)
+        embed.add_field(name="Guild XP", value=f"{guild['xp']:,} / {level * 500:,}", inline=True)
+        embed.add_field(name="Members", value=f"{guild['member_count']} / 20", inline=True)
+        embed.add_field(name="Active Bonus", value=f"+{level}% on `/daily` and `/work`", inline=False)
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="quests", description="View or claim your small daily reward quests.")
+    @app_commands.choices(action=[app_commands.Choice(name="View quests", value="view"), app_commands.Choice(name="Claim completed rewards", value="claim")])
+    async def quests(self, interaction: discord.Interaction, action: Optional[app_commands.Choice[str]] = None) -> None:
+        try:
+            if action and action.value == "claim":
+                reward, count = self.rewards_service.claim_quest_rewards(interaction.user.id)
+                await interaction.response.send_message(f"✅ Claimed **{reward} Uno Points** from **{count}** completed daily quest(s)!")
+                return
+            quests = self.rewards_service.get_daily_quests(interaction.user.id)
+            lines = []
+            for quest in quests:
+                status = "✅" if int(quest["progress"]) >= int(quest["target"]) else "⬜"
+                claimed = " — claimed" if quest["claimed"] else " — +20 pts"
+                lines.append(f"{status} **{quest['label']}** ({quest['progress']}/{quest['target']}){claimed}")
+            await interaction.response.send_message(embed=discord.Embed(title="📜 Daily Quests", description="\n".join(lines), color=discord.Color.gold()))
+        except RewardsError as exc:
+            await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
+
+    @app_commands.command(name="nuke", description="Use a Nuke Card on a target and trigger a one-minute economic crisis.")
+    @app_commands.describe(target="The classmate whose wallet will lose 30%.")
+    async def nuke(self, interaction: discord.Interaction, target: discord.Member) -> None:
+        if interaction.user.id in self._active_nukes:
+            await interaction.response.send_message("Your Nuke Card is already counting down.", ephemeral=True)
+            return
+        sending_gif = resolve_gif_path("nuke-sending.gif")
+        explosion_gif = resolve_gif_path("nuke-explosion.gif")
+        if not sending_gif.exists() or not explosion_gif.exists():
+            await interaction.response.send_message("❌ Nuke animation assets are unavailable.", ephemeral=True)
+            return
+        try:
+            self.rewards_service.begin_nuke(interaction.user.id, target.id)
+        except (ItemNotFoundError, RewardsError) as exc:
+            await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
+            return
+
+        self._active_nukes.add(interaction.user.id)
+        try:
+            for remaining in (20, 15, 10, 5):
+                embed = discord.Embed(
+                    title="☢️ NUCLEAR LAUNCH DETECTED",
+                    description=f"**{interaction.user.mention}** is targeting {target.mention}.\n\nImpact in **{remaining} seconds**…",
+                    color=discord.Color.orange(),
+                )
+                if remaining == 20:
+                    await interaction.response.send_message(embed=embed, file=discord.File(sending_gif, filename="nuke-sending.gif"))
+                else:
+                    await interaction.edit_original_response(embed=embed)
+                await asyncio.sleep(5)
+
+            loss, new_balance, locked_until = self.rewards_service.detonate_nuke(interaction.user.id, target.id)
+            await interaction.delete_original_response()
+            explosion = discord.Embed(
+                title="💥 NUCLEAR IMPACT — GLOBAL ECONOMIC CRISIS",
+                description=(
+                    f"{target.mention} lost **{loss:,} Uno Points** (30% of their wallet).\n"
+                    f"New wallet balance: **{new_balance:,} pts**.\n\n"
+                    f"☢️ All economic actions are disabled for everyone until <t:{int(locked_until.timestamp())}:R>."
+                ),
+                color=discord.Color.red(),
+            )
+            await interaction.followup.send(embed=explosion, file=discord.File(explosion_gif, filename="nuke-explosion.gif"))
+            await self._log_activity("☢️ Nuke detonated", f"{interaction.user.mention} struck {target.mention}; economy locked for one minute.", discord.Color.red())
+        finally:
+            self._active_nukes.discard(interaction.user.id)
+
     @app_commands.command(name="daily", description="Claim your daily attendance Uno Points & build your streak!")
     async def daily(self, interaction: discord.Interaction) -> None:
         """Claim daily points with consecutive streak multipliers."""
         user_id = interaction.user.id
         try:
             res = self.rewards_service.claim_daily(user_id)
+            guild_bonus, guild = self.rewards_service.apply_guild_activity_bonus(
+                self._server_id(interaction), user_id, res.points_awarded, "daily attendance"
+            )
 
             embed = discord.Embed(
                 title="📅 Daily Attendance Claimed!",
@@ -2446,7 +2593,9 @@ class RewardsCog(commands.Cog):
                 value=f"+{res.streak_bonus} pts (Day {res.streak} 🔥)",
                 inline=True,
             )
-            embed.add_field(name="Total Balance", value=f"**{res.new_balance:,} pts**", inline=True)
+            embed.add_field(name="Total Balance", value=f"**{res.new_balance + guild_bonus:,} pts**", inline=True)
+            if guild_bonus and guild:
+                embed.add_field(name="🏰 Guild Bonus", value=f"+{guild_bonus} pts (Level {guild['level']})", inline=True)
 
             if res.milestone_3k_unlocked:
                 embed.add_field(
@@ -3095,13 +3244,16 @@ class RewardsCog(commands.Cog):
         user_id = interaction.user.id
         try:
             res = self.rewards_service.execute_work(user_id)
+            guild_bonus, guild = self.rewards_service.apply_guild_activity_bonus(
+                self._server_id(interaction), user_id, res.points_earned, "campus shift"
+            )
             embed = discord.Embed(
                 title=f"💼 Campus Shift Complete — {res.job_title}",
                 description=(
                     f"🏢 **Client:** {res.company_or_prof}\n\n"
                     f"📝 *{res.description}*\n\n"
                     f"💰 **Earned:** `+{res.points_earned:,} Uno Points`\n"
-                    f"💳 **Wallet Balance:** `{res.new_balance:,} Uno Points`"
+                    f"💳 **Wallet Balance:** `{res.new_balance + guild_bonus:,} Uno Points`"
                 ),
                 color=discord.Color.green(),
             )
@@ -3111,6 +3263,8 @@ class RewardsCog(commands.Cog):
                     value=f"Your boss gave you a free **{res.bonus_item_name}**!\n*Check `/inventory`!*",
                     inline=False,
                 )
+            if guild_bonus and guild:
+                embed.add_field(name="🏰 Guild Bonus", value=f"+{guild_bonus} pts (Level {guild['level']})", inline=False)
             embed.set_footer(text="Work cooldown: 1 hour • Resets automatically")
             await interaction.response.send_message(embed=embed)
         except RewardsError as e:
