@@ -19,6 +19,8 @@ services:
     volumes:
       - uno_bot_logs:/app/logs
       - uno_bot_data:/app/data
+      # Keep static command animations available without replacing the persistent database volume.
+      - ./data/gifs:/app/data/gifs:ro
 
   qdrant:
     image: qdrant/qdrant:v1.19.0
