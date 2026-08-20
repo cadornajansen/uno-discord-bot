@@ -113,14 +113,14 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
                 "• `/slots wager:<pts>` or `!slots` - 3-Reel slot machine (consolations up to 20x Wild Jackpot).\n"
                 "• `/coinflip choice:<h/t> wager:<pts>` or `!cf` - 1.70x payout coin toss.\n"
                 "• `/blackjack wager:<pts>` or `!bj` - Blackjack 21 with Hit, Stand, Double Down (3:2 payout).\n"
-                "• `/highlow wager:<pts>` or `!hl` - Guess card streak ladder up to 30.0x multiplier."
+                "• `/highlow wager:<pts>` or `!hl` - Guess card streak ladder up to 10.0x multiplier."
             ),
             inline=False,
         )
         embed.add_field(
             name="Street Games (Unlimited Plays)",
             value=(
-                "• `/cups cup:<1|2|3> wager:<pts>` or `!cups` - Intramuros 3-Cup Shell Game (2.0x-2.5x payout)."
+                "• `/cups cup:<1|2|3> wager:<pts>` or `!cups` - Intramuros 3-Cup Shell Game (30% win, 1.5x payout, max 50 pts)."
             ),
             inline=False,
         )
@@ -138,7 +138,7 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
             value=(
                 "• `/duel target:@user wager:<pts>` or `!duel` - 1v1 PvP dice wager roll (5% rake, 60s cooldown).\n"
                 "• `/bounty place target:@user amount:<pts>` - Place a wanted bounty on a classmate.\n"
-                "• `/bounty board` - View the top 10 Most Wanted student bounty targets."
+                "• `/bounty list` - View the top 10 Most Wanted student bounty targets."
             ),
             inline=False,
         )
@@ -287,8 +287,8 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
             "`/slots [amount]` or `!slots` - 3-Reel slot machine with up to 20x Wild Jackpot.\n"
             "`/coinflip <heads|tails> [amount]` or `!cf` - Coinflip with 1.70x payout.\n"
             "`/blackjack [amount]` or `!bj` - Blackjack 21 with Hit, Stand, Double Down.\n"
-            "`/highlow [amount]` or `!hl` - High-Low card guessing streak up to 30.0x multiplier.\n"
-            "`/cups <1|2|3> [amount]` or `!cups` - Intramuros 3-Cup Shell Game (Unlimited Plays)."
+            "`/highlow [amount]` or `!hl` - High-Low card guessing streak up to 10.0x multiplier.\n"
+            "`/cups <1|2|3> [amount]` or `!cups` - Intramuros 3-Cup Shell Game (30% win, 1.5x payout, max 50 pts)."
         ),
         inline=False,
     )
@@ -298,7 +298,7 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
         value=(
             "`/duel @member [amount]` or `!duel` - Challenge a classmate to a 1v1 dice duel (5% rake).\n"
             "`/bounty place @member <amount>` or `!bounty place` - Place a wanted bounty on a classmate.\n"
-            "`/bounty board` or `!bounty board` - View the top 10 Most Wanted bounty targets."
+            "`/bounty list` or `!bounty list` - View the top 10 Most Wanted bounty targets."
         ),
         inline=False,
     )

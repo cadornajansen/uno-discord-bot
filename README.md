@@ -80,11 +80,11 @@ Uno AI supports both **Slash Commands (`/`)** and **Prefix Commands (`!`)**. Com
 | Slash Command | Prefix Alias | What It Does |
 |---|---|---|
 | `/bet amount:<pts>` | `!bet <pts>` | Spin the roulette wheel (*4x Jackpot, 2x Double, Skill Drop, Bust; 15 casino games/day limit*). |
-| `/coinflip choice:<h/t> wager:<pts>` | `!coinflip <h/t> <pts>` | Coin toss (*45% win chance, 1.70x payout, 15 games/day*). |
+| `/coinflip choice:<h/t> wager:<pts>` | `!coinflip <h/t> <pts>` | Coin toss (*46% base win chance, 1.70x payout, 15 games/day*). |
 | `/slots wager:<pts>` | `!slots <pts>` | Spin the 3-reel slot machine (consolation matching from 0.4x up to 20x Uno Wild jackpot, 15 games/day). |
 | `/blackjack wager:<pts>` | `!blackjack <pts>` | Play 21 against the dealer (*3:2 natural blackjack payout, supports hit, stand, double down, 15 games/day*). |
-| `/highlow wager:<pts>` | `!highlow <pts>` | Guess higher or lower cards on a streak ladder up to 30.0x multiplier cashout (15 games/day). |
-| `/cups cup:<1/2/3> wager:<pts>` | `!cups <1/2/3> <pts>` | Intramuros 3-Cup Shell Game (*Unlimited wagers; 2.0x–2.5x payout*). |
+| `/highlow wager:<pts>` | `!highlow <pts>` | Guess higher or lower cards on a streak ladder up to 10.0x multiplier cashout (15 games/day). |
+| `/cups cup:<1/2/3> wager:<pts>` | `!cups <1/2/3> <pts>` | Intramuros 3-Cup Shell Game (*30% win chance, 1.5x payout, 50-point max wager*). |
 
 ### 🐾 Companion Pets
 | Slash Command | Prefix Alias | What It Does |
@@ -100,7 +100,7 @@ Uno AI supports both **Slash Commands (`/`)** and **Prefix Commands (`!`)**. Com
 |---|---|---|
 | `/duel target:<user> wager:<pts>` | `!duel <user> <pts>` | Challenge a classmate to a 1v1 PvP dice wager roll (*5% server rake, 60s cooldown*). |
 | `/bounty place target:<user> amount:<pts>` | `!bounty place` | Place a wanted bounty on a classmate (awarded to whoever defeats them in a duel!). |
-| `/bounty board` | `!bounty board` | View the top 10 wanted classroom bounty targets. |
+| `/bounty list` | `!bounty list` | View the top 10 wanted classroom bounty targets. |
 
 ### ⚙️ General & Info
 | Slash Command | Prefix Alias | What It Does |
@@ -132,19 +132,20 @@ Uno AI features a balanced classroom economy designed so that accumulating point
   - Accounts with under 10 points are fully tax-exempt.
 
 ### 🎲 Gambling Safeguards & Casino Limits
-- **Strict 100 pt Wager Caps**: Maximum bet is capped at **100 Uno Points** across casino games (max 200 pts on `/duel`, max 250 pts on `/cups`).
+- **Strict Wager Caps**: Casino games are capped at **100 Uno Points**; `/duel` is capped at **150 pts** and `/cups` at **50 pts**.
 - **Shared Daily Casino Cap**: Maximum **15 casino games per calendar day** across `/bet`, `/slots`, `/coinflip`, `/blackjack`, and `/highlow` with a **15-second cooldown** between plays.
-- **Anti-Streak Trap**: Hitting 5 consecutive wins in `/bet` triggers 7 guaranteed BUST losses. In `/slots`, 2 wins trigger 4 losses. In `/coinflip`, 3 wins trigger 4 losses.
-- **3-Cup Shell Game (`/cups`)**: Unlimited play street game. First 3 rounds provide 100% win rate (2.0x–2.5x payout), after which sleight-of-hand lowers win rate to 6% forever.
+- **High-Roller Risk Adjustment**: Accounts with at least 5,000 wallet points and 4 wins in their latest 6 resolved games within 12 hours receive a modest odds reduction in chance-based games. It never forces a loss.
+- **3-Cup Shell Game (`/cups`)**: Low-stakes street game with a flat 30% win chance, 1.5x payout, and 50-point maximum wager.
 
 ### 🐾 Companion Pet Perks
-- 🐱 **Tuxedo Cat**: Doubles `/daily` attendance reward points (up to 80 pts/day).
+- 🐱 **Tuxedo Cat**: Doubles `/daily` attendance reward points and adds luck to roulette, slots, coinflip, and cups.
 - 🐶 **Golden Dog**: Guards against pickpocketing (75% catch rate + inflicts 50 pt bite fine on thief).
 - 🐢 **Oogway Turtle**: Freezes daily attendance streak on missed days & extends shields by +2 days.
 - 🦉 **Scholar Owl**: Grants +40 pts per correct trivia quiz and unlocks a 4th daily quiz attempt.
 - 🦎 **Pink Axolotl**: Grants 5% cashback on all shop purchases.
 - 🦊 **Desert Fox**: Boosts pickpocket success rate to 75% and siphons back 20% wager on duel loss.
-- 🐰 **Lucky Bunny**: Boosts gambling odds (+10% on `/bet`, +4% on `/coinflip`, extra weights on `/slots`).
+- 🐱 **Feline Fortune**: Doubles `/daily` points and adds +3% win chance in chance-based casino games.
+- 🐰 **Lucky Bunny**: Improves roulette outcomes, adds +4% coinflip and +5% cups odds, and boosts rare slot symbols.
 
 ---
 

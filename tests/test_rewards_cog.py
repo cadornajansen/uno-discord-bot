@@ -130,9 +130,15 @@ def test_leaderboard_pagination_view():
         embed, total_pages = await build_leaderboard_embed(service, guild, page=1, per_page=10)
         assert total_pages == 3
 
-        view = LeaderboardView(service, guild, page=1, per_page=10, total_pages=total_pages)
+        view = LeaderboardView(service, guild, owner_id=555, page=1, per_page=10, total_pages=total_pages)
         assert view.prev_button.disabled is True
         assert view.next_button.disabled is False
+
+        other_user = MagicMock()
+        other_user.user.id = 777
+        other_user.response.send_message = AsyncMock()
+        assert await view.interaction_check(other_user) is False
+        other_user.response.send_message.assert_awaited_once()
 
         # Simulate Next button click
         interaction = MagicMock()
@@ -468,6 +474,7 @@ def test_airdrop_command_and_catch_view():
         await btn.callback(interaction_c1)
         interaction_c1.response.edit_message.assert_awaited_once()
         assert service.get_balance(888) == 25
+        assert view.claimers == [888]
 
     asyncio.run(_test())
 

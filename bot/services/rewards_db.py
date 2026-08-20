@@ -537,8 +537,8 @@ PET_CATALOG: dict[str, dict] = {
         "cost": 50,
         "image_file": "tuxedo-cat.jpg",
         "title": "The Serene Feline",
-        "perk_title": "2x Daily Attendance Points",
-        "perk_desc": "Doubles points earned from daily attendance (/daily) permanently.",
+        "perk_title": "Feline Fortune (2x Daily + Luck)",
+        "perk_desc": "Doubles /daily points and adds +3% win chance to chance-based casino games.",
         "friendly_with": "Golden Retriever, Scholar Owl",
         "rival_with": "Trickster Fox, Pickpockets",
         "favorite_snack": "Fresh Tuna Treats",
@@ -557,8 +557,8 @@ PET_CATALOG: dict[str, dict] = {
         "cost": 100,
         "image_file": "talico-brown-cat.jpg",
         "title": "The Cozy Companion",
-        "perk_title": "2x Daily Attendance Points",
-        "perk_desc": "Doubles points earned from daily attendance (/daily) permanently.",
+        "perk_title": "Feline Fortune (2x Daily + Luck)",
+        "perk_desc": "Doubles /daily points and adds +3% win chance to chance-based casino games.",
         "friendly_with": "Lop-Eared Bunny, Pink Axolotl",
         "rival_with": "Arctic Ice Fox, Serpents",
         "favorite_snack": "Warm Milk Biscuits",
@@ -576,7 +576,7 @@ PET_CATALOG: dict[str, dict] = {
         "cost": 50,
         "image_file": "golden-retriever-dog.jpg",
         "title": "The Faithful Guard Pup",
-        "perk_title": "Guard Dog Defense (+40% Thief Bust)",
+        "perk_title": "Guard Dog Defense (75% Catch Rate)",
         "perk_desc": "75% chance to catch thieves red-handed and bite them for a fine.",
         "friendly_with": "Tuxedo Cat, Lop-Eared Bunny, Master Oogway",
         "rival_with": "Trickster Fox, Classmate Thieves",
@@ -596,7 +596,7 @@ PET_CATALOG: dict[str, dict] = {
         "cost": 100,
         "image_file": "shiba-inu-dog.jpg",
         "title": "The Alert Scout",
-        "perk_title": "Guard Dog Defense (+40% Thief Bust)",
+        "perk_title": "Guard Dog Defense (75% Catch Rate)",
         "perk_desc": "75% chance to catch thieves red-handed and bite them for a fine.",
         "friendly_with": "Calico Cat, Frost Owl",
         "rival_with": "Arctic Ice Fox, Classmate Thieves",
@@ -615,8 +615,8 @@ PET_CATALOG: dict[str, dict] = {
         "cost": 150,
         "image_file": "brown-bunny.jpg",
         "title": "The Lucky Rabbit",
-        "perk_title": "Lucky Gambler (+15% Bet Win Rates)",
-        "perk_desc": "Increases /bet Jackpot and Double chances, reducing Bust rate to 20%.",
+        "perk_title": "Lucky Gambler (Casino Odds Boost)",
+        "perk_desc": "Improves roulette outcomes, adds +4% coinflip and +5% cups odds, and boosts rare slot symbols.",
         "friendly_with": "Golden Retriever, Pink Axolotl",
         "rival_with": "Scholar Owl, Trickster Fox",
         "favorite_snack": "Organic Clover Crunch",
@@ -635,8 +635,8 @@ PET_CATALOG: dict[str, dict] = {
         "cost": 200,
         "image_file": "white-bunny.jpg",
         "title": "The Celestial Lucky Charm",
-        "perk_title": "Lucky Gambler (+15% Bet Win Rates)",
-        "perk_desc": "Increases /bet Jackpot and Double chances, reducing Bust rate to 20%.",
+        "perk_title": "Lucky Gambler (Casino Odds Boost)",
+        "perk_desc": "Improves roulette outcomes, adds +4% coinflip and +5% cups odds, and boosts rare slot symbols.",
         "friendly_with": "Master Oogway, Fiery Goldfish",
         "rival_with": "Frost Owl, Arctic Ice Fox",
         "favorite_snack": "Celestial Moon Mochi",
@@ -654,8 +654,8 @@ PET_CATALOG: dict[str, dict] = {
         "cost": 150,
         "image_file": "owl.jpg",
         "title": "The Academic Owl",
-        "perk_title": "Quiz Master (+25 pts/quiz & 4th Attempt)",
-        "perk_desc": "Earns +75 pts per correct trivia quiz and unlocks a 4th daily attempt.",
+        "perk_title": "Quiz Master (+40 pts/quiz & 4th Attempt)",
+        "perk_desc": "Earns +40 pts per correct trivia quiz and unlocks a 4th daily attempt.",
         "friendly_with": "Tuxedo Cat, Master Oogway",
         "rival_with": "Lop-Eared Bunny, High-Roll Gamblers",
         "favorite_snack": "Energy Acorn Berries",
@@ -674,8 +674,8 @@ PET_CATALOG: dict[str, dict] = {
         "cost": 200,
         "image_file": "ice-owl.jpg",
         "title": "The Glacial Scholar",
-        "perk_title": "Quiz Master (+25 pts/quiz & 4th Attempt)",
-        "perk_desc": "Earns +75 pts per correct trivia quiz and unlocks a 4th daily attempt.",
+        "perk_title": "Quiz Master (+40 pts/quiz & 4th Attempt)",
+        "perk_desc": "Earns +40 pts per correct trivia quiz and unlocks a 4th daily attempt.",
         "friendly_with": "Shiba Inu, Arctic Ice Fox",
         "rival_with": "Fiery Goldfish, Moon Rabbit",
         "favorite_snack": "Glacial Frost Berries",
@@ -714,7 +714,7 @@ PET_CATALOG: dict[str, dict] = {
         "image_file": "orange-fox.jpg",
         "title": "The Cunning Rogue",
         "perk_title": "Master Pickpocket (+15% Steal & +10 Airdrop)",
-        "perk_desc": "Increases /steal success rate to 80% and gains +35 pts from airdrops.",
+        "perk_desc": "Increases /steal success rate to 75% and gains +35 pts from airdrops.",
         "friendly_with": "Rainbow Axolotl, Fiery Goldfish",
         "rival_with": "Golden Retriever, Class Treasurer",
         "favorite_snack": "Canteen Chicken Skewers",
@@ -734,7 +734,7 @@ PET_CATALOG: dict[str, dict] = {
         "image_file": "ice-fox.jpg",
         "title": "The Glacial Phantom",
         "perk_title": "Master Pickpocket (+15% Steal & +10 Airdrop)",
-        "perk_desc": "Increases /steal success rate to 80% and gains +35 pts from airdrops.",
+        "perk_desc": "Increases /steal success rate to 75% and gains +35 pts from airdrops.",
         "friendly_with": "Frost Owl, Pink Axolotl",
         "rival_with": "Shiba Inu, Class Treasurer",
         "favorite_snack": "Smoked Salmon Flakes",
@@ -1089,17 +1089,10 @@ class UserRecord:
     duel_losses: int = 0
     duel_streak: int = 0
     bounties_claimed: int = 0
-    bet_win_streak: int = 0
-    bet_rigged_loss_remaining: int = 0
-    bet_loss_streak: int = 0
     last_tax_collection: Optional[str] = None
     last_gamble_time: Optional[str] = None
     daily_casino_games_count: int = 0
     last_casino_date: Optional[str] = None
-    slots_win_streak: int = 0
-    slots_rigged_loss_remaining: int = 0
-    coinflip_win_streak: int = 0
-    coinflip_rigged_loss_remaining: int = 0
     last_steal_time: Optional[str] = None
     last_duel_time: Optional[str] = None
     last_give_time: Optional[str] = None
@@ -1171,6 +1164,10 @@ SLOTS_SYMBOLS: list[dict] = [
     {"emoji": "👑", "name": "Crown", "weight": 6, "mult_3": 12.0, "mult_2": 1.0},
     {"emoji": "🃏", "name": "Uno Wild", "weight": 2, "mult_3": 20.0, "mult_2": 1.2},
 ]
+
+CUPS_MAX_WAGER = 50
+CUPS_WIN_CHANCE = 0.30
+CUPS_PAYOUT_MULTIPLIER = 1.5
 
 WORK_JOBS: list[dict] = [
     {
@@ -1336,9 +1333,6 @@ class RewardsDBService:
                     duel_losses INTEGER DEFAULT 0,
                     duel_streak INTEGER DEFAULT 0,
                     bounties_claimed INTEGER DEFAULT 0,
-                    bet_win_streak INTEGER DEFAULT 0,
-                    bet_rigged_loss_remaining INTEGER DEFAULT 0,
-                    bet_loss_streak INTEGER DEFAULT 0,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -1357,6 +1351,16 @@ class RewardsDBService:
                     description TEXT,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 );
+
+                CREATE TABLE IF NOT EXISTS gambling_rounds (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    game TEXT NOT NULL,
+                    won INTEGER NOT NULL,
+                    settled_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_gambling_rounds_user_time
+                    ON gambling_rounds(user_id, settled_at DESC);
 
                 CREATE TABLE IF NOT EXISTS redemptions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1424,12 +1428,6 @@ class RewardsDBService:
             conn.execute("ALTER TABLE users ADD COLUMN duel_streak INTEGER DEFAULT 0")
         if "bounties_claimed" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN bounties_claimed INTEGER DEFAULT 0")
-        if "bet_win_streak" not in cols:
-            conn.execute("ALTER TABLE users ADD COLUMN bet_win_streak INTEGER DEFAULT 0")
-        if "bet_rigged_loss_remaining" not in cols:
-            conn.execute("ALTER TABLE users ADD COLUMN bet_rigged_loss_remaining INTEGER DEFAULT 0")
-        if "bet_loss_streak" not in cols:
-            conn.execute("ALTER TABLE users ADD COLUMN bet_loss_streak INTEGER DEFAULT 0")
         if "last_tax_collection" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN last_tax_collection TEXT")
         if "last_gamble_time" not in cols:
@@ -1438,14 +1436,6 @@ class RewardsDBService:
             conn.execute("ALTER TABLE users ADD COLUMN daily_casino_games_count INTEGER DEFAULT 0")
         if "last_casino_date" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN last_casino_date TEXT")
-        if "slots_win_streak" not in cols:
-            conn.execute("ALTER TABLE users ADD COLUMN slots_win_streak INTEGER DEFAULT 0")
-        if "slots_rigged_loss_remaining" not in cols:
-            conn.execute("ALTER TABLE users ADD COLUMN slots_rigged_loss_remaining INTEGER DEFAULT 0")
-        if "coinflip_win_streak" not in cols:
-            conn.execute("ALTER TABLE users ADD COLUMN coinflip_win_streak INTEGER DEFAULT 0")
-        if "coinflip_rigged_loss_remaining" not in cols:
-            conn.execute("ALTER TABLE users ADD COLUMN coinflip_rigged_loss_remaining INTEGER DEFAULT 0")
         if "last_steal_time" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN last_steal_time TEXT")
         if "last_duel_time" not in cols:
@@ -1488,17 +1478,10 @@ class RewardsDBService:
                 duel_losses=row["duel_losses"] if "duel_losses" in keys else 0,
                 duel_streak=row["duel_streak"] if "duel_streak" in keys else 0,
                 bounties_claimed=row["bounties_claimed"] if "bounties_claimed" in keys else 0,
-                bet_win_streak=row["bet_win_streak"] if "bet_win_streak" in keys else 0,
-                bet_rigged_loss_remaining=row["bet_rigged_loss_remaining"] if "bet_rigged_loss_remaining" in keys else 0,
-                bet_loss_streak=row["bet_loss_streak"] if "bet_loss_streak" in keys else 0,
                 last_tax_collection=row["last_tax_collection"] if "last_tax_collection" in keys else None,
                 last_gamble_time=row["last_gamble_time"] if "last_gamble_time" in keys else None,
                 daily_casino_games_count=row["daily_casino_games_count"] if "daily_casino_games_count" in keys else 0,
                 last_casino_date=row["last_casino_date"] if "last_casino_date" in keys else None,
-                slots_win_streak=row["slots_win_streak"] if "slots_win_streak" in keys else 0,
-                slots_rigged_loss_remaining=row["slots_rigged_loss_remaining"] if "slots_rigged_loss_remaining" in keys else 0,
-                coinflip_win_streak=row["coinflip_win_streak"] if "coinflip_win_streak" in keys else 0,
-                coinflip_rigged_loss_remaining=row["coinflip_rigged_loss_remaining"] if "coinflip_rigged_loss_remaining" in keys else 0,
                 last_steal_time=row["last_steal_time"] if "last_steal_time" in keys else None,
                 last_duel_time=row["last_duel_time"] if "last_duel_time" in keys else None,
                 last_give_time=row["last_give_time"] if "last_give_time" in keys else None,
@@ -2293,6 +2276,53 @@ class RewardsDBService:
         games_remaining = self.MAX_DAILY_CASINO_GAMES - new_daily_count
         return new_daily_count, games_remaining, today_str, current_time
 
+    def _record_gambling_round(
+        self,
+        user_id: int,
+        game: str,
+        won: bool,
+        now: Optional[datetime] = None,
+    ) -> None:
+        """Persist a resolved gambling result for short-window fairness checks."""
+        settled_at = now or datetime.now(PHT)
+        if settled_at.tzinfo is None:
+            settled_at = settled_at.replace(tzinfo=PHT)
+        else:
+            settled_at = settled_at.astimezone(PHT)
+
+        with self._get_connection() as conn:
+            conn.execute(
+                "INSERT INTO gambling_rounds (user_id, game, won, settled_at) VALUES (?, ?, ?, ?)",
+                (user_id, game, int(won), settled_at.isoformat()),
+            )
+            conn.commit()
+
+    def _high_roller_risk_penalty(self, user: UserRecord, now: datetime) -> float:
+        """Return a modest odds reduction after repeated recent wins by a wealthy player.
+
+        This never forces a loss. It only lowers chance-based game odds when an
+        account has at least 5,000 wallet points and at least four wins among its
+        six most recent resolved gambling rounds in the last 12 hours.
+        """
+        if user.points < 5_000:
+            return 0.0
+
+        cutoff = now - timedelta(hours=12)
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT won FROM gambling_rounds
+                WHERE user_id = ? AND settled_at >= ?
+                ORDER BY settled_at DESC
+                LIMIT 6
+                """,
+                (user.user_id, cutoff.isoformat()),
+            ).fetchall()
+
+        if len(rows) == 6 and sum(row["won"] for row in rows) >= 4:
+            return 0.08
+        return 0.0
+
     def play_bet(
         self,
         user_id: int,
@@ -2315,111 +2345,45 @@ class RewardsDBService:
 
         new_daily_games, games_remaining, today_str, current_time = self._check_and_update_casino_limit(user, now)
 
-        # Track streak states
-        win_streak = user.bet_win_streak
-        rigged_losses = user.bet_rigged_loss_remaining
-        loss_streak = user.bet_loss_streak
-
         active_pet = self.get_active_pet(user_id)
         is_bunny = active_pet and active_pet.species == "bunny"
-        is_calibrated = (user_id == 750821596293365832)
+        is_cat = active_pet and active_pet.species == "cat"
+        risk_penalty = self._high_roller_risk_penalty(user, current_time)
 
         # Determine outcome
         if fixed_outcome is not None:
             outcome = fixed_outcome
-            if outcome in (BetOutcome.JACKPOT, BetOutcome.DOUBLE, BetOutcome.SKILL_DROP):
-                win_streak += 1
-                loss_streak = 0
-                if win_streak >= 5:
-                    rigged_losses = 7
-                    win_streak = 0
-            elif outcome == BetOutcome.BUST:
-                win_streak = 0
-                if rigged_losses > 0:
-                    rigged_losses -= 1
-                else:
-                    loss_streak += 1
-        elif is_calibrated:
-            # Calibrated variance dampening lifted by half (68% BUST, 18% REFUND, 7% SKILL_DROP, 5% DOUBLE, 2% JACKPOT)
+        else:
+            # Restored odds: 4% jackpot, 10% double, 15% skill drop, 36% refund.
+            jackpot_chance = 0.04
+            double_chance = 0.10
+            skill_drop_chance = 0.15
+            refund_chance = 0.36
+            if is_cat:
+                jackpot_chance += 0.01
+                double_chance += 0.01
+                skill_drop_chance += 0.01
+            elif is_bunny:
+                jackpot_chance += 0.02
+                double_chance += 0.03
+                skill_drop_chance += 0.05
+
+            if risk_penalty:
+                jackpot_chance = max(0.01, jackpot_chance - risk_penalty * 0.125)
+                double_chance = max(0.04, double_chance - risk_penalty * 0.375)
+                skill_drop_chance = max(0.08, skill_drop_chance - risk_penalty * 0.5)
+
             roll = random.random()
-            if roll < 0.02:
+            if roll < jackpot_chance:
                 outcome = BetOutcome.JACKPOT
-                win_streak += 1
-                loss_streak = 0
-            elif roll < 0.07:
+            elif roll < jackpot_chance + double_chance:
                 outcome = BetOutcome.DOUBLE
-                win_streak += 1
-                loss_streak = 0
-            elif roll < 0.14:
+            elif roll < jackpot_chance + double_chance + skill_drop_chance:
                 outcome = BetOutcome.SKILL_DROP
-                win_streak += 1
-                loss_streak = 0
-            elif roll < 0.32:
+            elif roll < jackpot_chance + double_chance + skill_drop_chance + refund_chance:
                 outcome = BetOutcome.REFUND
-                win_streak = 0
-                loss_streak += 1
             else:
                 outcome = BetOutcome.BUST
-                win_streak = 0
-                loss_streak += 1
-        elif rigged_losses > 0:
-            # Rigged House Edge: After 5 continuous wins, player suffers 7 forced losses
-            outcome = BetOutcome.BUST
-            rigged_losses -= 1
-            win_streak = 0
-            loss_streak += 1
-        elif loss_streak >= 5:
-            # Pity System: After 5 continuous losses, guarantee a pity win
-            roll = random.random()
-            if roll < 0.70:
-                outcome = BetOutcome.DOUBLE
-            elif roll < 0.90:
-                outcome = BetOutcome.SKILL_DROP
-            else:
-                outcome = BetOutcome.JACKPOT
-            loss_streak = 0
-            win_streak += 1
-            if win_streak >= 5:
-                rigged_losses = 7
-                win_streak = 0
-        else:
-            # Standard Probability Roll (Tuned with healthy House Edge: ~55% Bust)
-            roll = random.random()
-            if is_bunny:
-                # Bunny companion (+10% luck boost)
-                if roll < 0.08:
-                    outcome = BetOutcome.JACKPOT
-                elif roll < 0.24:
-                    outcome = BetOutcome.DOUBLE
-                elif roll < 0.42:
-                    outcome = BetOutcome.SKILL_DROP
-                elif roll < 0.55:
-                    outcome = BetOutcome.REFUND
-                else:
-                    outcome = BetOutcome.BUST
-            else:
-                # Standard odds: 5% Jackpot, 12% Double, 15% Skill Drop, 13% Refund, 55% Bust
-                if roll < 0.05:
-                    outcome = BetOutcome.JACKPOT
-                elif roll < 0.17:
-                    outcome = BetOutcome.DOUBLE
-                elif roll < 0.32:
-                    outcome = BetOutcome.SKILL_DROP
-                elif roll < 0.45:
-                    outcome = BetOutcome.REFUND
-                else:
-                    outcome = BetOutcome.BUST
-
-            # Update win/loss streaks
-            if outcome in (BetOutcome.JACKPOT, BetOutcome.DOUBLE, BetOutcome.SKILL_DROP):
-                win_streak += 1
-                loss_streak = 0
-                if win_streak >= 5:
-                    rigged_losses = 7
-                    win_streak = 0
-            elif outcome == BetOutcome.BUST:
-                win_streak = 0
-                loss_streak += 1
 
         # Calculate payouts
         points_delta = 0
@@ -2471,13 +2435,10 @@ class RewardsDBService:
             conn.execute(
                 """
                 UPDATE users
-                SET points = ?,
+                    SET points = ?,
                     lifetime_points = ?,
                     daily_bets_count = ?,
                     last_bet_date = ?,
-                    bet_win_streak = ?,
-                    bet_rigged_loss_remaining = ?,
-                    bet_loss_streak = ?,
                     last_gamble_time = ?,
                     daily_casino_games_count = ?,
                     last_casino_date = ?
@@ -2488,9 +2449,6 @@ class RewardsDBService:
                     new_lifetime,
                     new_daily_games,
                     today_str,
-                    win_streak,
-                    rigged_losses,
-                    loss_streak,
                     current_time.isoformat(),
                     new_daily_games,
                     today_str,
@@ -2500,6 +2458,10 @@ class RewardsDBService:
             action_desc = f"Bet Outcome: {outcome.value} ({'+' if points_delta > 0 else ''}{points_delta} pts, wager: {wager} pts)"
             if is_bunny:
                 action_desc += " [🐰 Bunny Perk!]"
+            elif is_cat:
+                action_desc += " [🐱 Cat Luck!]"
+            if risk_penalty:
+                action_desc += " [High-roller risk adjustment]"
             if reward_item_name:
                 action_desc += f" + Won {reward_item_name}"
             conn.execute(
@@ -2510,6 +2472,13 @@ class RewardsDBService:
                 (user_id, points_delta, action_desc),
             )
             conn.commit()
+
+        self._record_gambling_round(
+            user_id,
+            "roulette",
+            outcome in (BetOutcome.JACKPOT, BetOutcome.DOUBLE, BetOutcome.SKILL_DROP),
+            current_time,
+        )
 
         return BetResult(
             outcome=outcome,
@@ -2547,26 +2516,11 @@ class RewardsDBService:
 
         active_pet = self.get_active_pet(user_id)
         is_bunny = active_pet and active_pet.species == "bunny"
-        is_calibrated = (user_id == 750821596293365832)
-
-        win_streak = user.slots_win_streak
-        rigged_losses = user.slots_rigged_loss_remaining
+        is_cat = active_pet and active_pet.species == "cat"
+        risk_penalty = self._high_roller_risk_penalty(user, current_time)
 
         if fixed_reels is not None and len(fixed_reels) == 3:
             reels = fixed_reels
-        elif is_calibrated:
-            # Calibrated variance dampening lifted by half (50% forced non-match, 50% normal roll)
-            if random.random() < 0.50:
-                reels = ["🍒", "🍋", "🍇"]
-                win_streak = 0
-            else:
-                symbols = [s["emoji"] for s in SLOTS_SYMBOLS]
-                weights = [s["weight"] for s in SLOTS_SYMBOLS]
-                reels = random.choices(symbols, weights=weights, k=3)
-        elif rigged_losses > 0:
-            reels = ["🍒", "🍋", "🍇"]
-            rigged_losses -= 1
-            win_streak = 0
         else:
             symbols = []
             weights = []
@@ -2574,7 +2528,11 @@ class RewardsDBService:
                 symbols.append(s["emoji"])
                 w = s["weight"]
                 if is_bunny and s["emoji"] in ("💎", "👑", "🃏"):
-                    w += 4  # Bunny luck perk
+                    w += 4
+                elif is_cat and s["emoji"] in ("💎", "👑", "🃏"):
+                    w += 2
+                if risk_penalty and s["emoji"] in ("💎", "👑", "🃏"):
+                    w = max(1, w - 2)
                 weights.append(w)
             reels = random.choices(symbols, weights=weights, k=3)
 
@@ -2588,22 +2546,12 @@ class RewardsDBService:
             multiplier = sym_def["mult_3"]
             is_jackpot = (most_common_sym == "🃏")
             desc = f"🎉 TRIPLE MATCH! 3x {sym_def['name']} ({multiplier:.1f}x Multiplier)!"
-            win_streak += 1
-            if win_streak >= 2:
-                rigged_losses = 4
-                win_streak = 0
         elif count == 2:
             multiplier = sym_def["mult_2"]
             desc = f"✨ DOUBLE MATCH! 2x {sym_def['name']} ({multiplier:.1f}x Consolation Payout)!"
-            if multiplier >= 1.0:
-                win_streak += 1
-                if win_streak >= 2:
-                    rigged_losses = 4
-                    win_streak = 0
         else:
             multiplier = 0.0
             desc = "❌ No match. Better luck on the next spin!"
-            win_streak = 0
 
         points_won = int(wager * multiplier)
         points_delta = points_won - wager
@@ -2618,9 +2566,7 @@ class RewardsDBService:
                     lifetime_points = ?,
                     last_gamble_time = ?,
                     daily_casino_games_count = ?,
-                    last_casino_date = ?,
-                    slots_win_streak = ?,
-                    slots_rigged_loss_remaining = ?
+                    last_casino_date = ?
                 WHERE user_id = ?
                 """,
                 (
@@ -2629,8 +2575,6 @@ class RewardsDBService:
                     current_time.isoformat(),
                     new_daily_games,
                     today_str,
-                    win_streak,
-                    rigged_losses,
                     user_id,
                 ),
             )
@@ -2640,6 +2584,8 @@ class RewardsDBService:
                 (user_id, points_delta, act_desc),
             )
             conn.commit()
+
+        self._record_gambling_round(user_id, "slots", points_delta > 0, current_time)
 
         return SlotsResult(
             reels=reels,
@@ -2687,37 +2633,24 @@ class RewardsDBService:
 
         active_pet = self.get_active_pet(user_id)
         is_bunny = active_pet and active_pet.species == "bunny"
-        is_calibrated = (user_id == 750821596293365832)
-
-        win_streak = user.coinflip_win_streak
-        rigged_losses = user.coinflip_rigged_loss_remaining
+        is_cat = active_pet and active_pet.species == "cat"
+        risk_penalty = self._high_roller_risk_penalty(user, current_time)
 
         if fixed_flip is not None:
             result = fixed_flip.lower().strip()
-        elif is_calibrated:
-            # Calibrated dampening lifted by half (30% win rate / 70% loss rate)
-            won_roll = random.random() < 0.30
-            result = picked if won_roll else ("tails" if picked == "heads" else "heads")
-            win_streak = 0
-        elif rigged_losses > 0:
-            result = "tails" if picked == "heads" else "heads"
-            rigged_losses -= 1
-            win_streak = 0
         else:
-            win_chance = 0.48 if is_bunny else 0.45
+            win_chance = 0.46
+            if is_cat:
+                win_chance += 0.03
+            elif is_bunny:
+                win_chance += 0.04
+            win_chance = max(0.30, win_chance - risk_penalty)
             if random.random() < win_chance:
                 result = picked
             else:
                 result = "tails" if picked == "heads" else "heads"
 
         won = (picked == result)
-        if won:
-            win_streak += 1
-            if win_streak >= 3:
-                rigged_losses = 4
-                win_streak = 0
-        else:
-            win_streak = 0
 
         # 1.70x total return (+0.70x net profit on win)
         points_delta = int(wager * 0.70) if won else -wager
@@ -2732,9 +2665,7 @@ class RewardsDBService:
                     lifetime_points = ?,
                     last_gamble_time = ?,
                     daily_casino_games_count = ?,
-                    last_casino_date = ?,
-                    coinflip_win_streak = ?,
-                    coinflip_rigged_loss_remaining = ?
+                    last_casino_date = ?
                 WHERE user_id = ?
                 """,
                 (
@@ -2743,8 +2674,6 @@ class RewardsDBService:
                     current_time.isoformat(),
                     new_daily_games,
                     today_str,
-                    win_streak,
-                    rigged_losses,
                     user_id,
                 ),
             )
@@ -2754,6 +2683,8 @@ class RewardsDBService:
                 (user_id, points_delta, act_desc),
             )
             conn.commit()
+
+        self._record_gambling_round(user_id, "coinflip", won, current_time)
 
         return CoinflipResult(
             choice=picked,
@@ -2776,13 +2707,13 @@ class RewardsDBService:
         fixed_won: Optional[bool] = None,
         fixed_winning_cup: Optional[int] = None,
     ) -> CupsResult:
-        """Play Intramuros 3-Cup Shell Game (Unlimited Plays, Trap/Honeypot Scam)."""
+        """Play the low-stakes Intramuros 3-Cup Shell Game."""
         if chosen_cup not in (1, 2, 3):
             raise RewardsError("You must choose Cup **1**, **2**, or **3**!")
         if wager < 10:
             raise RewardsError("Minimum shell game wager is **10 Uno Points**!")
-        if wager > 250:
-            raise RewardsError("Maximum shell game wager is **250 Uno Points**!")
+        if wager > CUPS_MAX_WAGER:
+            raise RewardsError(f"Maximum shell game wager is **{CUPS_MAX_WAGER} Uno Points**!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -2792,10 +2723,11 @@ class RewardsDBService:
 
         current_time = now or datetime.now(PHT)
         round_number = user.cups_rounds_played + 1
-        is_calibrated = (user_id == 750821596293365832)
 
         active_pet = self.get_active_pet(user_id)
         is_bunny = active_pet and active_pet.species == "bunny"
+        is_cat = active_pet and active_pet.species == "cat"
+        risk_penalty = self._high_roller_risk_penalty(user, current_time)
 
         # Determine outcome
         if fixed_won is not None:
@@ -2805,34 +2737,18 @@ class RewardsDBService:
                 if fixed_winning_cup is not None
                 else (chosen_cup if won else random.choice([c for c in (1, 2, 3) if c != chosen_cup]))
             )
-        elif is_calibrated:
-            # Calibrated user lifted by half: 50% win rate on rounds 1-3, 3% on rounds 4+
-            if round_number <= 3:
-                won = (random.random() < 0.50)
-            else:
-                won = (random.random() < 0.03)
-            winning_cup = chosen_cup if won else random.choice([c for c in (1, 2, 3) if c != chosen_cup])
-        elif round_number <= 3:
-            # The Honeypot / Hook: 100% Guaranteed Win on rounds 1, 2, 3!
-            won = True
-            winning_cup = chosen_cup
         else:
-            # The Trap: only 6% chance of winning (94% loss rate) forever afterwards
-            win_chance = 0.08 if is_bunny else 0.06
+            win_chance = CUPS_WIN_CHANCE
+            if is_cat:
+                win_chance += 0.03
+            elif is_bunny:
+                win_chance += 0.05
+            win_chance = max(0.15, win_chance - risk_penalty)
             won = (random.random() < win_chance)
             winning_cup = chosen_cup if won else random.choice([c for c in (1, 2, 3) if c != chosen_cup])
 
-        # Multipliers
         if won:
-            if round_number == 1:
-                multiplier = 2.0
-            elif round_number == 2:
-                multiplier = 2.2
-            elif round_number == 3:
-                multiplier = 2.5
-            else:
-                multiplier = 2.0
-            payout = int(wager * multiplier)
+            payout = int(wager * CUPS_PAYOUT_MULTIPLIER)
             points_delta = payout - wager
         else:
             payout = 0
@@ -2852,20 +2768,7 @@ class RewardsDBService:
                 cup_rows.append(f"`[ Cup {c}: 🥤 ]`")
         display_cups = "  ".join(cup_rows)
 
-        # Shady dealer dialogue and flavor text
-        if is_calibrated:
-            dealer_comment = "😏 *'Nice try Ronald! The streets of Intramuros always collect their toll.'*"
-            flavor_text = f"You lifted **Cup {chosen_cup}**, but found only dust! The dealer smirked as he revealed the coin was tucked under **Cup {winning_cup}**."
-        elif round_number == 1:
-            dealer_comment = "🪙 *'Beginner's luck, kid! See how easy it is? Pick another cup!'*"
-            flavor_text = f"You lifted **Cup {chosen_cup}** and found the shining **🪙 Gold Coin**!"
-        elif round_number == 2:
-            dealer_comment = "🔥 *'Two for two! You've got an eagle eye! You're cleaning me out!'*"
-            flavor_text = f"You nailed it again! **Cup {chosen_cup}** held the **🪙 Gold Coin**!"
-        elif round_number == 3:
-            dealer_comment = "👑 *'UNBELIEVABLE 3-WIN STREAK! Bet bigger, you literally cannot lose today!'*"
-            flavor_text = f"A hat trick! **Cup {chosen_cup}** revealed the **🪙 Gold Coin** once again!"
-        elif won:
+        if won:
             dealer_comment = "👀 *'You caught my shuffle this time! But can you do it again?'*"
             flavor_text = f"Against all odds, you lifted **Cup {chosen_cup}** and found the **🪙 Gold Coin**!"
         else:
@@ -2896,6 +2799,8 @@ class RewardsDBService:
                 (user_id, points_delta, act_desc),
             )
             conn.commit()
+
+        self._record_gambling_round(user_id, "cups", won, current_time)
 
         return CupsResult(
             chosen_cup=chosen_cup,
@@ -2952,7 +2857,6 @@ class RewardsDBService:
         # Deduct wager upfront
         self.deduct_points(user_id, wager, "BLACKJACK_BET", f"Started Blackjack hand with {wager} pts wager")
 
-        is_calibrated = (user_id == 750821596293365832)
         p_hand = fixed_player_cards or [create_random_card(), create_random_card()]
         d_hand = fixed_dealer_cards or [create_random_card(), create_random_card()]
 
@@ -2989,6 +2893,9 @@ class RewardsDBService:
         else:
             self._active_blackjack[user_id] = game
 
+        if game.status != "IN_PROGRESS":
+            self._record_gambling_round(user_id, "blackjack", game.status == "BLACKJACK", current_time)
+
         return game
 
     def hit_blackjack(self, user_id: int, fixed_card: Optional[BlackjackCard] = None) -> BlackjackGame:
@@ -3007,6 +2914,7 @@ class RewardsDBService:
             game.new_balance = self.get_balance(user_id)
             game.message = f"💥 BUSTED ({p_score})! You lost your {game.wager:,} pts wager."
             self._active_blackjack.pop(user_id, None)
+            self._record_gambling_round(user_id, "blackjack", False)
         elif p_score == 21:
             return self.stand_blackjack(user_id)
         else:
@@ -3021,19 +2929,10 @@ class RewardsDBService:
             raise RewardsError("You don't have an active blackjack game in progress!")
 
         p_score = calculate_blackjack_score(game.player_hand)
-        is_calibrated = (user_id == 750821596293365832)
 
         if fixed_dealer_draws:
             for c in fixed_dealer_draws:
                 game.dealer_hand.append(c)
-        elif is_calibrated and p_score <= 21:
-            # Calibrated variance lifted by half: 50% chance dealer draws 20, 50% standard dealer rules
-            if random.random() < 0.50 and p_score >= 18:
-                needed = 20 - calculate_blackjack_score(game.dealer_hand)
-                if 0 < needed <= 10:
-                    game.dealer_hand.append(BlackjackCard("♠️", str(needed), min(10, needed)))
-            while calculate_blackjack_score(game.dealer_hand) < 17:
-                game.dealer_hand.append(create_random_card())
         else:
             while calculate_blackjack_score(game.dealer_hand) < 17:
                 game.dealer_hand.append(create_random_card())
@@ -3067,6 +2966,7 @@ class RewardsDBService:
             game.message = f"❌ Dealer wins ({d_score} vs {p_score}). You lost {game.wager:,} pts."
 
         self._active_blackjack.pop(user_id, None)
+        self._record_gambling_round(user_id, "blackjack", game.status == "PLAYER_WIN")
         return game
 
     def double_down_blackjack(
@@ -3102,6 +3002,7 @@ class RewardsDBService:
             game.new_balance = self.get_balance(user_id)
             game.message = f"💥 BUSTED ({p_score}) on Double Down! You lost {game.wager:,} pts."
             self._active_blackjack.pop(user_id, None)
+            self._record_gambling_round(user_id, "blackjack", False)
             return game
 
         return self.stand_blackjack(user_id, fixed_dealer_draws=fixed_dealer_draws)
@@ -3176,16 +3077,9 @@ class RewardsDBService:
             raise RewardsError("Invalid guess! Choose `higher` (🔼) or `lower` (🔽).")
 
         is_higher = clean_guess in ("higher", "high", "h")
-        is_calibrated = (user_id == 750821596293365832)
 
         if fixed_next_card is not None:
             next_c = fixed_next_card
-        elif is_calibrated:
-            # Calibrated variance lifted by half (50% counter-card, 50% random card)
-            if random.random() < 0.50:
-                next_c = BlackjackCard("♦️", "2", 2) if is_higher else BlackjackCard("♠️", "K", 13)
-            else:
-                next_c = create_random_card()
         else:
             next_c = create_random_card()
 
@@ -3204,6 +3098,7 @@ class RewardsDBService:
             game.new_balance = self.get_balance(user_id)
             game.message = f"❌ Drawn **{next_c}** (Value {new_val}). Wrong guess! Busted and lost {game.wager:,} pts."
             self._active_highlow.pop(user_id, None)
+            self._record_gambling_round(user_id, "highlow", False)
             return game
 
         game.streak += 1
@@ -3219,6 +3114,7 @@ class RewardsDBService:
             game.new_balance = self.get_balance(user_id)
             game.message = f"👑 MAXIMUM 6-STREAK HIT! Auto cashed out for **+{game.points_delta:,} pts** ({pot_payout:,} pts total)!"
             self._active_highlow.pop(user_id, None)
+            self._record_gambling_round(user_id, "highlow", True)
         else:
             game.status = "WON_ROUND"
             game.message = (
@@ -3245,6 +3141,7 @@ class RewardsDBService:
         game.new_balance = self.get_balance(user_id)
         game.message = f"💰 Cashed out **{payout:,} Uno Points** (Net Profit: **+{game.points_delta:,} pts**)!"
         self._active_highlow.pop(user_id, None)
+        self._record_gambling_round(user_id, "highlow", True)
         return game
 
     def execute_work(
@@ -3256,7 +3153,6 @@ class RewardsDBService:
         """Work an odd job on campus (1-hour cooldown). Earns 15–45 pts + random chance of skill item."""
         current_time = now or datetime.now(timezone.utc)
         user = self.get_or_create_user(user_id)
-        is_calibrated = (user_id == 750821596293365832)
 
         COOLDOWN_SECONDS = 3600  # 1 hour
         if user.last_work_time:
@@ -3273,10 +3169,10 @@ class RewardsDBService:
                 pass
 
         job = WORK_JOBS[fixed_job_index if fixed_job_index is not None and 0 <= fixed_job_index < len(WORK_JOBS) else random.randint(0, len(WORK_JOBS) - 1)]
-        earned = random.randint(job["min_pts"], (job["min_pts"] + job["max_pts"]) // 2) if is_calibrated else random.randint(job["min_pts"], job["max_pts"])
+        earned = random.randint(job["min_pts"], job["max_pts"])
 
         bonus_item_name = None
-        drop_chance = 0.10 if is_calibrated else 0.20
+        drop_chance = 0.20
         if random.random() < drop_chance:
             skill_keys = ["pickpocket", "shield_1w", "double_daily", "uno_reverse", "gacha_box", "coffee_bribe"]
             chosen_skill = random.choice(skill_keys)
@@ -3318,7 +3214,6 @@ class RewardsDBService:
         """Scavenge around campus for pocket change (30-min cooldown). Earns 10–35 pts."""
         current_time = now or datetime.now(timezone.utc)
         user = self.get_or_create_user(user_id)
-        is_calibrated = (user_id == 750821596293365832)
 
         COOLDOWN_SECONDS = 1800  # 30 mins
         if user.last_scavenge_time:
@@ -3335,7 +3230,7 @@ class RewardsDBService:
                 pass
 
         loc = SCAVENGE_LOCATIONS[fixed_location_index if fixed_location_index is not None and 0 <= fixed_location_index < len(SCAVENGE_LOCATIONS) else random.randint(0, len(SCAVENGE_LOCATIONS) - 1)]
-        earned = random.randint(loc["min_pts"], (loc["min_pts"] + loc["max_pts"]) // 2) if is_calibrated else random.randint(loc["min_pts"], loc["max_pts"])
+        earned = random.randint(loc["min_pts"], loc["max_pts"])
 
         new_balance = user.points + earned
         new_lifetime = user.lifetime_points + earned
@@ -3557,11 +3452,8 @@ class RewardsDBService:
         self.deduct_points(challenger_id, wager, "DUEL_WAGER", f"1v1 Duel wager against user {target_id}")
         self.deduct_points(target_id, wager, "DUEL_WAGER", f"1v1 Duel wager against user {challenger_id}")
 
-        c_calibrated = (challenger_id == 750821596293365832)
-        t_calibrated = (target_id == 750821596293365832)
-
-        c_roll = fixed_c_roll or (random.randint(1, 65) if c_calibrated else random.randint(1, 100))
-        t_roll = fixed_t_roll or (random.randint(1, 65) if t_calibrated else random.randint(1, 100))
+        c_roll = fixed_c_roll or random.randint(1, 100)
+        t_roll = fixed_t_roll or random.randint(1, 100)
 
         # Pet perks for dice duel
         c_perk_msg = None
@@ -3581,8 +3473,8 @@ class RewardsDBService:
                 t_perk_msg = (t_perk_msg or "") + f" 🦉 **{t_pet.nickname}** calculated clutch (+10 roll)!"
 
         while c_roll == t_roll and fixed_c_roll is None and fixed_t_roll is None:
-            c_roll = random.randint(1, 65) if c_calibrated else random.randint(1, 100)
-            t_roll = random.randint(1, 65) if t_calibrated else random.randint(1, 100)
+            c_roll = random.randint(1, 100)
+            t_roll = random.randint(1, 100)
 
         total_pot = int(wager * 1.95)  # 5% server burn to eliminate collusion / alt point farming
         is_tie = (c_roll == t_roll)
@@ -4135,10 +4027,9 @@ class RewardsDBService:
         # Check pet perks: Fox increases steal success, Dog dramatically increases bust chance
         thief_pet = self.get_active_pet(thief_id)
         target_pet = self.get_active_pet(target_id)
-        is_calibrated = (thief_id == 750821596293365832)
 
-        success_rate = 0.35 if is_calibrated else 0.60
-        if thief_pet and thief_pet.species == "fox" and not is_calibrated:
+        success_rate = 0.60
+        if thief_pet and thief_pet.species == "fox":
             success_rate += 0.15
 
         if target_pet and target_pet.species == "dog":

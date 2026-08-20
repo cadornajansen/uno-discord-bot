@@ -217,60 +217,33 @@ def test_play_bet_outcomes_and_limit(rewards_service: RewardsDBService):
     assert b4.bets_remaining == 11
 
 
-def test_play_bet_daily_limit_and_rigged_mechanics(rewards_service: RewardsDBService):
-    """Test 15 daily casino game limit, rigged 5-win trap (next 7 forced losses), and pity system."""
-    import pytest
+def test_high_roller_adjustment_reduces_odds_without_forcing_losses(rewards_service: RewardsDBService):
+    """Recent wins lower chance-based odds for wealthy players but never dictate an outcome."""
+    from unittest.mock import patch
     from bot.services.rewards_db import BetOutcome, MaxBetsReachedError
 
-    rewards_service.add_points(2001, 50000, "TEST")
+    rewards_service.add_points(2001, 50_000, "TEST")
     day1 = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
 
-    # 1. Test 5 consecutive wins -> triggers 7 rigged forced losses
-    for i in range(5):
-        win_res = rewards_service.play_bet(2001, wager=50, now=day1 + timedelta(seconds=20 * i), fixed_outcome=BetOutcome.DOUBLE)
-        assert win_res.outcome == BetOutcome.DOUBLE
+    # Four wins within six completed games activate the short-window adjustment.
+    for i, outcome in enumerate(
+        [BetOutcome.DOUBLE, BetOutcome.BUST, BetOutcome.DOUBLE, BetOutcome.REFUND, BetOutcome.JACKPOT, BetOutcome.SKILL_DROP]
+    ):
+        rewards_service.play_bet(2001, wager=50, now=day1 + timedelta(seconds=20 * i), fixed_outcome=outcome)
 
-    u = rewards_service.get_or_create_user(2001)
-    assert u.bet_rigged_loss_remaining == 7
-    assert u.bet_win_streak == 0
+    user = rewards_service.get_or_create_user(2001)
+    assert rewards_service._high_roller_risk_penalty(user, day1 + timedelta(minutes=3)) == 0.08
 
-    # Next 5 bets on day 1 must be forced BUSTs (5 of the 7 rigged losses consumed)
-    for i in range(5):
-        loss_res = rewards_service.play_bet(2001, wager=50, now=day1 + timedelta(seconds=20 * (5 + i)))
-        assert loss_res.outcome == BetOutcome.BUST
-        assert loss_res.daily_bets_count == 6 + i
+    # A 0.27 roll is a skill-drop normally but a refund while the risk adjustment is active.
+    with patch("bot.services.rewards_db.random.random", return_value=0.27):
+        adjusted = rewards_service.play_bet(2001, wager=50, now=day1 + timedelta(minutes=3))
+    assert adjusted.outcome == BetOutcome.REFUND
 
-    u_mid = rewards_service.get_or_create_user(2001)
-    # 2. Next Day (Day 2): remaining 2 rigged losses from the penalty
-    day2 = datetime(2026, 8, 2, 10, 0, tzinfo=timezone.utc)
-    for i in range(2):
-        loss_res = rewards_service.play_bet(2001, wager=50, now=day2 + timedelta(seconds=20 * i))
-        assert loss_res.outcome == BetOutcome.BUST
-
-    u2 = rewards_service.get_or_create_user(2001)
-    assert u2.bet_rigged_loss_remaining == 0
-
-    # Play remaining bets on day 2 to reach 15/15 daily limit
-    for i in range(13):
-        rewards_service.play_bet(2001, wager=50, now=day2 + timedelta(seconds=20 * (2 + i)))
-
-    # 16th bet on same day raises MaxBetsReachedError
+    # The 15-game daily cap is still enforced.
+    for i in range(8):
+        rewards_service.play_bet(2001, wager=50, now=day1 + timedelta(minutes=4 + i), fixed_outcome=BetOutcome.REFUND)
     with pytest.raises(MaxBetsReachedError):
-        rewards_service.play_bet(2001, wager=50, now=day2 + timedelta(seconds=20 * 16))
-
-    # 3. Test Pity System (5 consecutive losses outside rigged penalty -> guaranteed win)
-    rewards_service.add_points(3001, 10000, "TEST")
-    for i in range(5):
-        rewards_service.play_bet(3001, wager=50, now=day1 + timedelta(seconds=20 * i), fixed_outcome=BetOutcome.BUST)
-
-    u3 = rewards_service.get_or_create_user(3001)
-    assert u3.bet_loss_streak == 5
-
-    # 6th bet triggers Pity System -> guaranteed win!
-    pity_res = rewards_service.play_bet(3001, wager=50, now=day1 + timedelta(seconds=120))
-    assert pity_res.outcome in (BetOutcome.DOUBLE, BetOutcome.JACKPOT, BetOutcome.SKILL_DROP)
-    u3_after = rewards_service.get_or_create_user(3001)
-    assert u3_after.bet_loss_streak == 0
+        rewards_service.play_bet(2001, wager=50, now=day1 + timedelta(minutes=20))
 
 
 def test_execute_steal_mechanics(rewards_service: RewardsDBService):
@@ -526,6 +499,22 @@ def test_pet_cat_perk_daily(rewards_service: RewardsDBService):
     res = rewards_service.claim_daily(1001, now=now)
     # Day 1 base: 20 pts, with 2x cat perk: 40 pts
     assert res.points_awarded == 40
+
+
+def test_pet_cat_luck_bonus_applies_to_coinflip(rewards_service: RewardsDBService):
+    """Cats retain the daily bonus and make chance-based games slightly luckier."""
+    from unittest.mock import patch
+
+    rewards_service.add_points(1001, 1000, "START")
+    rewards_service.adopt_pet(1001, "tuxedo_cat")
+    now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+
+    # 0.47 is above the normal 46% chance but inside the cat's 49% chance.
+    with patch("bot.services.rewards_db.random.random", return_value=0.47):
+        result = rewards_service.play_coinflip(1001, "heads", wager=100, now=now)
+
+    assert result.won is True
+    assert result.points_delta == 70
 
 
 def test_pet_turtle_perk(rewards_service: RewardsDBService):
@@ -1006,53 +995,26 @@ def test_daily_wealth_taxes(rewards_service: RewardsDBService):
     assert tax_next["new_wallet"] == 424
 
 
-def test_cups_honeypot_and_trap_mechanics(rewards_service: RewardsDBService):
-    """Test 3-cup shell game: guaranteed wins on first 3 rounds, then 94% trap loss rate, and calibrated user."""
+def test_cups_low_stakes_probability_and_wager_cap(rewards_service: RewardsDBService):
+    """Test the flat 30% cups game with a small, fixed payout."""
     rewards_service.add_points(1001, 1000, "START")
 
-    # Round 1: Honeypot 100% win (2.0x payout)
-    res1 = rewards_service.play_cups(1001, chosen_cup=1, wager=100)
+    res1 = rewards_service.play_cups(1001, chosen_cup=1, wager=50, fixed_won=True)
     assert res1.won is True
     assert res1.winning_cup == 1
     assert res1.round_number == 1
-    assert res1.payout == 200
-    assert res1.points_delta == 100
-    assert rewards_service.get_balance(1001) == 1100
+    assert res1.payout == 75
+    assert res1.points_delta == 25
+    assert rewards_service.get_balance(1001) == 1025
 
-    # Round 2: Honeypot 100% win (2.2x payout)
-    res2 = rewards_service.play_cups(1001, chosen_cup=2, wager=100)
-    assert res2.won is True
-    assert res2.winning_cup == 2
+    res2 = rewards_service.play_cups(1001, chosen_cup=2, wager=50, fixed_won=False, fixed_winning_cup=1)
+    assert res2.won is False
+    assert res2.winning_cup == 1
     assert res2.round_number == 2
-    assert res2.payout == 220
-    assert res2.points_delta == 120
-    assert rewards_service.get_balance(1001) == 1220
+    assert res2.points_delta == -50
 
-    # Round 3: Honeypot 100% win (2.5x payout)
-    res3 = rewards_service.play_cups(1001, chosen_cup=3, wager=100)
-    assert res3.won is True
-    assert res3.winning_cup == 3
-    assert res3.round_number == 3
-    assert res3.payout == 250
-    assert res3.points_delta == 150
-    assert rewards_service.get_balance(1001) == 1370
-
-    # Round 4: Trap is active! (Tested with fixed outcome)
-    res4_loss = rewards_service.play_cups(1001, chosen_cup=1, wager=100, fixed_won=False, fixed_winning_cup=2)
-    assert res4_loss.won is False
-    assert res4_loss.winning_cup == 2
-    assert res4_loss.round_number == 4
-    assert res4_loss.payout == 0
-    assert res4_loss.points_delta == -100
-    assert rewards_service.get_balance(1001) == 1270
-
-    # Calibrated user (750821596293365832) has softened calibration
-    calib_id = 750821596293365832
-    rewards_service.add_points(calib_id, 1000, "START")
-    res_calib = rewards_service.play_cups(calib_id, chosen_cup=1, wager=100, fixed_won=False, fixed_winning_cup=2)
-    assert res_calib.won is False
-    assert res_calib.winning_cup == 2
-    assert rewards_service.get_balance(calib_id) == 900
+    with pytest.raises(RewardsError):
+        rewards_service.play_cups(1001, chosen_cup=1, wager=51)
 
 
 

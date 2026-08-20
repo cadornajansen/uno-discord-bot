@@ -141,6 +141,7 @@ class LeaderboardView(discord.ui.View):
         rewards_service: RewardsDBService,
         guild: Optional[discord.Guild],
         bot: Optional[commands.Bot] = None,
+        owner_id: Optional[int] = None,
         page: int = 1,
         per_page: int = 10,
         total_pages: int = 1,
@@ -149,10 +150,21 @@ class LeaderboardView(discord.ui.View):
         self.rewards_service = rewards_service
         self.guild = guild
         self.bot = bot
+        self.owner_id = owner_id
         self.page = page
         self.per_page = per_page
         self.total_pages = total_pages
         self._update_buttons()
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Keep a paginated leaderboard attached to the student who opened it."""
+        if self.owner_id is None or interaction.user.id == self.owner_id:
+            return True
+        await interaction.response.send_message(
+            "This leaderboard menu belongs to the student who opened it.",
+            ephemeral=True,
+        )
+        return False
 
     def _update_buttons(self) -> None:
         self.prev_button.disabled = (self.page <= 1)
@@ -317,8 +329,8 @@ class AirdropCatchButton(discord.ui.Button):
         view.claimers.append(user_id)
         active_pet = view.rewards_service.get_active_pet(user_id)
         pts_per_claim = 35 if (active_pet and active_pet.species == "fox") else 25
-        view.claimers.append(user_id)
         view.claimer_names.append(interaction.user.display_name)
+        view.claimer_rewards.append(pts_per_claim)
         new_bal = view.rewards_service.add_points(
             user_id, pts_per_claim, "AIRDROP_CATCH", f"Caught airdrop from user {view.launcher_id}"
         )
@@ -330,10 +342,13 @@ class AirdropCatchButton(discord.ui.Button):
             self.style = discord.ButtonStyle.secondary
             view.embed.title = "🌧️ Point Airdrop — FULLY CLAIMED!"
             view.embed.color = discord.Color.dark_grey()
-            winners = ", ".join(f"**{n}**" for n in view.claimer_names)
+            winners = ", ".join(
+                f"**{name}** (+{points} pts)"
+                for name, points in zip(view.claimer_names, view.claimer_rewards)
+            )
             view.embed.description = (
                 f"**Care package dropped by <@{view.launcher_id}> has been completely caught!**\n\n"
-                f"🎉 **Lucky Catchers:** {winners} (+25 pts each!)"
+                f"🎉 **Lucky Catchers:** {winners}"
             )
             await interaction.response.edit_message(embed=view.embed, view=view)
         else:
@@ -362,6 +377,7 @@ class AirdropCatchView(discord.ui.View):
         self.max_claims = 4
         self.claimers: list[int] = []
         self.claimer_names: list[str] = []
+        self.claimer_rewards: list[int] = []
         self.add_item(AirdropCatchButton())
 
 
@@ -405,10 +421,10 @@ def build_pet_guide_embed() -> discord.Embed:
     embed.add_field(
         name="3. Passive Economic Perks",
         value=(
-            "• **Cats** — **2x Daily Attendance Points** on `/daily` permanently.\n"
+            "• **Cats** — **2x Daily Attendance Points** plus `+3%` luck in roulette, slots, coinflip, and cups.\n"
             "• **Dogs** — **Guard Dog**: 75% thief catch rate & 50 pt bite fine on thieves.\n"
-            "• **Bunnies** — **Lucky Gambler**: +15% Jackpot & Double win rates in `/bet` and `/slots`.\n"
-            "• **Owls** — **Quiz Master**: +75 pts per correct trivia quiz and 4th attempt/day.\n"
+            "• **Bunnies** — **Lucky Gambler**: stronger roulette outcomes, +4% coinflip, +5% cups, and rare-slot boosts.\n"
+            "• **Owls** — **Quiz Master**: +40 pts per correct trivia quiz and 4th attempt/day.\n"
             "• **Turtles** — **Streak Freeze**: Protects daily streaks from resetting & +2d shield boost.\n"
             "• **Foxes** — **Pickpocket Master**: +15% steal rate & +10 pt bonus per airdrop catch.\n"
             "• **Axolotls & Goldfish** — **5% Cashback**: Instant 5% refund on all shop redemptions."
@@ -467,7 +483,7 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
         )
         embed.add_field(
             name="CS & Tech Trivia (/trivia)",
-            value="Answer Computer Science, Mathematics, and PLM trivia quizzes for `+25 pts` each (3 attempts/day, +50% with Owl companion).",
+            value="Answer Computer Science, Mathematics, and PLM trivia quizzes for `+25 pts` each (3 attempts/day; Owls earn `+40 pts` and unlock a fourth attempt).",
             inline=False,
         )
         embed.add_field(
@@ -516,12 +532,12 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
         )
         embed.add_field(
             name="High-Low Ladder (/highlow)",
-            value="Guess card values in sequence to climb the payout ladder up to `30.0x multiplier`.",
+            value="Guess card values in sequence to climb the payout ladder up to a `10.0x multiplier`.",
             inline=False,
         )
         embed.add_field(
             name="Street Game: 3-Cup Shell Game (/cups)",
-            value="Intramuros street game with **unlimited plays** (no daily limit). Guess which cup hides the ball for `2.0x–2.5x payout`.",
+            value="Low-stakes street game with **30% win odds**, a `1.5x payout`, and a `50 pts` maximum wager.",
             inline=False,
         )
         embed.set_footer(text="Use the dropdown menu below to explore other chapters.")
@@ -544,7 +560,7 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
             inline=False,
         )
         embed.add_field(
-            name="Bounty Board (/bounty board)",
+            name="Bounty Board (/bounty list)",
             value="View the top 10 Most Wanted students. Defeating a bountied player in a `/duel` awards `100% of their accumulated bounty pool`!",
             inline=False,
         )
@@ -565,9 +581,9 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
         embed.add_field(
             name="Companion Roster (50–250 pts)",
             value=(
-                "• **Cats** (Tuxedo, Calico) — `2x Daily Attendance Points`\n"
+                "• **Cats** (Tuxedo, Calico) — `2x Daily Attendance Points` + `3% chance-game luck`\n"
                 "• **Dogs** (Golden, Shiba) — `Guard Dog anti-theft & 50 pt bite fine`\n"
-                "• **Bunnies** (Brown, White) — `+15% Jackpot & Double casino luck`\n"
+                "• **Bunnies** (Brown, White) — better roulette, coinflip, cups, and rare-slot odds\n"
                 "• **Owls** (Scholar, Ice) — `+50% Trivia points & 4th daily quiz`\n"
                 "• **Turtles** (Oogway) — `Streak Freeze protection & +2d shield boost`\n"
                 "• **Foxes** (Trickster, Arctic) — `+15% Steal rate & +10 pt airdrop bonus`\n"
@@ -596,7 +612,7 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
         )
         embed.add_field(
             name="Progressive Wealth Taxes",
-            value="To keep the economy balanced, high net-worth accounts are subject to daily wealth maintenance:\n• Wallets above `5,000 pts`: `8% daily tax`\n• Wallets above `20,000 pts`: `10% daily tax`\n*Store points safely in your bank vault to mitigate tax liability.*",
+            value="To keep the economy balanced, accounts pay wealth tax every 24 hours based on wallet plus bank balance:\n• Net worth below `1,000 pts`: `8% tax`\n• Net worth of `1,000 pts` or more: `10% tax`\n*Accounts with under 10 total points are exempt.*",
             inline=False,
         )
         embed.add_field(
@@ -668,8 +684,8 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
             "• `/slots [amount]` or `!slots` — 3-Reel classic slots with up to 20x Wild Jackpot.\n"
             "• `/coinflip <heads|tails> [amount]` or `!cf` — 1.70x payout coin toss.\n"
             "• `/blackjack [amount]` or `!bj` — Blackjack 21 with Hit, Stand, and Double Down.\n"
-            "• `/highlow [amount]` or `!hl` — Card guessing ladder with up to 30.0x multiplier.\n"
-            "• `/cups <1|2|3> [amount]` or `!cups` — Intramuros 3-Cup Shell Game (Unlimited Plays)!"
+            "• `/highlow [amount]` or `!hl` — Card guessing ladder with up to 10.0x multiplier.\n"
+            "• `/cups <1|2|3> [amount]` or `!cups` — 3-Cup Shell Game (30% win, 1.5x payout, max 50 pts)!"
         ),
         inline=False,
     )
@@ -679,7 +695,7 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
         value=(
             "• `/duel @user [amount]` — Challenge a classmate to a 1v1 dice duel (5% rake).\n"
             "• `/bounty place @target <amount>` — Place a wanted bounty on a classmate (min 50 pts).\n"
-            "• `/bounty board` — View the top 10 Most Wanted board. Defeating a target awards 100% of their bounty!"
+            "• `/bounty list` — View the top 10 Most Wanted board. Defeating a target awards 100% of their bounty!"
         ),
         inline=False,
     )
@@ -1102,7 +1118,7 @@ def build_highlow_embed(game: HighLowGame, player_name: str) -> discord.Embed:
     if game.status != "IN_PROGRESS" and game.status != "WON_ROUND":
         embed.add_field(name="New Wallet Balance", value=f"**{game.new_balance:,} Uno Points**", inline=False)
 
-    embed.set_footer(text="Guess Higher or Lower • Cash out anytime after 1 win • Max 6 streak = 30x!")
+    embed.set_footer(text="Guess Higher or Lower • Cash out anytime after 1 win • Max 6 streak = 10x!")
     return embed
 
 
@@ -2835,25 +2851,26 @@ class RewardsCog(commands.Cog):
             self.rewards_service,
             interaction.guild,
             bot=self.bot,
+            owner_id=interaction.user.id,
             page=1,
             per_page=10,
             total_pages=total_pages,
         )
         await interaction.response.send_message(embed=embed, view=view)
 
-    @app_commands.command(name="bet", description="Gamble Uno Points on roulette with dynamic multipliers! (Limit: 10 bets/day)")
+    @app_commands.command(name="bet", description="Gamble Uno Points on roulette with dynamic multipliers! (Limit: 15 games/day)")
     @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, default 50).")
     async def bet(self, interaction: discord.Interaction, amount: int = 50) -> None:
-        """Play roulette with custom wager (limit 10 bets/day)."""
+        """Play roulette with a custom wager (limit: 15 games per day)."""
         user_id = interaction.user.id
         try:
             res = self.rewards_service.play_bet(user_id, wager=amount)
 
             if res.outcome in (BetOutcome.JACKPOT, BetOutcome.DOUBLE):
                 if res.outcome == BetOutcome.JACKPOT:
-                    title = f"🎰 MEGA JACKPOT! (5x Return: +{res.points_delta:,} pts)"
+                    title = f"🎰 MEGA JACKPOT! (4x Return: +{res.points_delta:,} pts)"
                     desc = (
-                        f"🎉 **JACKPOT!** You wagered **{res.wager:,} pts** and won a **5x payout**!\n"
+                        f"🎉 **JACKPOT!** You wagered **{res.wager:,} pts** and won a **4x payout**!\n"
                         f"💰 **Total Return:** `{res.total_payout:,} pts` (Net Profit: **+{res.points_delta:,} pts**)"
                     )
                 else:
@@ -2881,7 +2898,7 @@ class RewardsCog(commands.Cog):
 
             embed = discord.Embed(title=title, description=desc, color=color)
             embed.add_field(name="Current Balance", value=f"**{res.new_balance:,} Uno Points**", inline=True)
-            embed.set_footer(text=f"Gamble responsibly • {res.bets_remaining}/10 bets remaining today • 🐰 Bunny pet boosts luck")
+            embed.set_footer(text=f"Gamble responsibly • {res.bets_remaining}/15 games remaining today • 🐱 Cats and 🐰 bunnies boost luck")
 
             await interaction.response.send_message(embed=embed)
 
@@ -3005,7 +3022,7 @@ class RewardsCog(commands.Cog):
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
-    @app_commands.command(name="highlow", description="Guess if the next card is Higher or Lower. Cash out streaks for up to 30x!")
+    @app_commands.command(name="highlow", description="Guess if the next card is Higher or Lower. Cash out streaks for up to 10x!")
     @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, default 50).")
     async def highlow(self, interaction: discord.Interaction, amount: int = 50) -> None:
         """Start a High-Low streak game."""
@@ -3072,7 +3089,7 @@ class RewardsCog(commands.Cog):
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
-    @app_commands.command(name="work", description="Work an odd job on campus to earn 40–120 Uno Points and skill cards! (1h cooldown)")
+    @app_commands.command(name="work", description="Work an odd job on campus to earn 18–45 Uno Points and possible skill cards! (1h cooldown)")
     async def work(self, interaction: discord.Interaction) -> None:
         """Work a campus odd job."""
         user_id = interaction.user.id
@@ -3811,24 +3828,24 @@ class RewardsCog(commands.Cog):
                 "Earn Uno Points daily, adopt pixel-art companions (including 1 FREE Starter Pet!), gamble in the casino, "
                 "clash in 4-mode PvP duels, place classroom bounties, store savings in bank vaults, and redeem real-world student rewards!\n\n"
                 "**🐾 PET COMPANIONS & FREE STARTER (50%+ DISCOUNT)**\n"
-                "• 🐱 **Cats**: 2x permanent daily claim boost (`50 pts` / `100 pts` Calico)\n"
-                "• 🐶 **Dogs**: Guard dog protection against thieves & -15 roll duel bark (`50 pts` / `100 pts` Shiba)\n"
-                "• 🐰 **Bunnies**: Passive luck edge in casino wagers & lucky duel rerolls (`150 pts`)\n"
-                "• 🦉 **Owls**: 1.5x bonus trivia points & clutch roll duel bonus (`150 pts`)\n"
+                "• 🐱 **Cats**: 2x daily claim boost plus luck in roulette, slots, coinflip, and cups (`50 pts` / `100 pts` Calico)\n"
+                "• 🐶 **Dogs**: Guard dog protection against thieves (`50 pts` / `100 pts` Shiba)\n"
+                "• 🐰 **Bunnies**: Passive luck edge in roulette, slots, coinflip, and cups (`150 pts`)\n"
+                "• 🦉 **Owls**: +40 trivia points and a fourth trivia attempt each day (`150 pts`)\n"
                 "• 🎁 **Claim Free Starter Companion**: `/pet starter` (0 pts cost!)\n"
                 "• 🔄 **Shelter & 3-Day Drops**: `/pet drop`, `/pet adopt`, `/pet switch`, `/pet sell`, `/pet guide`\n\n"
                 "**⚔️ 1v1 MEGA DUELS & CLASSROOM BOUNTIES**\n"
                 "• 🎮 **4 Duel Modes**: `/duel @classmate [amount] [dice|rps|roulette|rpg]`\n"
                 "• 🎯 **Classroom Bounties**: `/bounty place @target <amount>` & `/bounty list` (winner claims 100% bounty pot!)\n"
                 "• 🔁 **Double-or-Nothing Rematches**: Instant 2x rematch button for defeated duelists\n\n"
-                "**🎰 CASINO & HIGH-STAKES GAMBLING (UNLIMITED WAGERS)**\n"
-                "• 🎰 **Unlimited Roulette**: `/bet [amount]` (up to 5x Mega Jackpot!)\n"
-                "• 🍒 **3-Reel Slots**: `/slots [amount]` (up to 50x Uno Wild Jackpot!)\n"
+                "**🎰 CASINO & HIGH-STAKES GAMBLING**\n"
+                "• 🎰 **Roulette**: `/bet [amount]` (up to 4x Mega Jackpot; 15 casino games/day)\n"
+                "• 🍒 **3-Reel Slots**: `/slots [amount]` (up to 20x Uno Wild Jackpot!)\n"
                 "• 🃏 **Interactive Blackjack 21**: `/blackjack [amount]` (Hit, Stand, Double Down!)\n"
-                "• 📈 **High-Low Card Streak**: `/highlow [amount]` (Climb ladder up to 30x max win!)\n"
-                "• 🪙 **Coinflip 50/50**: `/coinflip <heads|tails> [amount]`\n\n"
+                "• 📈 **High-Low Card Streak**: `/highlow [amount]` (Climb ladder up to 10x max win!)\n"
+                "• 🪙 **Coinflip**: `/coinflip <heads|tails> [amount]` (46% base win chance, 1.70x payout)\n\n"
                 "**💼 CAMPUS SIDE HUSTLES & BANK VAULTS**\n"
-                "• 💻 **Campus Shift / Work**: `/work` (earn 40–120 pts + rare card drops, 1h cooldown)\n"
+                "• 💻 **Campus Shift / Work**: `/work` (earn 18–45 pts + possible item drops, 1h cooldown)\n"
                 "• 🎒 **Campus Scavenge**: `/beg` (find loose change across Intramuros, 30m cooldown)\n"
                 "• 🏦 **Piggy Bank Vault**: `/bank deposit|withdraw|view` (100% immune to theft & audits)\n\n"
                 "**🏪 REAL-WORLD SHOP & REDEMPTIONS**\n"
