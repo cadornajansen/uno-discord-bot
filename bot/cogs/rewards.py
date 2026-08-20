@@ -2453,6 +2453,23 @@ class RewardsCog(commands.Cog):
         except Exception as e:
             logger.warning(f"[rewards_log] Failed to send log to channel {log_channel_id}: {e}")
 
+    async def _publish_nuke_recovery(self, impact_message: discord.WebhookMessage, locked_until: datetime) -> None:
+        """Replace the expired crisis countdown with the permanent recovery notice."""
+        delay = max(0.0, (locked_until - datetime.now(timezone.utc)).total_seconds())
+        await asyncio.sleep(delay)
+        recovery = discord.Embed(
+            title="☢️ ECONOMIC BALANCE RESTORED",
+            description=(
+                "Markets have reopened and all economic actions are available again.\n\n"
+                "⚠️ **Residual radiation remains.** The blast site is still unstable, so students should expect the atmosphere to stay a little strange."
+            ),
+            color=discord.Color.green(),
+        )
+        try:
+            await impact_message.edit(embed=recovery)
+        except (discord.HTTPException, discord.NotFound, discord.Forbidden) as exc:
+            logger.warning(f"[nuke] Could not publish recovery update: {exc}")
+
     guild_group = app_commands.Group(name="guild", description="Create or join a server team with shared progression bonuses.")
 
     @guild_group.command(name="create", description="Create a public guild for this server.")
@@ -2567,7 +2584,13 @@ class RewardsCog(commands.Cog):
                 ),
                 color=discord.Color.red(),
             )
-            await interaction.followup.send(embed=explosion, file=discord.File(explosion_gif, filename="nuke-explosion.gif"))
+            impact_message = await interaction.followup.send(
+                embed=explosion,
+                file=discord.File(explosion_gif, filename="nuke-explosion.gif"),
+                wait=True,
+            )
+            if isinstance(impact_message, discord.WebhookMessage):
+                asyncio.create_task(self._publish_nuke_recovery(impact_message, locked_until))
             await self._log_activity("☢️ Nuke detonated", f"{interaction.user.mention} struck {target.mention}; economy locked for one minute.", discord.Color.red())
         finally:
             self._active_nukes.discard(interaction.user.id)
