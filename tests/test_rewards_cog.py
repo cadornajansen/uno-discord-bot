@@ -152,6 +152,26 @@ def test_leaderboard_pagination_view():
     asyncio.run(_test())
 
 
+def test_leaderboard_acknowledges_before_building_response():
+    """The command must defer before member-name lookups can delay its response."""
+    async def _test():
+        cog, service, _ = _make_rewards_cog()
+        service.add_points(555, 100, "TEST")
+
+        interaction = MagicMock()
+        interaction.user.id = 555
+        interaction.guild = MagicMock()
+        interaction.response.defer = AsyncMock()
+        interaction.edit_original_response = AsyncMock()
+
+        await cog.leaderboard.callback(cog, interaction)
+
+        interaction.response.defer.assert_awaited_once_with(thinking=True)
+        interaction.edit_original_response.assert_awaited_once()
+
+    asyncio.run(_test())
+
+
 def test_bet_command():
     """Test /bet slash command places bet, updates points, and sends embed."""
     async def _test():

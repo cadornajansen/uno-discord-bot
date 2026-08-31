@@ -968,6 +968,12 @@ class ScavengeResult:
 
 
 @dataclass(frozen=True)
+class StudyResult:
+    points_earned: int
+    new_balance: int
+
+
+@dataclass(frozen=True)
 class BountyRecord:
     id: int
     target_id: int
@@ -1090,6 +1096,7 @@ class UserRecord:
     bank_points: int = 0
     last_work_time: Optional[str] = None
     last_scavenge_time: Optional[str] = None
+    last_study_time: Optional[str] = None
     has_claimed_starter: bool = False
     duel_wins: int = 0
     duel_losses: int = 0
@@ -1334,6 +1341,7 @@ class RewardsDBService:
                     bank_points INTEGER DEFAULT 0,
                     last_work_time TEXT,
                     last_scavenge_time TEXT,
+                    last_study_time TEXT,
                     has_claimed_starter INTEGER DEFAULT 0,
                     duel_wins INTEGER DEFAULT 0,
                     duel_losses INTEGER DEFAULT 0,
@@ -1460,6 +1468,8 @@ class RewardsDBService:
             conn.execute("ALTER TABLE users ADD COLUMN last_work_time TEXT")
         if "last_scavenge_time" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN last_scavenge_time TEXT")
+        if "last_study_time" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN last_study_time TEXT")
         if "has_claimed_starter" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN has_claimed_starter INTEGER DEFAULT 0")
         if "duel_wins" not in cols:
@@ -1515,6 +1525,7 @@ class RewardsDBService:
                 bank_points=row["bank_points"] if "bank_points" in keys else 0,
                 last_work_time=row["last_work_time"] if "last_work_time" in keys else None,
                 last_scavenge_time=row["last_scavenge_time"] if "last_scavenge_time" in keys else None,
+                last_study_time=row["last_study_time"] if "last_study_time" in keys else None,
                 has_claimed_starter=bool(row["has_claimed_starter"]) if "has_claimed_starter" in keys else False,
                 duel_wins=row["duel_wins"] if "duel_wins" in keys else 0,
                 duel_losses=row["duel_losses"] if "duel_losses" in keys else 0,
@@ -3473,6 +3484,50 @@ class RewardsDBService:
             new_balance=new_balance,
         )
 
+    def execute_study(
+        self,
+        user_id: int,
+        now: Optional[datetime] = None,
+        fixed_points: Optional[int] = None,
+    ) -> StudyResult:
+        """Record a study session and award 200–300 points once every 12 hours."""
+        current_time = now or datetime.now(timezone.utc)
+        user = self.get_or_create_user(user_id)
+        cooldown_seconds = 12 * 60 * 60
+
+        if user.last_study_time:
+            try:
+                last_study = datetime.fromisoformat(user.last_study_time)
+                if last_study.tzinfo is None:
+                    last_study = last_study.replace(tzinfo=timezone.utc)
+                elapsed = (current_time - last_study).total_seconds()
+                if elapsed < cooldown_seconds:
+                    remaining = int(cooldown_seconds - elapsed)
+                    hours, remaining = divmod(remaining, 3600)
+                    minutes, _ = divmod(remaining, 60)
+                    raise RewardsError(f"Study session is on cooldown. Try again in {hours}h {minutes}m.")
+            except ValueError:
+                pass
+
+        earned = fixed_points if fixed_points is not None else random.randint(200, 300)
+        if not 200 <= earned <= 300:
+            raise ValueError("Study rewards must be between 200 and 300 points.")
+
+        new_balance = user.points + earned
+        new_lifetime = user.lifetime_points + earned
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE users SET points = ?, lifetime_points = ?, last_study_time = ? WHERE user_id = ?",
+                (new_balance, new_lifetime, current_time.isoformat(), user_id),
+            )
+            conn.execute(
+                "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'STUDY', ?)",
+                (user_id, earned, f"Study session completed (+{earned} pts)"),
+            )
+            conn.commit()
+
+        return StudyResult(points_earned=earned, new_balance=new_balance)
+
     # ==================== BOUNTY SYSTEM ====================
 
     def place_bounty(self, creator_id: int, target_id: int, amount: int) -> dict:
@@ -4078,91 +4133,12 @@ class RewardsDBService:
         }
 
     def collect_daily_tax(self, user_id: int, now: Optional[datetime] = None) -> Optional[dict]:
-        """Collect 24-hr wealth tax: 8% on assets, or 10% for wealthy accounts (1k+ pts)."""
-        current_time = now or datetime.now(PHT)
-        if current_time.tzinfo is None:
-            current_time = current_time.replace(tzinfo=PHT)
-        else:
-            current_time = current_time.astimezone(PHT)
-        today_str = current_time.strftime("%Y-%m-%d")
-
-        user = self.get_or_create_user(user_id)
-        if user.last_tax_collection == today_str:
-            return None
-
-        total_assets = user.points + user.bank_points
-        if total_assets < 10:
-            with self._get_connection() as conn:
-                conn.execute(
-                    "UPDATE users SET last_tax_collection = ? WHERE user_id = ?",
-                    (today_str, user_id),
-                )
-                conn.commit()
-            return None
-
-        tax_rate = 0.10 if total_assets >= 1000 else 0.08
-        tax_amount = max(1, int(total_assets * tax_rate))
-
-        # Deduct from wallet first, then bank
-        new_wallet = max(0, user.points - tax_amount)
-        wallet_deducted = user.points - new_wallet
-        remaining_tax = tax_amount - wallet_deducted
-        new_bank = max(0, user.bank_points - remaining_tax)
-
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                UPDATE users
-                SET points = ?,
-                    bank_points = ?,
-                    last_tax_collection = ?
-                WHERE user_id = ?
-                """,
-                (new_wallet, new_bank, today_str, user_id),
-            )
-            conn.execute(
-                """
-                INSERT INTO transactions (user_id, amount, action_type, description)
-                VALUES (?, ?, 'TAX', ?)
-                """,
-                (user_id, -tax_amount, f"Daily Wealth Tax ({int(tax_rate * 100)}% on {total_assets:,} pts net worth)"),
-            )
-            conn.commit()
-
-        return {
-            "user_id": user_id,
-            "tax_rate": tax_rate,
-            "total_assets": total_assets,
-            "tax_amount": tax_amount,
-            "new_wallet": new_wallet,
-            "new_bank": new_bank,
-        }
+        """Retired compatibility hook; automatic wealth taxes no longer change points."""
+        return None
 
     def collect_all_pending_taxes(self, now: Optional[datetime] = None) -> list[dict]:
-        """Collect taxes from all users eligible for 24-hr tax collection."""
-        current_time = now or datetime.now(PHT)
-        if current_time.tzinfo is None:
-            current_time = current_time.replace(tzinfo=PHT)
-        else:
-            current_time = current_time.astimezone(PHT)
-        today_str = current_time.strftime("%Y-%m-%d")
-
-        with self._get_connection() as conn:
-            rows = conn.execute(
-                """
-                SELECT user_id FROM users
-                WHERE (last_tax_collection IS NULL OR last_tax_collection != ?)
-                  AND (points + bank_points) >= 10
-                """,
-                (today_str,),
-            ).fetchall()
-
-        results = []
-        for r in rows:
-            res = self.collect_daily_tax(r["user_id"], now=current_time)
-            if res:
-                results.append(res)
-        return results
+        """Retired compatibility hook; automatic wealth taxes no longer change points."""
+        return []
 
     def execute_steal(
         self,

@@ -8,7 +8,7 @@ import random
 from typing import Any, Optional, Union
 import discord
 from discord import app_commands
-from discord.ext import commands, tasks
+from discord.ext import commands
 
 from bot.services.rewards_db import (
     BetOutcome,
@@ -83,7 +83,7 @@ async def build_leaderboard_embed(
     total_pages = max(1, math.ceil(total_count / per_page))
 
     embed = discord.Embed(
-        title="🏆 BSCS 1-4 — Uno Points Leaderboard",
+        title="BSCS 1-4 — Uno Points Leaderboard",
         color=discord.Color.gold(),
         description="Rankings based on total accumulated Uno Points & Daily Streaks.",
     )
@@ -130,7 +130,7 @@ async def build_leaderboard_embed(
         else:
             rank_str = f"**#{entry.rank}**"
 
-        streak_str = f" · 🔥 {entry.daily_streak}d" if entry.daily_streak > 0 else ""
+        streak_str = f" · {entry.daily_streak}-day streak" if entry.daily_streak > 0 else ""
         lines.append(f"{rank_str} **{display_name}** — `{entry.points:,} pts`{streak_str}")
 
     embed.add_field(name="Class Leaderboard", value="\n".join(lines), inline=False)
@@ -606,8 +606,8 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
 
     if category == "bank":
         embed = discord.Embed(
-            title="Uno Rewards Guide — 5. Bank Vault, Taxes & Skill Items",
-            description="Financial safety, campus taxation, and consumable skill cards.",
+            title="Uno Rewards Guide — 5. Bank Vault & Skill Items",
+            description="Financial safety and consumable skill cards.",
             color=discord.Color.purple(),
         )
         embed.add_field(
@@ -616,8 +616,8 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
             inline=False,
         )
         embed.add_field(
-            name="Progressive Wealth Taxes",
-            value="To keep the economy balanced, accounts pay wealth tax every 24 hours based on wallet plus bank balance:\n• Net worth below `1,000 pts`: `8% tax`\n• Net worth of `1,000 pts` or more: `10% tax`\n*Accounts with under 10 total points are exempt.*",
+            name="No Automatic Point Deductions",
+            value="Your points are not reduced automatically. Point changes only happen when you choose a paid action, such as a transfer, wager, purchase, or bank transaction.",
             inline=False,
         )
         embed.add_field(
@@ -627,7 +627,7 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
                 "• **Uno Reverse Card** — Passive trap that counter-steals 40%–60% from pickpockets.\n"
                 "• **Point Airdrop** — Drops a 100 pt community care package in chat for 4 quick catchers.\n"
                 "• **EMP Shield Breaker** — Shatters a classmate's active Immunity Shield.\n"
-                "• **Class Treasurer Audit** — Audits 5% tax from a top leaderboard player.\n"
+                "• **Class Treasurer Audit** — Takes 5% from an eligible top-ranked player when used.\n"
                 "• **Mystery Gacha Box** — High-roller lootbox with prizes up to 1,000 points."
             ),
             inline=False,
@@ -661,7 +661,7 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
 
     # Default: Overview
     embed = discord.Embed(
-        title="🎮 Uno AI Rewards, Casino, Pets & PvP — Complete Student Guide",
+        title="Uno AI Rewards — Student Guide",
         description=(
             "Welcome to the **BSCS 1-4 Uno Rewards & Gamification Universe**! Earn points, "
             "adopt companions, test your luck in the casino, clash in 1v1 PvP duels, and redeem real-world prizes."
@@ -716,10 +716,10 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
     )
 
     embed.add_field(
-        name="5. Bank Vault, Taxes & Skill Cards",
+        name="5. Bank Vault & Skill Cards",
         value=(
             "• `/bank <deposit|withdraw|view>` — Protected bank vault 100% immune to theft (10% fee).\n"
-            "• Progressive wealth taxes (8%–10%) apply daily on large unbanked wallets.\n"
+            "• Points are never deducted automatically.\n"
             "• Skill cards: 1-Week Immunity Shield, Uno Reverse Card, Point Airdrops, EMP Breakers, Tax Audits."
         ),
         inline=False,
@@ -746,13 +746,13 @@ class GuideCategorySelect(discord.ui.Select):
 
     def __init__(self):
         options = [
-            discord.SelectOption(label="Complete Guide Overview", value="overview", description="Full guide summary", emoji="📖", default=True),
-            discord.SelectOption(label="1. Earning & Side Hustles", value="earning", description="Daily, shifts, scavenging, and trivia", emoji="💼"),
-            discord.SelectOption(label="2. Casino & Shell Game", value="casino", description="Roulette, slots, coinflip, blackjack, cups", emoji="🎰"),
-            discord.SelectOption(label="3. PvP Duels & Bounties", value="pvp", description="1v1 wagers and wanted bounty hunting", emoji="⚔️"),
-            discord.SelectOption(label="4. Pet Companions & Shelter", value="pets", description="Companion roster, care, and passive buffs", emoji="🐾"),
-            discord.SelectOption(label="5. Banking, Taxes & Cards", value="bank", description="Theft-proof vault, wealth tax, and skill cards", emoji="🏦"),
-            discord.SelectOption(label="6. Real-World Prizes", value="prizes", description="50k-100k physical treats, GCash, and Nitro", emoji="🎁"),
+            discord.SelectOption(label="Complete Guide Overview", value="overview", description="Full guide summary", default=True),
+            discord.SelectOption(label="1. Earning & Side Hustles", value="earning", description="Daily, shifts, scavenging, and trivia"),
+            discord.SelectOption(label="2. Casino & Shell Game", value="casino", description="Roulette, slots, coinflip, blackjack, cups"),
+            discord.SelectOption(label="3. PvP Duels & Bounties", value="pvp", description="1v1 wagers and wanted bounty hunting"),
+            discord.SelectOption(label="4. Pet Companions & Shelter", value="pets", description="Companion roster, care, and passive buffs"),
+            discord.SelectOption(label="5. Banking & Cards", value="bank", description="Theft-proof vault and skill cards"),
+            discord.SelectOption(label="6. Real-World Prizes", value="prizes", description="50k-100k physical treats, GCash, and Nitro"),
         ]
         super().__init__(placeholder="Select a guide chapter to read...", min_values=1, max_values=1, options=options)
 
@@ -2379,27 +2379,6 @@ class RewardsCog(commands.Cog):
             return False
         return True
 
-    async def cog_load(self) -> None:
-        self.daily_tax_loop.start()
-
-    async def cog_unload(self) -> None:
-        self.daily_tax_loop.cancel()
-
-    @tasks.loop(hours=1)
-    async def daily_tax_loop(self) -> None:
-        """Periodic background task that collects 24-hr wealth taxes."""
-        try:
-            taxes = self.rewards_service.collect_all_pending_taxes()
-            if taxes:
-                total_tax_collected = sum(t["tax_amount"] for t in taxes)
-                logger.info(f"[taxes] Collected {total_tax_collected:,} pts in wealth taxes from {len(taxes)} users.")
-        except Exception as e:
-            logger.error(f"[taxes] Error during daily wealth tax collection: {e}", exc_info=True)
-
-    @daily_tax_loop.before_loop
-    async def before_daily_tax_loop(self) -> None:
-        await self.bot.wait_until_ready()
-
     def _check_admin_permissions(self, interaction: discord.Interaction) -> bool:
         """Verify whether caller is a server administrator or guild owner."""
         user = interaction.user
@@ -3016,6 +2995,9 @@ class RewardsCog(commands.Cog):
     @app_commands.command(name="leaderboard", description="Browse the full paginated class leaderboard.")
     async def leaderboard(self, interaction: discord.Interaction) -> None:
         """Browse the full class leaderboard with interactive pagination buttons."""
+        # Member-name resolution can require API requests. Acknowledge first so
+        # Discord does not expire the interaction while the page is assembled.
+        await interaction.response.defer(thinking=True)
         embed, total_pages = await build_leaderboard_embed(
             self.rewards_service, interaction.guild, bot=self.bot, page=1, per_page=10
         )
@@ -3028,7 +3010,7 @@ class RewardsCog(commands.Cog):
             per_page=10,
             total_pages=total_pages,
         )
-        await interaction.response.send_message(embed=embed, view=view)
+        await interaction.edit_original_response(embed=embed, view=view)
 
     @app_commands.command(name="bet", description="Gamble Uno Points on roulette with dynamic multipliers! (Limit: 15 games/day)")
     @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, default 50).")
@@ -3313,6 +3295,24 @@ class RewardsCog(commands.Cog):
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
+    @app_commands.command(name="study", description="Complete a study session to earn 200–300 Uno Points. (12h cooldown)")
+    async def study(self, interaction: discord.Interaction) -> None:
+        """Reward a completed study session on a 12-hour cooldown."""
+        try:
+            result = self.rewards_service.execute_study(interaction.user.id)
+            embed = discord.Embed(
+                title="Study Session Complete",
+                description=(
+                    f"You earned `+{result.points_earned:,} Uno Points` for studying.\n"
+                    f"**Wallet Balance:** `{result.new_balance:,} Uno Points`"
+                ),
+                color=discord.Color.green(),
+            )
+            embed.set_footer(text="Study cooldown: 12 hours")
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as error:
+            await interaction.response.send_message(str(error), ephemeral=True)
+
     @app_commands.command(name="duel", description="Challenge a classmate to a 1v1 wager duel with selectable game modes!")
     @app_commands.describe(
         target="The classmate to duel against.",
@@ -3432,16 +3432,14 @@ class RewardsCog(commands.Cog):
             else:  # view
                 prof = self.rewards_service.get_profile(user_id)
                 net_worth = prof.points + prof.bank_points
-                tax_rate_str = "10%" if net_worth >= 1000 else "8%"
                 embed = discord.Embed(
-                    title=f"🏦 {interaction.user.display_name}'s Campus Piggy Bank",
+                    title=f"{interaction.user.display_name}'s Campus Piggy Bank",
                     description=(
-                        f"🔒 **Vault Status:** Protected & Insured\n\n"
-                        f"🏦 **Bank Vault Balance:** `{prof.bank_points:,} Uno Points`\n"
-                        f"💳 **Active Wallet:** `{prof.points:,} Uno Points`\n"
-                        f"💎 **Total Net Worth:** `{net_worth:,} Uno Points`\n\n"
-                        f"🏛️ **Daily Tax Bracket:** `{tax_rate_str}` every 24hrs\n"
-                        f"🏷️ **Banking Fees:** `10%` on deposits and withdrawals"
+                        f"**Vault Status:** Protected from theft\n\n"
+                        f"**Bank Vault Balance:** `{prof.bank_points:,} Uno Points`\n"
+                        f"**Active Wallet:** `{prof.points:,} Uno Points`\n"
+                        f"**Total Net Worth:** `{net_worth:,} Uno Points`\n\n"
+                        "**Banking Fees:** `10%` on deposits and withdrawals"
                     ),
                     color=discord.Color.gold(),
                 )

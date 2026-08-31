@@ -18,7 +18,7 @@ class PrefixResponse:
     def is_done(self) -> bool:
         return self._is_done
 
-    async def defer(self) -> None:
+    async def defer(self, **kwargs: Any) -> None:
         """Mark a prefix response as deferred without sending a placeholder."""
         self._is_done = True
 
@@ -443,6 +443,11 @@ class PrefixCommandsCog(commands.Cog):
     async def trivia_prefix(self, context: commands.Context) -> None:
         """Prefix alias for /trivia."""
         await self._invoke_app_command(context, "RewardsCog", "trivia")
+
+    @commands.command(name="study")
+    async def study_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /study."""
+        await self._invoke_app_command(context, "RewardsCog", "study")
 
     # -------------------------------------------------------------------------
     # Slash-Only Explanations

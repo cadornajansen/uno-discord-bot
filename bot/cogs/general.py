@@ -80,6 +80,7 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
                 "• `/daily` or `!daily` - Claim daily attendance points (20 base + streak bonus, 2x with Cat).\n"
                 "• `/work` or `!work` - Work a 1-hour campus shift (earns 18-45 pts + 15% skill drop chance).\n"
                 "• `/beg` or `!beg` - Scavenge pocket change around campus (5-18 pts, 30m cooldown).\n"
+                "• `/study` or `!study` - Complete a study session for 200-300 pts (12h cooldown).\n"
                 "• `/trivia` or `!trivia` - Answer CS, Math, and PLM quizzes (+25 pts each, 3 attempts/day)."
             ),
             inline=False,
@@ -250,11 +251,12 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
     )
 
     embed.add_field(
-        name="💰 Earning & Economy",
+        name="Earning & Economy",
         value=(
             "`/daily` or `!daily` - Claim daily attendance points and build streaks.\n"
             "`/work` or `!work` - Work a campus shift (1hr cooldown, 18-45 pts + rare drops).\n"
             "`/beg` or `!beg` - Scavenge pocket change (30m cooldown, 5-18 pts).\n"
+            "`/study` or `!study` - Complete a study session (12h cooldown, 200-300 pts).\n"
             "`/trivia` or `!trivia` - Answer CS/Tech trivia for +25 pts each.\n"
             "`/balance` or `!bal` - Check wallet, streak, and shield status.\n"
             "`/profile [member]` or `!profile` - Full student card, companion, rank, and badges.\n"
@@ -268,7 +270,7 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
     )
 
     embed.add_field(
-        name="🛒 Shop, Items & Guides",
+        name="Shop, Items & Guides",
         value=(
             "`/shop` or `!shop` - Browse prizes and skill card items.\n"
             "`/redeem <item>` or `!redeem` - Redeem prizes (Coffee, GCash, Nitro, Printing).\n"
@@ -281,7 +283,7 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
     )
 
     embed.add_field(
-        name="🎰 High-Stakes Casino",
+        name="Casino",
         value=(
             "`/bet [amount]` or `!bet` - Roulette gamble (15 games/day limit, 15s cooldown).\n"
             "`/slots [amount]` or `!slots` - 3-Reel slot machine with up to 20x Wild Jackpot.\n"
@@ -294,7 +296,7 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
     )
 
     embed.add_field(
-        name="⚔️ 1v1 PvP Duels & Classroom Bounties",
+        name="1v1 Duels & Classroom Bounties",
         value=(
             "`/duel @member [amount]` or `!duel` - Challenge a classmate to a 1v1 dice duel (5% rake).\n"
             "`/bounty place @member <amount>` or `!bounty place` - Place a wanted bounty on a classmate.\n"
@@ -304,7 +306,7 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
     )
 
     embed.add_field(
-        name="🐾 Pet Companions & Shelter",
+        name="Pet Companions & Shelter",
         value=(
             "`/pet` or `!pet` - Pet dashboard to feed, cuddle, level up, and manage companions.\n"
             "`/pet starter` or `!pet starter` - Adopt your 1 Free Starter Companion (0 pts).\n"
@@ -357,14 +359,14 @@ class HelpCategorySelect(discord.ui.Select):
 
     def __init__(self):
         options = [
-            discord.SelectOption(label="Full Command Overview", value="overview", description="All commands and quick reference", emoji="📖", default=True),
-            discord.SelectOption(label="AI & Knowledge", value="ai", description="Conversations, search, and memory", emoji="🤖"),
-            discord.SelectOption(label="Academics & Documents", value="academics", description="Class schedules, professors, and PDF tools", emoji="📚"),
-            discord.SelectOption(label="Economy & Work", value="economy", description="Daily streaks, jobs, banking, and wealth taxes", emoji="💼"),
-            discord.SelectOption(label="Casino & Shell Game", value="casino", description="Roulette, slots, coinflip, blackjack, cups", emoji="🎰"),
-            discord.SelectOption(label="PvP Duels & Bounties", value="pvp", description="1v1 wager rolls and classroom bounty board", emoji="⚔️"),
-            discord.SelectOption(label="Pets & Shelter", value="pets", description="Companion shelter, passive buffs, and care", emoji="🐾"),
-            discord.SelectOption(label="Shop & Prizes", value="shop", description="50k-100k real-world rewards and skill items", emoji="🛍️"),
+            discord.SelectOption(label="Full Command Overview", value="overview", description="All commands and quick reference", default=True),
+            discord.SelectOption(label="AI & Knowledge", value="ai", description="Conversations, search, and memory"),
+            discord.SelectOption(label="Academics & Documents", value="academics", description="Class schedules, professors, and PDF tools"),
+            discord.SelectOption(label="Economy & Work", value="economy", description="Daily streaks, jobs, and banking"),
+            discord.SelectOption(label="Casino & Shell Game", value="casino", description="Roulette, slots, coinflip, blackjack, cups"),
+            discord.SelectOption(label="PvP Duels & Bounties", value="pvp", description="1v1 wager rolls and classroom bounty board"),
+            discord.SelectOption(label="Pets & Shelter", value="pets", description="Companion shelter, passive buffs, and care"),
+            discord.SelectOption(label="Shop & Prizes", value="shop", description="50k-100k real-world rewards and skill items"),
         ]
         super().__init__(placeholder="Select a category to view details...", min_values=1, max_values=1, options=options)
 

@@ -832,6 +832,21 @@ def test_work_and_scavenge_cooldowns(rewards_service: RewardsDBService):
     assert rewards_service.get_balance(1001) == bal_after_scav + res_scav2.points_earned
 
 
+def test_study_session_reward_and_cooldown(rewards_service: RewardsDBService):
+    """Study pays within range once per 12-hour cooldown."""
+    now = datetime(2026, 8, 1, 9, 0, tzinfo=timezone.utc)
+
+    result = rewards_service.execute_study(1001, now=now, fixed_points=250)
+
+    assert result.points_earned == 250
+    assert result.new_balance == 250
+    with pytest.raises(RewardsError, match="cooldown"):
+        rewards_service.execute_study(1001, now=now + timedelta(hours=11), fixed_points=200)
+
+    next_result = rewards_service.execute_study(1001, now=now + timedelta(hours=12), fixed_points=300)
+    assert next_result.new_balance == 550
+
+
 def test_duel_resolution(rewards_service: RewardsDBService):
     """Test 1v1 PvP dice wager duels."""
     rewards_service.add_points(1001, 500, "START")
@@ -962,38 +977,18 @@ def test_bank_deposit_and_withdraw(rewards_service: RewardsDBService):
     assert rewards_service.get_profile(1001).bank_points == 340
 
 
-def test_daily_wealth_taxes(rewards_service: RewardsDBService):
-    """Test 24-hr wealth taxes: 8% on assets, 10% on 1k+ assets, and daily reset."""
+def test_automatic_wealth_taxes_are_disabled(rewards_service: RewardsDBService):
+    """Automatic tax compatibility hooks must never change a student's balance."""
     d1 = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
     d2 = datetime(2026, 8, 2, 12, 0, tzinfo=timezone.utc)
 
-    # User 1: 500 pts total (< 1000 pts) -> 8% tax = 40 pts
     rewards_service.add_points(1001, 500, "START")
-    tax_res1 = rewards_service.collect_daily_tax(1001, now=d1)
-    assert tax_res1 is not None
-    assert tax_res1["tax_rate"] == 0.08
-    assert tax_res1["tax_amount"] == 40
-    assert tax_res1["new_wallet"] == 460
-    assert rewards_service.get_balance(1001) == 460
-
-    # Calling again same day -> None (already taxed)
     assert rewards_service.collect_daily_tax(1001, now=d1) is None
+    assert rewards_service.get_balance(1001) == 500
 
-    # User 2: 2,000 pts total (>= 1000 pts) -> 10% tax = 200 pts
     rewards_service.add_points(1002, 2000, "START")
-    tax_res2 = rewards_service.collect_daily_tax(1002, now=d1)
-    assert tax_res2 is not None
-    assert tax_res2["tax_rate"] == 0.10
-    assert tax_res2["tax_amount"] == 200
-    assert tax_res2["new_wallet"] == 1800
-    assert rewards_service.get_balance(1002) == 1800
-
-    # Next day -> eligible again
-    tax_next = rewards_service.collect_daily_tax(1001, now=d2)
-    assert tax_next is not None
-    # 8% of 460 is 36 pts
-    assert tax_next["tax_amount"] == 36
-    assert tax_next["new_wallet"] == 424
+    assert rewards_service.collect_all_pending_taxes(now=d2) == []
+    assert rewards_service.get_balance(1002) == 2000
 
 
 def test_cups_low_stakes_probability_and_wager_cap(rewards_service: RewardsDBService):
