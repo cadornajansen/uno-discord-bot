@@ -80,6 +80,20 @@ class AnySearchNewsClient:
             published = str(item.get("published_at") or item.get("published_date") or item.get("date") or "").strip()
             articles.append(BulletinArticle(title[:200], cls._canonical_url(url), summary[:500], source[:100], published[:80]))
         if not articles:
+            result_pattern = re.compile(
+                r"^###\s+\d+\.\s+(.+?)\r?\n-\s+\*\*URL\*\*:\s+(https?://\S+)\r?\n-\s+(.+?)(?=\r?\n\r?\n###|\Z)",
+                re.MULTILINE | re.DOTALL,
+            )
+            for title, url, summary in result_pattern.findall(text):
+                articles.append(
+                    BulletinArticle(
+                        title.strip()[:200],
+                        cls._canonical_url(url),
+                        summary.strip()[:500],
+                        urlsplit(url).netloc,
+                    )
+                )
+        if not articles:
             for title, url in re.findall(r"\[([^\]]{5,200})\]\((https?://[^)\s]+)\)", text):
                 articles.append(BulletinArticle(title.strip(), cls._canonical_url(url), "", urlsplit(url).netloc))
         unique: dict[str, BulletinArticle] = {}

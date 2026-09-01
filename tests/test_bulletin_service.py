@@ -18,6 +18,27 @@ def test_anysearch_parser_extracts_and_deduplicates_articles() -> None:
     assert articles[0].url == "https://news.example/story"
 
 
+def test_anysearch_parser_supports_numbered_markdown_results() -> None:
+    response_text = """## Query 1: latest Philippines technology news today
+
+## Search Results (2 results, 864ms)
+
+### 1. Inquirer Technology
+- **URL**: https://technology.inquirer.net/?source=search
+- Philippine technology headlines and startup coverage.
+
+### 2. Rappler Technology
+- **URL**: https://www.rappler.com/technology/
+- Latest reporting about AI and digital policy.
+"""
+
+    articles = AnySearchNewsClient._parse_articles(response_text)
+
+    assert [article.title for article in articles] == ["Inquirer Technology", "Rappler Technology"]
+    assert articles[0].url == "https://technology.inquirer.net"
+    assert articles[0].summary == "Philippine technology headlines and startup coverage."
+
+
 def test_bulletin_state_deduplicates_per_channel() -> None:
     rewards = RewardsDBService(db_path=":memory:")
     state = BulletinState(rewards)
