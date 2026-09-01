@@ -84,7 +84,7 @@ Uno AI supports both **Slash Commands (`/`)** and **Prefix Commands (`!`)**. Com
 | `/escape create` | `!escape create` | Start a 1–4 player coding escape room; hints help but reduce the final reward. |
 | `/startup start name:<name>` | `!startup start <name>` | Run a three-phase guild startup where members choose build, research, market, or stabilize actions. |
 | `/review history` and `/review file` | `!review history`, `!review file` | Find an eligible transaction, file a Campus Review case, let the respondent defend, and have moderators resolve it. |
-| `/economy pulse` | `!economy pulse` | Show six-hour earnings, spending, casino aggregates, leaderboard movement, and major net-worth changes. |
+| `/economy pulse` | `!economy pulse` | Show eight-hour earnings, spending, casino aggregates, leaderboard movement, and major net-worth changes. |
 | `/bulletin latest` | `!bulletin latest` | Read source links from the latest Uno AI Bulletin posts. |
 
 Raid, escape-room, and startup rewards can each be claimed once per player per Manila calendar day. Players may still join later sessions to help classmates.
