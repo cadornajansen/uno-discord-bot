@@ -22,6 +22,19 @@ def test_anysearch_parser_extracts_and_deduplicates_articles() -> None:
     assert articles[0].url == "https://news.example/story"
 
 
+def test_anysearch_parser_ignores_generic_google_news_landing_pages() -> None:
+    payload = {
+        "results": [
+            {"title": "Google News", "url": "https://news.google.com/home", "snippet": "Source Material"},
+            {"title": "Real technology story", "url": "https://news.example/story", "snippet": "A real story."},
+        ]
+    }
+
+    articles = AnySearchNewsClient._parse_articles(json.dumps(payload))
+
+    assert [article.title for article in articles] == ["Real technology story"]
+
+
 def test_anysearch_parser_supports_numbered_markdown_results() -> None:
     response_text = """## Query 1: latest Philippines technology news today
 
@@ -129,6 +142,12 @@ def test_flash_summary_rejects_prompt_labels_and_uses_clean_source_text() -> Non
     result = asyncio.run(cog._write_flash_summary(article))
 
     assert result.summary == "A major technology breakthrough was announced."
+
+
+def test_flash_summary_has_readable_fallback_for_short_source_text() -> None:
+    assert BulletinCog._fallback_flash_summary("AI update", "Short") == (
+        "A technology story is developing around AI update. The linked report has the details and the context behind why it matters."
+    )
 
 
 def test_bulletin_intervals_match_requested_cadence() -> None:

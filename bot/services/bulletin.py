@@ -75,6 +75,9 @@ class AnySearchNewsClient:
             url = str(item.get("url") or item.get("link") or "").strip()
             if not title or not url.startswith(("http://", "https://")):
                 continue
+            domain = urlsplit(url).netloc.casefold()
+            if domain == "news.google.com" or title.casefold() in {"google news", "news"}:
+                continue
             summary = str(item.get("snippet") or item.get("description") or item.get("content") or "").strip()
             source = str(item.get("source") or item.get("domain") or urlsplit(url).netloc).strip()
             published = str(item.get("published_at") or item.get("published_date") or item.get("date") or "").strip()
@@ -85,6 +88,8 @@ class AnySearchNewsClient:
                 re.MULTILINE | re.DOTALL,
             )
             for title, url, summary in result_pattern.findall(text):
+                if urlsplit(url).netloc.casefold() == "news.google.com" or title.strip().casefold() in {"google news", "news"}:
+                    continue
                 articles.append(
                     BulletinArticle(
                         title.strip()[:200],

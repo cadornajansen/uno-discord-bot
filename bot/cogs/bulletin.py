@@ -59,19 +59,23 @@ class BulletinCog(commands.Cog):
     @staticmethod
     def _embed(articles: list[BulletinArticle], digest: bool) -> discord.Embed:
         embed = discord.Embed(
-            title="Uno AI Bulletin — Tech Brief" if digest else "Uno AI Bulletin — Tech Flash",
-            description="Philippines-first technology updates with selected global context.",
-            color=discord.Color.blue(),
+            title="📰 Uno AI Bulletin · Tech Brief" if digest else "⚡ Uno AI Tech Flash",
+            description=(
+                "The biggest technology stories worth knowing today."
+                if digest
+                else "One important technology story, explained before it gets buried."
+            ),
+            color=discord.Color.blurple(),
             timestamp=datetime.now(timezone.utc),
         )
         for article in articles:
             summary = article.summary or "Open the source for the full report."
             embed.add_field(
-                name=article.title[:256],
-                value=f"{summary[:700]}\n[Read at {article.source}]({article.url})",
+                name=f"🔎 {article.title[:250]}",
+                value=f"> {summary[:760]}\n\n[Read the full story · {article.source}]({article.url})",
                 inline=False,
             )
-        embed.set_footer(text="Uno AI Bulletin · Sources linked above")
+        embed.set_footer(text="Uno AI · Curated from linked sources")
         return embed
 
     async def _write_flash_summary(self, article: BulletinArticle) -> BulletinArticle:
@@ -109,7 +113,7 @@ class BulletinCog(commands.Cog):
         invalid_markers = ("source material", "source snippet:", "<reference>", "</reference>")
         if not summary or any(marker in summary.casefold() for marker in invalid_markers):
             logger.warning("[bulletin] Ignoring malformed flash summary for %s", article.url)
-            summary = source_summary or article.title
+            summary = self._fallback_flash_summary(article.title, source_summary)
         if not summary:
             return article
         return BulletinArticle(
@@ -119,6 +123,13 @@ class BulletinCog(commands.Cog):
             source=article.source,
             published_at=article.published_at,
         )
+
+    @staticmethod
+    def _fallback_flash_summary(title: str, source_summary: str) -> str:
+        """Keep a degraded bulletin readable when search or AI copy is weak."""
+        if source_summary and len(source_summary.split()) >= 5:
+            return source_summary
+        return f"A technology story is developing around {title}. The linked report has the details and the context behind why it matters."
 
     async def _prepare_flash_articles(self, articles: list[BulletinArticle]) -> list[BulletinArticle]:
         """Generate flash copy without preventing delivery when one item fails."""
