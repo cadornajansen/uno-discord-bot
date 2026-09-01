@@ -671,7 +671,7 @@ def test_featured_pet_rotation_schedule(rewards_service: RewardsDBService):
 
 
 def test_custom_wager_bet(rewards_service: RewardsDBService):
-    """Test custom wager bet scaling with jackpot and double, and 100 pt max cap."""
+    """Test custom wager scaling, immediate replay, and the 500 pt cap."""
     rewards_service.add_points(1001, 1000, "START")
     base_t = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
 
@@ -682,15 +682,17 @@ def test_custom_wager_bet(rewards_service: RewardsDBService):
     assert res_jp.total_payout == 400
     assert rewards_service.get_balance(1001) == 1300
 
-    # Wager 50 pts with DOUBLE (1x profit = 2x payout, 20s later)
-    res_db = rewards_service.play_bet(1001, wager=50, now=base_t + timedelta(seconds=20), fixed_outcome=BetOutcome.DOUBLE)
+    # Immediate replay is allowed; only the shared daily limit remains.
+    res_db = rewards_service.play_bet(1001, wager=50, now=base_t, fixed_outcome=BetOutcome.DOUBLE)
     assert res_db.points_delta == 50
     assert res_db.total_payout == 100
     assert rewards_service.get_balance(1001) == 1350
 
-    # Exceeding 100 pt max bet cap raises RewardsError
+    # 500 is valid; 501 exceeds the new cap.
+    res_max = rewards_service.play_bet(1001, wager=500, now=base_t, fixed_outcome=BetOutcome.BUST)
+    assert res_max.wager == 500
     with pytest.raises(RewardsError):
-        rewards_service.play_bet(1001, wager=150, now=base_t + timedelta(seconds=40))
+        rewards_service.play_bet(1001, wager=501, now=base_t)
 
 
 def test_slots_engine(rewards_service: RewardsDBService):
@@ -719,13 +721,13 @@ def test_slots_engine(rewards_service: RewardsDBService):
     assert res_bust.points_delta == -100
     assert rewards_service.get_balance(1001) == 1440
 
-    # Exceeding 100 pt max cap raises RewardsError
+    # Exceeding the 500 pt cap raises RewardsError
     with pytest.raises(RewardsError):
-        rewards_service.play_slots(1001, wager=150, now=base_t + timedelta(seconds=60))
+        rewards_service.play_slots(1001, wager=501, now=base_t + timedelta(seconds=60))
 
 
 def test_coinflip_engine(rewards_service: RewardsDBService):
-    """Test 1.70x coinflip win (+0.70x profit) and loss, plus 100 pt max cap."""
+    """Test 1.70x coinflip win (+0.70x profit), loss, and 500 pt cap."""
     rewards_service.add_points(1001, 1000, "START")
     base_t = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
 
@@ -741,9 +743,9 @@ def test_coinflip_engine(rewards_service: RewardsDBService):
     assert res_loss.points_delta == -100
     assert rewards_service.get_balance(1001) == 970
 
-    # Exceeding 100 pt max cap raises RewardsError
+    # Exceeding the 500 pt cap raises RewardsError
     with pytest.raises(RewardsError):
-        rewards_service.play_coinflip(1001, choice="heads", wager=150, now=base_t + timedelta(seconds=40))
+        rewards_service.play_coinflip(1001, choice="heads", wager=501, now=base_t + timedelta(seconds=40))
 
 
 def test_blackjack_engine(rewards_service: RewardsDBService):

@@ -12,6 +12,9 @@ def test_valid_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.discord_token == "mock_secret_token_123"
     assert settings.dev_guild_id == 987654321098765432
     assert settings.indexed_channel_ids == frozenset()
+    assert settings.bulletin_enabled is True
+    assert settings.bulletin_chismis_channel_id == 1531615193786876062
+    assert settings.bulletin_bot_channel_id == 1533779047480299690
 
 
 def test_rag_and_generation_defaults(monkeypatch: pytest.MonkeyPatch) -> None:

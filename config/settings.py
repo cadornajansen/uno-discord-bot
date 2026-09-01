@@ -58,6 +58,10 @@ class Settings:
         forum_channel_ids: frozenset[int],
         rewards_log_channel_id: int | None,
         rewards_db_path: Path,
+        anysearch_api_key: str,
+        bulletin_enabled: bool,
+        bulletin_chismis_channel_id: int,
+        bulletin_bot_channel_id: int,
         chat_memory_max_turns: int,
         chat_memory_ttl_minutes: int,
         chat_memory_max_tokens: int,
@@ -103,6 +107,10 @@ class Settings:
         self.forum_channel_ids = forum_channel_ids
         self.rewards_log_channel_id = rewards_log_channel_id
         self.rewards_db_path = rewards_db_path
+        self.anysearch_api_key = anysearch_api_key
+        self.bulletin_enabled = bulletin_enabled
+        self.bulletin_chismis_channel_id = bulletin_chismis_channel_id
+        self.bulletin_bot_channel_id = bulletin_bot_channel_id
         self.chat_memory_max_turns = chat_memory_max_turns
         self.chat_memory_ttl_minutes = chat_memory_ttl_minutes
         self.chat_memory_max_tokens = chat_memory_max_tokens
@@ -345,6 +353,15 @@ def load_settings() -> Settings:
     rewards_log_channel_id = int(rewards_log_raw) if rewards_log_raw.isdigit() else None
     rewards_db_path = Path(os.getenv("REWARDS_DB_PATH", "data/rewards.db").strip())
 
+    anysearch_api_key = os.getenv("ANYSEARCH_API_KEY", "").strip()
+    bulletin_enabled = os.getenv("BULLETIN_ENABLED", "true").strip().casefold() in {"1", "true", "yes", "on"}
+    chismis_raw = os.getenv("BULLETIN_CHISMIS_CHANNEL_ID", "1531615193786876062").strip()
+    bot_channel_raw = os.getenv("BULLETIN_BOT_CHANNEL_ID", "1533779047480299690").strip()
+    if not chismis_raw.isdigit() or not bot_channel_raw.isdigit():
+        raise ConfigError("BULLETIN channel IDs must be numeric Discord channel IDs.")
+    bulletin_chismis_channel_id = int(chismis_raw)
+    bulletin_bot_channel_id = int(bot_channel_raw)
+
     chat_memory_max_turns = _positive_int_env("CHAT_MEMORY_MAX_TURNS", "4")
     chat_memory_ttl_minutes = _positive_int_env("CHAT_MEMORY_TTL_MINUTES", "30")
     chat_memory_max_tokens = _positive_int_env("CHAT_MEMORY_MAX_TOKENS", "1200")
@@ -391,6 +408,10 @@ def load_settings() -> Settings:
         forum_channel_ids=frozenset(forum_channel_ids),
         rewards_log_channel_id=rewards_log_channel_id,
         rewards_db_path=rewards_db_path,
+        anysearch_api_key=anysearch_api_key,
+        bulletin_enabled=bulletin_enabled,
+        bulletin_chismis_channel_id=bulletin_chismis_channel_id,
+        bulletin_bot_channel_id=bulletin_bot_channel_id,
         chat_memory_max_turns=chat_memory_max_turns,
         chat_memory_ttl_minutes=chat_memory_ttl_minutes,
         chat_memory_max_tokens=chat_memory_max_tokens,

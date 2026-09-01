@@ -104,7 +104,7 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
     if category == "casino":
         embed = discord.Embed(
             title="Uno AI - Casino & Gambling Games",
-            description="Max 100 pt wager caps on casino games. 15 games/day limit with a 15s dealer delay.",
+            description="Standard casino games allow wagers up to 500 points with a shared 15-games/day limit.",
             color=discord.Color.gold(),
         )
         embed.add_field(
@@ -285,7 +285,7 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
     embed.add_field(
         name="Casino",
         value=(
-            "`/bet [amount]` or `!bet` - Roulette gamble (15 games/day limit, 15s cooldown).\n"
+            "`/bet [amount]` or `!bet` - Roulette gamble (500 pt max, 15 games/day).\n"
             "`/slots [amount]` or `!slots` - 3-Reel slot machine with up to 20x Wild Jackpot.\n"
             "`/coinflip <heads|tails> [amount]` or `!cf` - Coinflip with 1.70x payout.\n"
             "`/blackjack [amount]` or `!bj` - Blackjack 21 with Hit, Stand, Double Down.\n"
@@ -332,6 +332,19 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
             "`/help` or `!help` - Show this command list.\n"
             "**Right-click a message → Apps → Explain This** - AI explanation of any message.\n"
             "**Right-click a message → Apps → Run OCR** - Extract text from an image attachment."
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="Cooperative Games & Campus Systems",
+        value=(
+            "`/raid` - Run cooperative multi-stage Study Raids.\n"
+            "`/escape` - Solve persistent three-room coding challenges.\n"
+            "`/startup` - Build a three-phase project with your guild.\n"
+            "`/review` - File or respond to a bot-transaction review.\n"
+            "`/economy pulse` - View earnings and leaderboard movement.\n"
+            "`/bulletin latest` - Read recently posted technology stories."
         ),
         inline=False,
     )

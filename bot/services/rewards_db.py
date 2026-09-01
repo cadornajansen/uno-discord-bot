@@ -2462,12 +2462,13 @@ class RewardsDBService:
             return [dict(r) for r in rows]
 
     MAX_DAILY_CASINO_GAMES: int = 15
-    CASINO_COOLDOWN_SECONDS: int = 15
+    MAX_CASINO_WAGER: int = 500
+    MAX_CASINO_PAYOUT: int = 5_000
 
     def _check_and_update_casino_limit(
         self, user: UserRecord, now: Optional[datetime] = None
     ) -> tuple[int, int, str, datetime]:
-        """Enforce 15s casino cooldown and 15 daily games limit across all casino activities."""
+        """Enforce the shared 15-game daily limit across casino activities."""
         current_time = now or datetime.now(PHT)
         if current_time.tzinfo is None:
             current_time = current_time.replace(tzinfo=PHT)
@@ -2475,22 +2476,7 @@ class RewardsDBService:
             current_time = current_time.astimezone(PHT)
         today_str = current_time.strftime("%Y-%m-%d")
 
-        # 1. Cooldown check (15 seconds between any casino game)
-        if user.last_gamble_time:
-            try:
-                last_g = datetime.fromisoformat(user.last_gamble_time)
-                if last_g.tzinfo is None:
-                    last_g = last_g.replace(tzinfo=PHT)
-                diff = (current_time - last_g).total_seconds()
-                if diff < self.CASINO_COOLDOWN_SECONDS:
-                    rem = max(1, int(self.CASINO_COOLDOWN_SECONDS - diff))
-                    raise RewardsError(
-                        f"⏳ The casino dealer is shuffling! Please wait **{rem}s** before playing again."
-                    )
-            except ValueError:
-                pass
-
-        # 2. Daily limit check (15 games/day)
+        # Daily limit check (15 games/day)
         if user.last_casino_date == today_str:
             daily_count = user.daily_casino_games_count
         else:
@@ -2560,11 +2546,11 @@ class RewardsDBService:
         fixed_outcome: Optional[BetOutcome] = None,
         fixed_skill: Optional[str] = None,
     ) -> BetResult:
-        """Place a roulette bet (min 10 pts, max 100 pts, limit 15 casino games/day)."""
+        """Place a roulette bet (min 10 pts, max 500 pts, limit 15 casino games/day)."""
         if wager < 10:
             raise RewardsError("Minimum bet amount is 10 Uno Points!")
-        if wager > 100:
-            raise RewardsError("Maximum bet amount is 100 Uno Points!")
+        if wager > self.MAX_CASINO_WAGER:
+            raise RewardsError(f"Maximum bet amount is {self.MAX_CASINO_WAGER} Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -2729,11 +2715,11 @@ class RewardsDBService:
         now: Optional[datetime] = None,
         fixed_reels: Optional[list[str]] = None,
     ) -> SlotsResult:
-        """Spin 3 slot machine reels (max 100 pts, limit 15 casino games/day, 15s cooldown)."""
+        """Spin 3 slot machine reels (max 500 pts, limit 15 casino games/day)."""
         if wager < 10:
             raise RewardsError("Minimum slots wager is 10 Uno Points!")
-        if wager > 100:
-            raise RewardsError("Maximum slots wager is 100 Uno Points!")
+        if wager > self.MAX_CASINO_WAGER:
+            raise RewardsError(f"Maximum slots wager is {self.MAX_CASINO_WAGER} Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -2782,7 +2768,7 @@ class RewardsDBService:
             multiplier = 0.0
             desc = "❌ No match. Better luck on the next spin!"
 
-        points_won = int(wager * multiplier)
+        points_won = min(int(wager * multiplier), self.MAX_CASINO_PAYOUT)
         points_delta = points_won - wager
         new_balance = user.points + points_delta
         new_lifetime = user.lifetime_points + max(0, points_delta)
@@ -2838,11 +2824,11 @@ class RewardsDBService:
         now: Optional[datetime] = None,
         fixed_flip: Optional[str] = None,
     ) -> CoinflipResult:
-        """Fast 1.70x payout coin toss (limit 100 pts max, 15s cooldown, 15 daily casino games)."""
+        """Fast 1.70x payout coin toss (500 pts max, 15 daily casino games)."""
         if wager < 10:
             raise RewardsError("Minimum coinflip wager is 10 Uno Points!")
-        if wager > 100:
-            raise RewardsError("Maximum coinflip wager is 100 Uno Points!")
+        if wager > self.MAX_CASINO_WAGER:
+            raise RewardsError(f"Maximum coinflip wager is {self.MAX_CASINO_WAGER} Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -3056,11 +3042,11 @@ class RewardsDBService:
         fixed_player_cards: Optional[list[BlackjackCard]] = None,
         fixed_dealer_cards: Optional[list[BlackjackCard]] = None,
     ) -> BlackjackGame:
-        """Start a new blackjack game, dealing 2 cards each (max 100 pts, limit 15 casino games/day, 15s cooldown)."""
+        """Start a new blackjack game, dealing 2 cards each (max 500 pts, limit 15 casino games/day)."""
         if wager < 10:
             raise RewardsError("Minimum blackjack wager is 10 Uno Points!")
-        if wager > 100:
-            raise RewardsError("Maximum blackjack wager is 100 Uno Points!")
+        if wager > self.MAX_CASINO_WAGER:
+            raise RewardsError(f"Maximum blackjack wager is {self.MAX_CASINO_WAGER} Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:
@@ -3246,11 +3232,11 @@ class RewardsDBService:
         now: Optional[datetime] = None,
         fixed_card: Optional[BlackjackCard] = None,
     ) -> HighLowGame:
-        """Start a high-low streak game with a starting card (limit 100 pts max, 15 casino games/day, 15s cooldown)."""
+        """Start a high-low streak game with a starting card (500 pts max, 15 casino games/day)."""
         if wager < 10:
             raise RewardsError("Minimum High-Low wager is 10 Uno Points!")
-        if wager > 100:
-            raise RewardsError("Maximum High-Low wager is 100 Uno Points!")
+        if wager > self.MAX_CASINO_WAGER:
+            raise RewardsError(f"Maximum High-Low wager is {self.MAX_CASINO_WAGER} Uno Points!")
 
         user = self.get_or_create_user(user_id)
         if user.points < wager:

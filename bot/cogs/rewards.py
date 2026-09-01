@@ -512,7 +512,7 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
         )
         embed.add_field(
             name="Casino Guardrails",
-            value="• **Wager Limit:** Max `100 pts` per bet across casino games.\n• **Daily Cap:** `15 games/day` shared across casino games.\n• **Dealer Delay:** `15-second cooldown` between spins.",
+            value="• **Wager Limit:** Max `500 pts` per standard casino game.\n• **Daily Cap:** `15 games/day` shared across casino games.\n• **No Dealer Delay:** Games can be played back-to-back.",
             inline=False,
         )
         embed.add_field(
@@ -661,10 +661,10 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
 
     # Default: Overview
     embed = discord.Embed(
-        title="Uno AI Rewards — Student Guide",
+        title="Uno AI Rewards — Complete Student Guide",
         description=(
-            "Welcome to the **BSCS 1-4 Uno Rewards & Gamification Universe**! Earn points, "
-            "adopt companions, test your luck in the casino, clash in 1v1 PvP duels, and redeem real-world prizes."
+            "Earn points through study and team activities, play economy games, use campus systems, "
+            "and redeem rewards."
         ),
         color=discord.Color.blue(),
     )
@@ -675,6 +675,7 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
             "• `/daily` or `!daily` — Daily attendance check-in (20 base + streak bonus, 2x with Cat).\n"
             "• `/work` or `!work` — Work a campus shift (1h cooldown, 18–45 pts + rare card drops).\n"
             "• `/beg` or `!beg` — Scavenge pocket change across campus (30m cooldown, 5–18 pts).\n"
+            "• `/study` or `!study` — Complete a study session (12h cooldown, 200–300 pts).\n"
             "• `/trivia` or `!trivia` — Answer CS/Tech quizzes for +25 pts each (3 attempts/day).\n"
             "• `/give @user <amount>` or `!give` — Transfer points to a classmate (15% tax).\n"
             "• `/steal @user` or `!steal` — Pickpocket points from an unshielded classmate (60s cooldown)."
@@ -683,14 +684,15 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
     )
 
     embed.add_field(
-        name="2. High-Stakes Casino & Street Games",
+        name="2. Casino & Street Games",
         value=(
-            "• `/bet [amount]` or `!bet` — Roulette gamble with up to 4.0x payout (15/day cap, 15s cooldown).\n"
+            "• `/bet [amount]` or `!bet` — Roulette gamble with up to 4.0x payout (500 pt max, 15/day cap).\n"
             "• `/slots [amount]` or `!slots` — 3-Reel classic slots with up to 20x Wild Jackpot.\n"
             "• `/coinflip <heads|tails> [amount]` or `!cf` — 1.70x payout coin toss.\n"
             "• `/blackjack [amount]` or `!bj` — Blackjack 21 with Hit, Stand, and Double Down.\n"
             "• `/highlow [amount]` or `!hl` — Card guessing ladder with up to 10.0x multiplier.\n"
-            "• `/cups <1|2|3> [amount]` or `!cups` — 3-Cup Shell Game (30% win, 1.5x payout, max 50 pts)!"
+            "• `/cups <1|2|3> [amount]` or `!cups` — 3-Cup Shell Game (30% win, 1.5x payout, max 50 pts).\n"
+            "• Standard casino games have no delay between plays, a 500-point wager cap, and a shared 15-game daily cap."
         ),
         inline=False,
     )
@@ -721,6 +723,20 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
             "• `/bank <deposit|withdraw|view>` — Protected bank vault 100% immune to theft (10% fee).\n"
             "• Points are never deducted automatically.\n"
             "• Skill cards: 1-Week Immunity Shield, Uno Reverse Card, Point Airdrops, EMP Breakers, Tax Audits."
+        ),
+        inline=False,
+    )
+
+    embed.add_field(
+        name="Cooperative Games & Campus Systems",
+        value=(
+            "• `/raid` or `!raid` — Cooperative Study Raids with team puzzle stages.\n"
+            "• `/escape` or `!escape` — Persistent coding rooms where hints reduce rewards.\n"
+            "• `/startup` or `!startup` — Three-phase guild projects with strategic contribution choices.\n"
+            "• `/review` or `!review` — File, defend, and resolve eligible transaction disputes.\n"
+            "• `/economy pulse` or `!economy pulse` — Six-hour economy and leaderboard report.\n"
+            "• `/bulletin latest` or `!bulletin latest` — Latest sourced Uno AI Bulletin stories.\n"
+            "• Raid, escape, and startup rewards are each claimable once per Manila calendar day."
         ),
         inline=False,
     )
@@ -3013,7 +3029,7 @@ class RewardsCog(commands.Cog):
         await interaction.edit_original_response(embed=embed, view=view)
 
     @app_commands.command(name="bet", description="Gamble Uno Points on roulette with dynamic multipliers! (Limit: 15 games/day)")
-    @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, default 50).")
+    @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, maximum 500, default 50).")
     async def bet(self, interaction: discord.Interaction, amount: int = 50) -> None:
         """Play roulette with a custom wager (limit: 15 games per day)."""
         user_id = interaction.user.id
@@ -3074,8 +3090,8 @@ class RewardsCog(commands.Cog):
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
-    @app_commands.command(name="slots", description="Spin the 3-reel slot machine (max 100 pts, limit 15 casino games/day).")
-    @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, max 100, default 50).")
+    @app_commands.command(name="slots", description="Spin the 3-reel slot machine (max 500 pts, limit 15 casino games/day).")
+    @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, max 500, default 50).")
     async def slots(self, interaction: discord.Interaction, amount: int = 50) -> None:
         """Spin 3-reel slot machine."""
         user_id = interaction.user.id
@@ -3123,8 +3139,8 @@ class RewardsCog(commands.Cog):
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
-    @app_commands.command(name="coinflip", description="Flip a coin for instant 1.70x payout (max 100 pts, limit 15 games/day)!")
-    @app_commands.describe(choice="Choose Heads or Tails.", amount="The amount of Uno Points to wager (minimum 10, max 100, default 50).")
+    @app_commands.command(name="coinflip", description="Flip a coin for instant 1.70x payout (max 500 pts, limit 15 games/day)!")
+    @app_commands.describe(choice="Choose Heads or Tails.", amount="The amount of Uno Points to wager (minimum 10, max 500, default 50).")
     @app_commands.choices(
         choice=[
             app_commands.Choice(name="🪙 Heads", value="heads"),

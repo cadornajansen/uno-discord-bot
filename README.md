@@ -75,11 +75,24 @@ Uno AI supports both **Slash Commands (`/`)** and **Prefix Commands (`!`)**. Com
 | `/trivia` | `!trivia` | Test your CS, Math, and PLM knowledge (+25 pts per correct answer, 3 daily attempts). |
 | `/work` | `!work` | Work a 1-hour campus shift (earns 18–45 pts + 15% chance of consumable skill card drop). |
 | `/scavenge` or `/beg` | `!scavenge`, `!beg` | Scavenge around Intramuros/CET for loose points (5–18 pts, 30-min cooldown). |
+| `/study` | `!study` | Complete a study session for 200–300 points (12-hour cooldown). |
+
+### Cooperative Games & Campus Systems
+| Slash Command | Prefix Alias | What It Does |
+|---|---|---|
+| `/raid create` | `!raid create` | Open a persistent 2–8 player Study Raid with team puzzle stages and contribution-based rewards. |
+| `/escape create` | `!escape create` | Start a 1–4 player coding escape room; hints help but reduce the final reward. |
+| `/startup start name:<name>` | `!startup start <name>` | Run a three-phase guild startup where members choose build, research, market, or stabilize actions. |
+| `/review history` and `/review file` | `!review history`, `!review file` | Find an eligible transaction, file a Campus Review case, let the respondent defend, and have moderators resolve it. |
+| `/economy pulse` | `!economy pulse` | Show six-hour earnings, spending, casino aggregates, leaderboard movement, and major net-worth changes. |
+| `/bulletin latest` | `!bulletin latest` | Read source links from the latest Uno AI Bulletin posts. |
+
+Raid, escape-room, and startup rewards can each be claimed once per player per Manila calendar day. Players may still join later sessions to help classmates.
 
 ### 🎰 Casino & Gambling Games
 | Slash Command | Prefix Alias | What It Does |
 |---|---|---|
-| `/bet amount:<pts>` | `!bet <pts>` | Spin the roulette wheel (*4x Jackpot, 2x Double, Skill Drop, Bust; 15 casino games/day limit*). |
+| `/bet amount:<pts>` | `!bet <pts>` | Spin the roulette wheel (*4x Jackpot, 2x Double, Skill Drop, Bust; 500-point max, 15 casino games/day*). |
 | `/coinflip choice:<h/t> wager:<pts>` | `!coinflip <h/t> <pts>` | Coin toss (*46% base win chance, 1.70x payout, 15 games/day*). |
 | `/slots wager:<pts>` | `!slots <pts>` | Spin the 3-reel slot machine (consolation matching from 0.4x up to 20x Uno Wild jackpot, 15 games/day). |
 | `/blackjack wager:<pts>` | `!blackjack <pts>` | Play 21 against the dealer (*3:2 natural blackjack payout, supports hit, stand, double down, 15 games/day*). |
@@ -113,7 +126,7 @@ Uno AI supports both **Slash Commands (`/`)** and **Prefix Commands (`!`)**. Com
 
 ---
 
-## 💎 Economy, Banking & Gambling Rules
+## Economy, Banking & Gambling Rules
 
 Uno AI features a balanced classroom economy designed so that accumulating points and redeeming real-world physical prizes (coffee treats, GCash gift cards, free printing services, Discord Nitro) requires **weeks of consistent participation**.
 
@@ -123,17 +136,14 @@ Uno AI features a balanced classroom economy designed so that accumulating point
 - **🖨️ Free Printing Service (1 Month)**: `80,000 pts` (Academic reviewer/project printing)
 - **🚀 1 Month Discord Nitro**: `100,000 pts` (Discord Nitro gift link)
 
-### 🏦 Banking & Wealth Taxes
+### Banking & Transfer Fees
 - **10% Banking Fees**: A **10% transaction fee** applies to all `/bank deposit` and `/bank withdraw` operations. Deposited bank points are 100% immune to `/steal` pickpockets.
 - **15% Peer Transfer Fee**: A **15% treasury tax** applies to `/give` transfers with a 100 pt minimum sender wallet balance requirement.
-- **24-Hour Wealth Taxes**: Every 24 hours, the campus treasury collects wealth taxes on total net worth (*wallet + bank vault*):
-  - **8% Tax**: Standard accounts under 1,000 Uno Points.
-  - **10% Tax**: Wealthy accounts holding 1,000+ Uno Points.
-  - Accounts with under 10 points are fully tax-exempt.
 
-### 🎲 Gambling Safeguards & Casino Limits
-- **Strict Wager Caps**: Casino games are capped at **100 Uno Points**; `/duel` is capped at **150 pts** and `/cups` at **50 pts**.
-- **Shared Daily Casino Cap**: Maximum **15 casino games per calendar day** across `/bet`, `/slots`, `/coinflip`, `/blackjack`, and `/highlow` with a **15-second cooldown** between plays.
+### Gambling Safeguards & Casino Limits
+- **Wager Caps**: `/bet`, `/slots`, `/coinflip`, `/blackjack`, and `/highlow` accept up to **500 Uno Points**. `/duel` remains capped at **150 pts** and `/cups` at **50 pts**.
+- **Shared Daily Casino Cap**: Maximum **15 casino games per calendar day** across the five standard casino games. There is no delay between bets.
+- **Payout Guard**: A single standard casino payout cannot exceed **5,000 points**.
 - **High-Roller Risk Adjustment**: Accounts with at least 5,000 wallet points and 4 wins in their latest 6 resolved games within 12 hours receive a modest odds reduction in chance-based games. It never forces a loss.
 - **3-Cup Shell Game (`/cups`)**: Low-stakes street game with a flat 30% win chance, 1.5x payout, and 50-point maximum wager.
 

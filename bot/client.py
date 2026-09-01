@@ -42,6 +42,8 @@ class UnoDiscordBot(commands.Bot):
             "bot.cogs.mentions",
             "bot.cogs.forum",
             "bot.cogs.rewards",
+            "bot.cogs.community",
+            "bot.cogs.bulletin",
             "bot.cogs.prefix",
         ]
         for extension in cogs_to_load:
