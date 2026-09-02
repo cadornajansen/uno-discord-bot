@@ -93,10 +93,10 @@ Raid, escape-room, and startup rewards can each be claimed once per player per M
 | Slash Command | Prefix Alias | What It Does |
 |---|---|---|
 | `/bet amount:<pts>` | `!bet <pts>` | Spin the roulette wheel (*4x Jackpot, 2x Double, Skill Drop, Bust; 500-point max, 15 casino games/day*). |
-| `/coinflip choice:<h/t> wager:<pts>` | `!coinflip <h/t> <pts>` | Coin toss (*46% base win chance, 1.70x payout, 15 games/day*). |
-| `/slots wager:<pts>` | `!slots <pts>` | Spin the 3-reel slot machine (consolation matching from 0.4x up to 20x Uno Wild jackpot, 15 games/day). |
-| `/blackjack wager:<pts>` | `!blackjack <pts>` | Play 21 against the dealer (*3:2 natural blackjack payout, supports hit, stand, double down, 15 games/day*). |
-| `/highlow wager:<pts>` | `!highlow <pts>` | Guess higher or lower cards on a streak ladder up to 10.0x multiplier cashout (15 games/day). |
+| `/coinflip choice:<h/t> wager:<pts>` | `!coinflip <h/t> <pts>` | Coin toss (*46% base win chance, 1.70x payout*). |
+| `/slots wager:<pts>` | `!slots <pts>` | Spin the 3-reel slot machine (consolation matching from 0.4x up to 20x Uno Wild jackpot). |
+| `/blackjack wager:<pts>` | `!blackjack <pts>` | Play 21 against the dealer (*3:2 natural blackjack payout, supports hit, stand, double down*). |
+| `/highlow wager:<pts>` | `!highlow <pts>` | Guess higher or lower cards on a streak ladder up to 10.0x multiplier cashout. |
 | `/cups cup:<1/2/3> wager:<pts>` | `!cups <1/2/3> <pts>` | Intramuros 3-Cup Shell Game (*30% win chance, 1.5x payout, 50-point max wager*). |
 
 ### 🐾 Companion Pets
@@ -140,9 +140,9 @@ Uno AI features a balanced classroom economy designed so that accumulating point
 - **10% Banking Fees**: A **10% transaction fee** applies to all `/bank deposit` and `/bank withdraw` operations. Deposited bank points are 100% immune to `/steal` pickpockets.
 - **15% Peer Transfer Fee**: A **15% treasury tax** applies to `/give` transfers with a 100 pt minimum sender wallet balance requirement.
 
-### Gambling Safeguards & Casino Limits
+### Gambling Safeguards
 - **Wager Caps**: `/bet`, `/slots`, `/coinflip`, `/blackjack`, and `/highlow` accept up to **500 Uno Points**. `/duel` remains capped at **150 pts** and `/cups` at **50 pts**.
-- **Shared Daily Casino Cap**: Maximum **15 casino games per calendar day** across the five standard casino games. There is no delay between bets.
+- **No Shared Daily Cap**: Standard casino games can be played repeatedly; wager and payout safeguards still apply.
 - **Payout Guard**: A single standard casino payout cannot exceed **5,000 points**.
 - **High-Roller Risk Adjustment**: Accounts with at least 5,000 wallet points and 4 wins in their latest 6 resolved games within 12 hours receive a modest odds reduction in chance-based games. It never forces a loss.
 - **3-Cup Shell Game (`/cups`)**: Low-stakes street game with a flat 30% win chance, 1.5x payout, and 50-point maximum wager.

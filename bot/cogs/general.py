@@ -104,11 +104,11 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
     if category == "casino":
         embed = discord.Embed(
             title="Uno AI - Casino & Gambling Games",
-            description="Standard casino games allow wagers up to 500 points with a shared 15-games/day limit.",
+            description="Standard casino games allow wagers up to 500 points with no shared daily play limit.",
             color=discord.Color.gold(),
         )
         embed.add_field(
-            name="Casino Games (15/day shared cap)",
+            name="Casino Games (Unlimited Plays)",
             value=(
                 "• `/bet amount:<pts>` or `!bet` - Spin roulette wheel (4x Jackpot, Double, Skill Drop, Bust).\n"
                 "• `/slots wager:<pts>` or `!slots` - 3-Reel slot machine (consolations up to 20x Wild Jackpot).\n"
@@ -285,7 +285,7 @@ def build_help_embed(category: str = "overview") -> discord.Embed:
     embed.add_field(
         name="Casino",
         value=(
-            "`/bet [amount]` or `!bet` - Roulette gamble (500 pt max, 15 games/day).\n"
+            "`/bet [amount]` or `!bet` - Roulette gamble (500 pt max, unlimited plays).\n"
             "`/slots [amount]` or `!slots` - 3-Reel slot machine with up to 20x Wild Jackpot.\n"
             "`/coinflip <heads|tails> [amount]` or `!cf` - Coinflip with 1.70x payout.\n"
             "`/blackjack [amount]` or `!bj` - Blackjack 21 with Hit, Stand, Double Down.\n"

@@ -882,8 +882,8 @@ class BetResult:
     reward_item_id: Optional[str] = None
     reward_item_name: Optional[str] = None
     daily_bets_count: int = 1
-    max_daily_bets: int = 10
-    bets_remaining: int = 9
+    max_daily_bets: int | None = None
+    bets_remaining: int | None = None
 
 
 @dataclass(frozen=True)
@@ -897,8 +897,8 @@ class SlotsResult:
     is_jackpot: bool
     description: str
     daily_games_count: int = 1
-    max_daily_games: int = 15
-    games_remaining: int = 14
+    max_daily_games: int | None = None
+    games_remaining: int | None = None
 
 
 @dataclass(frozen=True)
@@ -910,8 +910,8 @@ class CoinflipResult:
     points_delta: int
     new_balance: int
     daily_games_count: int = 1
-    max_daily_games: int = 15
-    games_remaining: int = 14
+    max_daily_games: int | None = None
+    games_remaining: int | None = None
 
 
 @dataclass(frozen=True)
@@ -2461,14 +2461,13 @@ class RewardsDBService:
             ).fetchall()
             return [dict(r) for r in rows]
 
-    MAX_DAILY_CASINO_GAMES: int = 15
     MAX_CASINO_WAGER: int = 500
     MAX_CASINO_PAYOUT: int = 5_000
 
     def _check_and_update_casino_limit(
         self, user: UserRecord, now: Optional[datetime] = None
     ) -> tuple[int, int, str, datetime]:
-        """Enforce the shared 15-game daily limit across casino activities."""
+        """Record a casino round without imposing a shared daily play limit."""
         current_time = now or datetime.now(PHT)
         if current_time.tzinfo is None:
             current_time = current_time.replace(tzinfo=PHT)
@@ -2476,20 +2475,13 @@ class RewardsDBService:
             current_time = current_time.astimezone(PHT)
         today_str = current_time.strftime("%Y-%m-%d")
 
-        # Daily limit check (15 games/day)
         if user.last_casino_date == today_str:
             daily_count = user.daily_casino_games_count
         else:
             daily_count = 0
 
-        if daily_count >= self.MAX_DAILY_CASINO_GAMES:
-            raise MaxBetsReachedError(
-                f"❌ You have reached your daily casino limit of {self.MAX_DAILY_CASINO_GAMES} games today! Return tomorrow after 00:00 (PHT) to gamble again."
-            )
-
         new_daily_count = daily_count + 1
-        games_remaining = self.MAX_DAILY_CASINO_GAMES - new_daily_count
-        return new_daily_count, games_remaining, today_str, current_time
+        return new_daily_count, 0, today_str, current_time
 
     def _record_gambling_round(
         self,
@@ -2546,7 +2538,7 @@ class RewardsDBService:
         fixed_outcome: Optional[BetOutcome] = None,
         fixed_skill: Optional[str] = None,
     ) -> BetResult:
-        """Place a roulette bet (min 10 pts, max 500 pts, limit 15 casino games/day)."""
+        """Place a roulette bet (min 10 pts, max 500 pts)."""
         if wager < 10:
             raise RewardsError("Minimum bet amount is 10 Uno Points!")
         if wager > self.MAX_CASINO_WAGER:
@@ -2704,8 +2696,8 @@ class RewardsDBService:
             reward_item_id=reward_item_id,
             reward_item_name=reward_item_name,
             daily_bets_count=new_daily_games,
-            max_daily_bets=self.MAX_DAILY_CASINO_GAMES,
-            bets_remaining=games_remaining,
+            max_daily_bets=None,
+            bets_remaining=None,
         )
 
     def play_slots(
@@ -2715,7 +2707,7 @@ class RewardsDBService:
         now: Optional[datetime] = None,
         fixed_reels: Optional[list[str]] = None,
     ) -> SlotsResult:
-        """Spin 3 slot machine reels (max 500 pts, limit 15 casino games/day)."""
+        """Spin 3 slot machine reels (max 500 pts)."""
         if wager < 10:
             raise RewardsError("Minimum slots wager is 10 Uno Points!")
         if wager > self.MAX_CASINO_WAGER:
@@ -2812,8 +2804,8 @@ class RewardsDBService:
             is_jackpot=is_jackpot,
             description=desc,
             daily_games_count=new_daily_games,
-            max_daily_games=self.MAX_DAILY_CASINO_GAMES,
-            games_remaining=games_remaining,
+            max_daily_games=None,
+            games_remaining=None,
         )
 
     def play_coinflip(
@@ -2824,7 +2816,7 @@ class RewardsDBService:
         now: Optional[datetime] = None,
         fixed_flip: Optional[str] = None,
     ) -> CoinflipResult:
-        """Fast 1.70x payout coin toss (500 pts max, 15 daily casino games)."""
+        """Fast 1.70x payout coin toss (500 pts max)."""
         if wager < 10:
             raise RewardsError("Minimum coinflip wager is 10 Uno Points!")
         if wager > self.MAX_CASINO_WAGER:
@@ -2909,8 +2901,8 @@ class RewardsDBService:
             points_delta=points_delta,
             new_balance=new_balance,
             daily_games_count=new_daily_games,
-            max_daily_games=self.MAX_DAILY_CASINO_GAMES,
-            games_remaining=games_remaining,
+            max_daily_games=None,
+            games_remaining=None,
         )
 
     def play_cups(
@@ -3042,7 +3034,7 @@ class RewardsDBService:
         fixed_player_cards: Optional[list[BlackjackCard]] = None,
         fixed_dealer_cards: Optional[list[BlackjackCard]] = None,
     ) -> BlackjackGame:
-        """Start a new blackjack game, dealing 2 cards each (max 500 pts, limit 15 casino games/day)."""
+        """Start a new blackjack game, dealing 2 cards each (max 500 pts)."""
         if wager < 10:
             raise RewardsError("Minimum blackjack wager is 10 Uno Points!")
         if wager > self.MAX_CASINO_WAGER:

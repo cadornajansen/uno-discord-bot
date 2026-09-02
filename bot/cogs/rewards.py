@@ -15,7 +15,6 @@ from bot.services.rewards_db import (
     DailyAlreadyClaimedError,
     InsufficientPointsError,
     ItemNotFoundError,
-    MaxBetsReachedError,
     MaxTriviaReachedError,
     RewardsDBService,
     RewardsError,
@@ -512,7 +511,7 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
         )
         embed.add_field(
             name="Casino Guardrails",
-            value="• **Wager Limit:** Max `500 pts` per standard casino game.\n• **Daily Cap:** `15 games/day` shared across casino games.\n• **No Dealer Delay:** Games can be played back-to-back.",
+            value="• **Wager Limit:** Max `500 pts` per standard casino game.\n• **No Daily Cap:** Play standard casino games as often as your balance allows.\n• **No Dealer Delay:** Games can be played back-to-back.",
             inline=False,
         )
         embed.add_field(
@@ -686,13 +685,13 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
     embed.add_field(
         name="2. Casino & Street Games",
         value=(
-            "• `/bet [amount]` or `!bet` — Roulette gamble with up to 4.0x payout (500 pt max, 15/day cap).\n"
+            "• `/bet [amount]` or `!bet` — Roulette gamble with up to 4.0x payout (500 pt max).\n"
             "• `/slots [amount]` or `!slots` — 3-Reel classic slots with up to 20x Wild Jackpot.\n"
             "• `/coinflip <heads|tails> [amount]` or `!cf` — 1.70x payout coin toss.\n"
             "• `/blackjack [amount]` or `!bj` — Blackjack 21 with Hit, Stand, and Double Down.\n"
             "• `/highlow [amount]` or `!hl` — Card guessing ladder with up to 10.0x multiplier.\n"
             "• `/cups <1|2|3> [amount]` or `!cups` — 3-Cup Shell Game (30% win, 1.5x payout, max 50 pts).\n"
-            "• Standard casino games have no delay between plays, a 500-point wager cap, and a shared 15-game daily cap."
+            "• Standard casino games have no delay between plays and a 500-point wager cap."
         ),
         inline=False,
     )
@@ -3028,10 +3027,10 @@ class RewardsCog(commands.Cog):
         )
         await interaction.edit_original_response(embed=embed, view=view)
 
-    @app_commands.command(name="bet", description="Gamble Uno Points on roulette with dynamic multipliers! (Limit: 15 games/day)")
+    @app_commands.command(name="bet", description="Gamble Uno Points on roulette with dynamic multipliers! (500 pt max wager)")
     @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, maximum 500, default 50).")
     async def bet(self, interaction: discord.Interaction, amount: int = 50) -> None:
-        """Play roulette with a custom wager (limit: 15 games per day)."""
+        """Play roulette with a custom wager."""
         user_id = interaction.user.id
         try:
             res = self.rewards_service.play_bet(user_id, wager=amount)
@@ -3068,7 +3067,7 @@ class RewardsCog(commands.Cog):
 
             embed = discord.Embed(title=title, description=desc, color=color)
             embed.add_field(name="Current Balance", value=f"**{res.new_balance:,} Uno Points**", inline=True)
-            embed.set_footer(text=f"Gamble responsibly • {res.bets_remaining}/15 games remaining today • 🐱 Cats and 🐰 bunnies boost luck")
+            embed.set_footer(text="Gamble responsibly • 500 pt max wager • 🐱 Cats and 🐰 bunnies boost luck")
 
             await interaction.response.send_message(embed=embed)
 
@@ -3090,7 +3089,7 @@ class RewardsCog(commands.Cog):
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
-    @app_commands.command(name="slots", description="Spin the 3-reel slot machine (max 500 pts, limit 15 casino games/day).")
+    @app_commands.command(name="slots", description="Spin the 3-reel slot machine (max 500 pts).")
     @app_commands.describe(amount="The amount of Uno Points to wager (minimum 10, max 500, default 50).")
     async def slots(self, interaction: discord.Interaction, amount: int = 50) -> None:
         """Spin 3-reel slot machine."""
@@ -3123,7 +3122,7 @@ class RewardsCog(commands.Cog):
                 ),
                 color=color,
             )
-            embed.set_footer(text=f"🍒 2.5x | 🍋 3x | 🍇 4.5x | 💎 7x | 👑 12x | 🃏 20x • {res.games_remaining}/15 games left today")
+            embed.set_footer(text="🍒 2.5x | 🍋 3x | 🍇 4.5x | 💎 7x | 👑 12x | 🃏 20x • 500 pt max wager")
             await interaction.response.send_message(embed=embed)
 
             await self._log_activity(
@@ -3139,7 +3138,7 @@ class RewardsCog(commands.Cog):
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
-    @app_commands.command(name="coinflip", description="Flip a coin for instant 1.70x payout (max 500 pts, limit 15 games/day)!")
+    @app_commands.command(name="coinflip", description="Flip a coin for instant 1.70x payout (max 500 pts)!")
     @app_commands.describe(choice="Choose Heads or Tails.", amount="The amount of Uno Points to wager (minimum 10, max 500, default 50).")
     @app_commands.choices(
         choice=[
@@ -3171,7 +3170,7 @@ class RewardsCog(commands.Cog):
             embed = discord.Embed(title=title, description=desc, color=color)
             embed.add_field(name="Wager", value=f"`{res.wager:,} pts`", inline=True)
             embed.add_field(name="Current Balance", value=f"**{res.new_balance:,} pts**", inline=True)
-            embed.set_footer(text=f"1.70x Multiplier • {res.games_remaining}/15 games left today • 🐰 Bunny pet increases odds")
+            embed.set_footer(text="1.70x Multiplier • 500 pt max wager • 🐰 Bunny pet increases odds")
             await interaction.response.send_message(embed=embed)
         except RewardsError as e:
             await interaction.response.send_message(f"❌ {e}", ephemeral=True)

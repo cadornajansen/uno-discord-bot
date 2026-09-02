@@ -188,8 +188,8 @@ def test_csv_export(rewards_service: RewardsDBService):
     assert "1001,500,500" in csv_text
 
 
-def test_play_bet_outcomes_and_limit(rewards_service: RewardsDBService):
-    """Test bet mechanics, dynamic payouts, and skill drops with 15-game daily limit."""
+def test_play_bet_outcomes_without_global_limit(rewards_service: RewardsDBService):
+    """Test bet mechanics, dynamic payouts, and unrestricted daily play."""
     from bot.services.rewards_db import BetOutcome
 
     rewards_service.add_points(1001, 300, "TEST")
@@ -215,13 +215,13 @@ def test_play_bet_outcomes_and_limit(rewards_service: RewardsDBService):
     b4 = rewards_service.play_bet(1001, wager=50, now=base_time + timedelta(seconds=60), fixed_outcome=BetOutcome.REFUND)
     assert b4.new_balance == 400
     assert b4.daily_bets_count == 4
-    assert b4.bets_remaining == 11
+    assert b4.bets_remaining is None
 
 
 def test_high_roller_adjustment_reduces_odds_without_forcing_losses(rewards_service: RewardsDBService):
     """Recent wins lower chance-based odds for wealthy players but never dictate an outcome."""
     from unittest.mock import patch
-    from bot.services.rewards_db import BetOutcome, MaxBetsReachedError
+    from bot.services.rewards_db import BetOutcome
 
     rewards_service.add_points(2001, 50_000, "TEST")
     day1 = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
@@ -240,11 +240,11 @@ def test_high_roller_adjustment_reduces_odds_without_forcing_losses(rewards_serv
         adjusted = rewards_service.play_bet(2001, wager=50, now=day1 + timedelta(minutes=3))
     assert adjusted.outcome == BetOutcome.REFUND
 
-    # The 15-game daily cap is still enforced.
+    # More than 15 casino rounds remain playable on the same day.
     for i in range(8):
         rewards_service.play_bet(2001, wager=50, now=day1 + timedelta(minutes=4 + i), fixed_outcome=BetOutcome.REFUND)
-    with pytest.raises(MaxBetsReachedError):
-        rewards_service.play_bet(2001, wager=50, now=day1 + timedelta(minutes=20))
+    extra = rewards_service.play_bet(2001, wager=50, now=day1 + timedelta(minutes=20), fixed_outcome=BetOutcome.REFUND)
+    assert extra.bets_remaining is None
 
 
 def test_execute_steal_mechanics(rewards_service: RewardsDBService):
