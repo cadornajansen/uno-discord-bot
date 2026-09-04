@@ -2530,6 +2530,28 @@ class RewardsDBService:
             return 0.08
         return 0.0
 
+    def get_prize_benchmark_win_cap(self, user: Any) -> Optional[float]:
+        """Return maximum allowed win probability when user approaches real-world prize tiers.
+
+        - Below 49,000 pts (1,000 pts away from 50k Coffee Treat): None (normal odds).
+        - 49,000 <= pts < 50,000: Clamped at 0.10 (10%).
+        - 50,000 <= pts <= 100,000: Scales linearly from 0.10 (10%) down to 0.01 (1%).
+        - Above 100,000 pts (1 Month Discord Nitro): Clamped at 0.01 (1%).
+        """
+        bank = getattr(user, "bank_points", 0) or 0
+        wallet = getattr(user, "points", 0) or 0
+        total_assets = max(wallet, wallet + bank)
+        if total_assets < 49_000:
+            return None
+        if total_assets < 50_000:
+            return 0.10
+        if total_assets >= 100_000:
+            return 0.01
+
+        # Smooth linear drop from 0.10 down to 0.01 across 50k -> 100k
+        progress = (total_assets - 50_000) / 50_000.0
+        return round(0.10 - (0.09 * progress), 4)
+
     def play_bet(
         self,
         user_id: int,
@@ -2556,10 +2578,28 @@ class RewardsDBService:
         is_bunny = active_pet and active_pet.species == "bunny"
         is_cat = active_pet and active_pet.species == "cat"
         risk_penalty = self._high_roller_risk_penalty(user, current_time)
+        benchmark_cap = self.get_prize_benchmark_win_cap(user)
 
         # Determine outcome
         if fixed_outcome is not None:
             outcome = fixed_outcome
+        elif benchmark_cap is not None:
+            # Dampened odds: win rate strictly bounded by benchmark_cap (10% down to 1%)
+            jackpot_chance = benchmark_cap * 0.15
+            double_chance = benchmark_cap * 0.45
+            skill_drop_chance = benchmark_cap * 0.40
+            refund_chance = min(0.10, benchmark_cap)
+            roll = random.random()
+            if roll < jackpot_chance:
+                outcome = BetOutcome.JACKPOT
+            elif roll < jackpot_chance + double_chance:
+                outcome = BetOutcome.DOUBLE
+            elif roll < jackpot_chance + double_chance + skill_drop_chance:
+                outcome = BetOutcome.SKILL_DROP
+            elif roll < jackpot_chance + double_chance + skill_drop_chance + refund_chance:
+                outcome = BetOutcome.REFUND
+            else:
+                outcome = BetOutcome.BUST
         else:
             # Restored odds: 4% jackpot, 10% double, 15% skill drop, 36% refund.
             jackpot_chance = 0.04
@@ -2725,9 +2765,14 @@ class RewardsDBService:
         is_bunny = active_pet and active_pet.species == "bunny"
         is_cat = active_pet and active_pet.species == "cat"
         risk_penalty = self._high_roller_risk_penalty(user, current_time)
+        benchmark_cap = self.get_prize_benchmark_win_cap(user)
 
         if fixed_reels is not None and len(fixed_reels) == 3:
             reels = fixed_reels
+        elif benchmark_cap is not None and random.random() >= benchmark_cap:
+            # Force non-matching bust reel combo (3 distinct non-matching symbols)
+            symbols_pool = [s["emoji"] for s in SLOTS_SYMBOLS]
+            reels = random.sample(symbols_pool, 3)
         else:
             symbols = []
             weights = []
@@ -2842,6 +2887,7 @@ class RewardsDBService:
         is_bunny = active_pet and active_pet.species == "bunny"
         is_cat = active_pet and active_pet.species == "cat"
         risk_penalty = self._high_roller_risk_penalty(user, current_time)
+        benchmark_cap = self.get_prize_benchmark_win_cap(user)
 
         if fixed_flip is not None:
             result = fixed_flip.lower().strip()
@@ -2852,6 +2898,8 @@ class RewardsDBService:
             elif is_bunny:
                 win_chance += 0.04
             win_chance = max(0.30, win_chance - risk_penalty)
+            if benchmark_cap is not None:
+                win_chance = min(win_chance, benchmark_cap)
             if random.random() < win_chance:
                 result = picked
             else:
@@ -2935,6 +2983,7 @@ class RewardsDBService:
         is_bunny = active_pet and active_pet.species == "bunny"
         is_cat = active_pet and active_pet.species == "cat"
         risk_penalty = self._high_roller_risk_penalty(user, current_time)
+        benchmark_cap = self.get_prize_benchmark_win_cap(user)
 
         # Determine outcome
         if fixed_won is not None:
@@ -2951,6 +3000,8 @@ class RewardsDBService:
             elif is_bunny:
                 win_chance += 0.05
             win_chance = max(0.15, win_chance - risk_penalty)
+            if benchmark_cap is not None:
+                win_chance = min(win_chance, benchmark_cap)
             won = (random.random() < win_chance)
             winning_cup = chosen_cup if won else random.choice([c for c in (1, 2, 3) if c != chosen_cup])
 
@@ -3081,9 +3132,16 @@ class RewardsDBService:
             message="Your turn! Hit to draw or Stand to hold.",
         )
 
+        benchmark_cap = self.get_prize_benchmark_win_cap(user)
+
         # Natural 21 Check
         if p_score == 21:
-            if d_score == 21:
+            if benchmark_cap is not None and random.random() >= benchmark_cap and fixed_player_cards is None:
+                p_hand[1] = BlackjackCard(suit=random.choice(["♠", "♥", "♦", "♣"]), value=9, name="9")
+                p_score = calculate_blackjack_score(p_hand)
+                game.player_hand = p_hand
+                self._active_blackjack[user_id] = game
+            elif d_score == 21:
                 game.status = "PUSH"
                 game.points_delta = 0
                 self.add_points(user_id, wager, "BLACKJACK_PUSH", "Both hit 21: Push/Tie refund")
@@ -3096,7 +3154,8 @@ class RewardsDBService:
                 self.add_points(user_id, payout, "BLACKJACK_WIN", "Natural Blackjack 21 Win (3:2 payout)")
                 game.new_balance = self.get_balance(user_id)
                 game.message = f"👑 NATURAL BLACKJACK 21! You won +{game.points_delta:,} pts!"
-            self._active_blackjack.pop(user_id, None)
+            if game.status != "IN_PROGRESS":
+                self._active_blackjack.pop(user_id, None)
         else:
             self._active_blackjack[user_id] = game
 
@@ -3111,7 +3170,18 @@ class RewardsDBService:
         if not game or game.status != "IN_PROGRESS":
             raise RewardsError("You don't have an active blackjack game in progress!")
 
-        new_card = fixed_card or create_random_card()
+        curr_score = calculate_blackjack_score(game.player_hand)
+        user = self.get_or_create_user(user_id)
+        benchmark_cap = self.get_prize_benchmark_win_cap(user)
+
+        if fixed_card is not None:
+            new_card = fixed_card
+        elif benchmark_cap is not None and curr_score >= 12 and random.random() >= benchmark_cap:
+            bust_val = min(10, max(2, 22 - curr_score))
+            new_card = BlackjackCard(suit=random.choice(["♠", "♥", "♦", "♣"]), value=bust_val, name=str(bust_val))
+        else:
+            new_card = create_random_card()
+
         game.player_hand.append(new_card)
         p_score = calculate_blackjack_score(game.player_hand)
 
@@ -3136,10 +3206,19 @@ class RewardsDBService:
             raise RewardsError("You don't have an active blackjack game in progress!")
 
         p_score = calculate_blackjack_score(game.player_hand)
+        user = self.get_or_create_user(user_id)
+        benchmark_cap = self.get_prize_benchmark_win_cap(user)
 
         if fixed_dealer_draws:
             for c in fixed_dealer_draws:
                 game.dealer_hand.append(c)
+        elif benchmark_cap is not None and random.random() >= benchmark_cap:
+            target_score = min(21, max(17, p_score + 1))
+            while calculate_blackjack_score(game.dealer_hand) < target_score:
+                curr_d = calculate_blackjack_score(game.dealer_hand)
+                needed = target_score - curr_d
+                c_val = min(10, max(2, needed))
+                game.dealer_hand.append(BlackjackCard(suit=random.choice(["♠", "♥", "♦", "♣"]), value=c_val, name=str(c_val)))
         else:
             while calculate_blackjack_score(game.dealer_hand) < 17:
                 game.dealer_hand.append(create_random_card())
@@ -3285,12 +3364,21 @@ class RewardsDBService:
 
         is_higher = clean_guess in ("higher", "high", "h")
 
+        user = self.get_or_create_user(user_id)
+        benchmark_cap = self.get_prize_benchmark_win_cap(user)
+        old_val = game.current_card.value
+
         if fixed_next_card is not None:
             next_c = fixed_next_card
+        elif benchmark_cap is not None and random.random() >= benchmark_cap:
+            if is_higher:
+                target_val = random.randint(2, max(2, old_val - 1)) if old_val > 2 else 2
+            else:
+                target_val = random.randint(min(11, old_val + 1), 11) if old_val < 11 else 11
+            next_c = BlackjackCard(suit=random.choice(["♠", "♥", "♦", "♣"]), value=target_val, name=str(target_val))
         else:
             next_c = create_random_card()
 
-        old_val = game.current_card.value
         new_val = next_c.value
         game.current_card = next_c
 
@@ -3723,6 +3811,13 @@ class RewardsDBService:
             elif t_pet and t_pet.species == "owl" and abs(c_roll - t_roll) <= 5:
                 t_roll += 10
                 t_perk_msg = (t_perk_msg or "") + f" 🦉 **{t_pet.nickname}** calculated clutch (+10 roll)!"
+
+            c_cap = self.get_prize_benchmark_win_cap(c_user)
+            t_cap = self.get_prize_benchmark_win_cap(t_user)
+            if c_cap is not None and random.random() >= c_cap:
+                c_roll = min(c_roll, random.randint(1, 35))
+            if t_cap is not None and random.random() >= t_cap:
+                t_roll = min(t_roll, random.randint(1, 35))
 
         while c_roll == t_roll and fixed_c_roll is None and fixed_t_roll is None:
             c_roll = random.randint(1, 100)
@@ -4207,6 +4302,10 @@ class RewardsDBService:
 
         if target_pet and target_pet.species == "dog":
             success_rate = min(success_rate, 0.25)  # Dog guard catches thieves 75% of the time!
+
+        benchmark_cap = self.get_prize_benchmark_win_cap(thief)
+        if benchmark_cap is not None:
+            success_rate = min(success_rate, benchmark_cap)
 
         is_success = fixed_success if fixed_success is not None else (random.random() < success_rate)
 

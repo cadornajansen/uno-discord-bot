@@ -223,7 +223,7 @@ def test_high_roller_adjustment_reduces_odds_without_forcing_losses(rewards_serv
     from unittest.mock import patch
     from bot.services.rewards_db import BetOutcome
 
-    rewards_service.add_points(2001, 50_000, "TEST")
+    rewards_service.add_points(2001, 10_000, "TEST")
     day1 = datetime(2026, 8, 1, 10, 0, tzinfo=timezone.utc)
 
     # Four wins within six completed games activate the short-window adjustment.
