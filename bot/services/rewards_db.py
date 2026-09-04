@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 import random
 import sqlite3
-from typing import Optional
+from typing import Any, Optional, Union
 
 logger = logging.getLogger(__name__)
 
