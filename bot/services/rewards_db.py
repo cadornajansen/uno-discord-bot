@@ -425,7 +425,7 @@ ITEM_DEFINITIONS = {
     },
     "tax_audit": {
         "name": "🕵️ Class Treasurer Audit",
-        "description": "Target a Top-3 Leaderboard player to audit 5% of their points into your wallet (max 200 pts)!",
+        "description": "Target a Top-3 Leaderboard player to audit 20% of their points into your wallet without deducting from them!",
         "usable": True,
     },
     "coffee_bribe": {
@@ -496,7 +496,7 @@ SHOP_CATALOG = {
         "cost": 200,
         "category": "consumable",
         "subcategory": "offense",
-        "description": "Target a Top-3 Leaderboard player to audit 5% of their points into your wallet.",
+        "description": "Target a Top-3 Leaderboard player to audit 20% of their points into your wallet (no deduction from target).",
     },
     "coffee_bribe": {
         "name": "☕ Dean's Coffee Bribe",
@@ -4469,11 +4469,10 @@ class RewardsDBService:
                     f"That classmate is ranked #{target_profile.rank}. The Class Treasurer Audit can only target students in the Top 3!"
                 )
             self.remove_item(user_id, item_id, 1)
-            tax_amount = min(max(int(target_profile.points * 0.05), 10), 200)
-            self.deduct_points(target_id, tax_amount, "TAX_AUDITED", f"Audited by Class Treasurer {user_id}")
-            new_balance = self.add_points(user_id, tax_amount, "TAX_COLLECTED", f"Collected 5% Class Tax from {target_id}")
+            tax_amount = max(int(target_profile.points * 0.20), 10)
+            new_balance = self.add_points(user_id, tax_amount, "TAX_COLLECTED", f"Collected 20% Class Tax based on {target_id}")
             points_awarded = tax_amount
-            desc = f"🕵️ Class Treasurer Audit executed! You audited a 5% Class Fund Tax (**+{tax_amount:,} Uno Points**) from <@{target_id}>!"
+            desc = f"🕵️ Class Treasurer Audit executed! You audited a 20% Class Fund Tax (**+{tax_amount:,} Uno Points**) from <@{target_id}>!"
 
         elif item_id == "coffee_bribe":
             self.remove_item(user_id, item_id, 1)

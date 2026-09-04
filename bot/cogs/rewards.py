@@ -626,7 +626,7 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
                 "• **Uno Reverse Card** — Passive trap that counter-steals 40%–60% from pickpockets.\n"
                 "• **Point Airdrop** — Drops a 100 pt community care package in chat for 4 quick catchers.\n"
                 "• **EMP Shield Breaker** — Shatters a classmate's active Immunity Shield.\n"
-                "• **Class Treasurer Audit** — Takes 5% from an eligible top-ranked player when used.\n"
+                "• **Class Treasurer Audit** — Collects 20% based on an eligible top-ranked player without deducting from them.\n"
                 "• **Mystery Gacha Box** — High-roller lootbox with prizes up to 1,000 points."
             ),
             inline=False,

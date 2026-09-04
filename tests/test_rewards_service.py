@@ -435,12 +435,12 @@ def test_shield_breaker_and_tax_audit(rewards_service: RewardsDBService):
     assert not rewards_service.has_active_shield(1001, now=now)
     assert "shield_breaker" not in rewards_service.get_inventory(1002)
 
-    # 3. Tax Audit Top 1 player (5% of 500 = 25 pts)
+    # 3. Tax Audit Top 1 player (20% of 500 = 100 pts, not deducted from target)
     rewards_service.add_item(1002, "tax_audit", 1)
     res_tax = rewards_service.use_item(1002, "tax_audit", target_id=1001, now=now)
-    assert res_tax.points_awarded == 25
-    assert rewards_service.get_balance(1001) == 475
-    assert rewards_service.get_balance(1002) == 125
+    assert res_tax.points_awarded == 100
+    assert rewards_service.get_balance(1001) == 500  # Target user is not deducted
+    assert rewards_service.get_balance(1002) == 200  # Auditor gets 100 pts added
 
 
 def test_coffee_bribe_and_gacha_box(rewards_service: RewardsDBService):
