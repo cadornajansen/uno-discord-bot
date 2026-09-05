@@ -972,4 +972,90 @@ def test_cups_command_execution():
 
     asyncio.run(_test())
 
+def test_sue_command_execution():
+    """Test /sue slash command files lawsuit and logs activity."""
+    async def _test():
+        cog, service, log_channel = _make_rewards_cog()
+        service.add_points(555, 30_000, "START")
+        service.add_points(777, 30_000, "START")
+
+        interaction = MagicMock()
+        interaction.user.id = 555
+        interaction.user.display_name = "Charlie"
+        interaction.user.mention = "<@555>"
+        interaction.response.send_message = AsyncMock()
+
+        target = MagicMock()
+        target.id = 777
+        target.mention = "<@777>"
+
+        await cog.sue.callback(cog, interaction, target=target, amount=20_000)
+        interaction.response.send_message.assert_awaited_once()
+        embed = interaction.response.send_message.call_args.kwargs["embed"]
+        assert "COURTROOM VERDICT" in embed.title
+        assert "20,000 Uno Points" in embed.description
+        assert service.get_balance(555) == 10_000
+        assert service.get_balance(777) == 10_000
+
+        log_channel.send.assert_awaited_once()
+
+    asyncio.run(_test())
+
+
+def test_arrest_command_execution():
+    """Test /arrest slash command places target under arrest and logs activity."""
+    async def _test():
+        cog, service, log_channel = _make_rewards_cog()
+        service.add_points(555, 60_000, "START")
+
+        interaction = MagicMock()
+        interaction.user.id = 555
+        interaction.user.display_name = "Officer"
+        interaction.user.mention = "<@555>"
+        interaction.response.send_message = AsyncMock()
+
+        target = MagicMock()
+        target.id = 777
+        target.mention = "<@777>"
+
+        await cog.arrest.callback(cog, interaction, target=target)
+        interaction.response.send_message.assert_awaited_once()
+        embed = interaction.response.send_message.call_args.kwargs["embed"]
+        assert "CITIZEN'S ARREST" in embed.title
+        assert service.get_balance(555) == 10_000
+        assert service.is_user_arrested(777) is not None
+
+        log_channel.send.assert_awaited_once()
+
+    asyncio.run(_test())
+
+
+def test_arrested_user_interaction_check():
+    """Test interaction_check blocks arrested users from economic commands but allows read-only commands."""
+    async def _test():
+        cog, service, _ = _make_rewards_cog()
+        service.add_points(555, 60_000, "START")
+        service.arrest_user(555, 777)
+
+        # Arrested user trying economic command /bet
+        interaction = MagicMock()
+        interaction.user.id = 777
+        interaction.command.qualified_name = "bet"
+        interaction.response.send_message = AsyncMock()
+
+        allowed = await cog.interaction_check(interaction)
+        assert allowed is False
+        interaction.response.send_message.assert_awaited_once()
+        assert "under arrest" in interaction.response.send_message.call_args.args[0]
+
+        # Arrested user trying read-only command /balance
+        interaction_ro = MagicMock()
+        interaction_ro.user.id = 777
+        interaction_ro.command.qualified_name = "balance"
+        interaction_ro.response.send_message = AsyncMock()
+
+        allowed_ro = await cog.interaction_check(interaction_ro)
+        assert allowed_ro is True
+
+    asyncio.run(_test())
 

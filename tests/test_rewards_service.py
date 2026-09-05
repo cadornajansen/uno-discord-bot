@@ -435,12 +435,12 @@ def test_shield_breaker_and_tax_audit(rewards_service: RewardsDBService):
     assert not rewards_service.has_active_shield(1001, now=now)
     assert "shield_breaker" not in rewards_service.get_inventory(1002)
 
-    # 3. Tax Audit Top 1 player (20% of 500 = 100 pts, not deducted from target)
+    # 3. Tax Audit Top 1 player (5% of 500 = 25 pts, deducted from target)
     rewards_service.add_item(1002, "tax_audit", 1)
     res_tax = rewards_service.use_item(1002, "tax_audit", target_id=1001, now=now)
-    assert res_tax.points_awarded == 100
-    assert rewards_service.get_balance(1001) == 500  # Target user is not deducted
-    assert rewards_service.get_balance(1002) == 200  # Auditor gets 100 pts added
+    assert res_tax.points_awarded == 25
+    assert rewards_service.get_balance(1001) == 475  # Target user loses 25 pts
+    assert rewards_service.get_balance(1002) == 125  # Auditor gets 25 pts added
 
 
 def test_coffee_bribe_and_gacha_box(rewards_service: RewardsDBService):
@@ -1049,11 +1049,14 @@ def test_daily_quests_and_nuke_crisis_state(rewards_service: RewardsDBService):
         rewards_service.claim_quest_rewards(1001, now=now)
 
     rewards_service.add_points(1002, 1_000, "TEST")
+    rewards_service.bank_deposit(1002, 200) # deposit 200 (20 fee, 180 credited into bank, 800 wallet)
     rewards_service.add_item(1001, "nuke")
     rewards_service.begin_nuke(1001, 1002)
     assert "nuke" not in rewards_service.get_inventory(1001)
     loss, balance, locked_until = rewards_service.detonate_nuke(1001, 1002, now=now)
-    assert (loss, balance) == (300, 700)
+    # wallet: 800 * 0.50 = 400, bank: 180 * 0.50 = 90. total loss: 490.
+    assert (loss, balance) == (490, 400)
+    assert rewards_service.get_profile(1002).bank_points == 90
     assert locked_until == now + timedelta(minutes=1)
     assert rewards_service.is_economy_locked(now=now) == locked_until
     assert rewards_service.is_economy_locked(now=locked_until) is None
@@ -1076,5 +1079,92 @@ def test_owner_economy_override_has_unlimited_nukes_and_zero_balance_grants(rewa
     with pytest.raises(RewardsError):
         rewards_service.transfer_points(1001, 1002, 100)
 
+def test_sue_user_rules_and_deductions(rewards_service: RewardsDBService):
+    """Test /sue min 20,000 pts, mutual deduction, and bank deduction."""
+    # Min amount check
+    with pytest.raises(RewardsError, match="minimum lawsuit amount is 20,000"):
+        rewards_service.sue_user(1001, 1002, 10_000)
 
+    # Self sue check
+    with pytest.raises(RewardsError, match="cannot sue yourself"):
+        rewards_service.sue_user(1001, 1001, 25_000)
+
+    # Insufficient funds check
+    rewards_service.add_points(1001, 5_000, "TEST")
+    with pytest.raises(InsufficientPointsError, match="Insufficient funds to sue"):
+        rewards_service.sue_user(1001, 1002, 20_000)
+
+    # Setup balances: 1001 has 15k wallet + 10k bank = 25k total
+    # 1002 has 12k wallet + 15k bank = 27k total
+    rewards_service.get_or_create_user(1001)
+    rewards_service.get_or_create_user(1002)
+    with rewards_service._get_connection() as conn:
+        conn.execute("UPDATE users SET points = 15000, bank_points = 10000 WHERE user_id = 1001")
+        conn.execute("UPDATE users SET points = 12000, bank_points = 15000 WHERE user_id = 1002")
+        conn.commit()
+
+    res = rewards_service.sue_user(1001, 1002, 20_000)
+    assert res["amount"] == 20_000
+    assert res["suer_loss"] == 20_000
+    assert res["suer_wallet_loss"] == 15_000
+    assert res["suer_bank_loss"] == 5_000
+    assert res["suer_new_wallet"] == 0
+    assert res["suer_new_bank"] == 5_000
+    assert res["target_loss"] == 20_000
+    assert res["target_wallet_loss"] == 12_000
+    assert res["target_bank_loss"] == 8_000
+    assert res["target_new_wallet"] == 0
+    assert res["target_new_bank"] == 7_000
+
+    # Test when target has less than sued amount (target loses everything, no negative balance)
+    rewards_service.get_or_create_user(1003)
+    with rewards_service._get_connection() as conn:
+        conn.execute("UPDATE users SET points = 30000, bank_points = 0 WHERE user_id = 1001")
+        conn.execute("UPDATE users SET points = 3000, bank_points = 2000 WHERE user_id = 1003")
+        conn.commit()
+
+    res_partial = rewards_service.sue_user(1001, 1003, 20_000)
+    assert res_partial["suer_loss"] == 20_000
+    assert res_partial["suer_new_wallet"] == 10_000
+    assert res_partial["target_loss"] == 5_000
+    assert res_partial["target_new_wallet"] == 0
+    assert res_partial["target_new_bank"] == 0
+
+
+def test_arrest_user_rules_and_cost(rewards_service: RewardsDBService):
+    """Test /arrest costs 50,000 pts, locks target for 1 hour, and handles edge cases."""
+    now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+
+    # Self arrest check
+    with pytest.raises(RewardsError, match="cannot arrest yourself"):
+        rewards_service.arrest_user(1001, 1001, now=now)
+
+    # Insufficient funds check
+    rewards_service.add_points(1001, 20_000, "TEST")
+    with pytest.raises(InsufficientPointsError, match="requires 50,000 Uno Points"):
+        rewards_service.arrest_user(1001, 1002, now=now)
+
+    # Give enough points: 30,000 wallet, 25,000 bank
+    with rewards_service._get_connection() as conn:
+        conn.execute("UPDATE users SET points = 30000, bank_points = 25000 WHERE user_id = 1001")
+        conn.commit()
+
+    cost, arrested_until = rewards_service.arrest_user(1001, 1002, now=now)
+    assert cost == 50_000
+    assert arrested_until == now + timedelta(hours=1)
+
+    # Check caller deducted: 30k from wallet (now 0), 20k from bank (now 5,000)
+    assert rewards_service.get_balance(1001) == 0
+    p1 = rewards_service.get_profile(1001)
+    assert p1.bank_points == 5_000
+
+    # Target is arrested
+    assert rewards_service.is_user_arrested(1002, now=now) == arrested_until
+    assert rewards_service.is_user_arrested(1002, now=now + timedelta(minutes=30)) == arrested_until
+    # After 1 hour, no longer arrested
+    assert rewards_service.is_user_arrested(1002, now=now + timedelta(hours=1, seconds=1)) is None
+
+    # Cannot re-arrest an already arrested user
+    with pytest.raises(RewardsError, match="already under arrest"):
+        rewards_service.arrest_user(1001, 1002, now=now + timedelta(minutes=10))
 

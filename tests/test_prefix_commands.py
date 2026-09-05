@@ -67,6 +67,8 @@ def test_prefix_cog_registers_all_non_document_aliases():
         "duel",
         "bounty",
         "give",
+        "sue",
+        "arrest",
     }.issubset(command_names)
 
 

@@ -626,7 +626,7 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
                 "• **Uno Reverse Card** — Passive trap that counter-steals 40%–60% from pickpockets.\n"
                 "• **Point Airdrop** — Drops a 100 pt community care package in chat for 4 quick catchers.\n"
                 "• **EMP Shield Breaker** — Shatters a classmate's active Immunity Shield.\n"
-                "• **Class Treasurer Audit** — Collects 20% based on an eligible top-ranked player without deducting from them.\n"
+                "• **Class Treasurer Audit** — Takes 5% from an eligible top-ranked player when used.\n"
                 "• **Mystery Gacha Box** — High-roller lootbox with prizes up to 1,000 points."
             ),
             inline=False,
@@ -2381,12 +2381,22 @@ class RewardsCog(commands.Cog):
         self._active_nukes: set[int] = set()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Pause reward-changing slash commands during a Nuke Card crisis."""
-        locked_until = self.rewards_service.is_economy_locked()
+        """Pause reward-changing slash commands if user is arrested or during a Nuke Card crisis."""
+        user_id = interaction.user.id
         command = getattr(interaction, "command", None)
         command_name = getattr(command, "qualified_name", "")
-        read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild view", "quests", "nuke"}
-        if locked_until and command_name not in read_only:
+        read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild view", "quests"}
+
+        arrested_until = self.rewards_service.is_user_arrested(user_id)
+        if arrested_until and command_name not in read_only:
+            await interaction.response.send_message(
+                f"🚨 **You are under arrest!** You cannot perform economic actions until <t:{int(arrested_until.timestamp())}:R>.",
+                ephemeral=True,
+            )
+            return False
+
+        locked_until = self.rewards_service.is_economy_locked()
+        if locked_until and command_name not in read_only and command_name != "nuke":
             await interaction.response.send_message(
                 f"☢️ **Global Economic Crisis in effect.** Economic actions resume <t:{int(locked_until.timestamp())}:R>.",
                 ephemeral=True,
@@ -2537,7 +2547,7 @@ class RewardsCog(commands.Cog):
             await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
 
     @app_commands.command(name="nuke", description="Use a Nuke Card on a target and trigger a one-minute economic crisis.")
-    @app_commands.describe(target="The classmate whose wallet will lose 30%.")
+    @app_commands.describe(target="The classmate whose wallet and bank vault will lose 50%.")
     async def nuke(self, interaction: discord.Interaction, target: discord.Member) -> None:
         if interaction.user.id in self._active_nukes:
             await interaction.response.send_message("Your Nuke Card is already counting down.", ephemeral=True)
@@ -2572,7 +2582,7 @@ class RewardsCog(commands.Cog):
             explosion = discord.Embed(
                 title="💥 NUCLEAR IMPACT — GLOBAL ECONOMIC CRISIS",
                 description=(
-                    f"{target.mention} lost **{loss:,} Uno Points** (30% of their wallet).\n"
+                    f"{target.mention} lost **{loss:,} Uno Points** (50% of their wallet & bank vault).\n"
                     f"New wallet balance: **{new_balance:,} pts**.\n\n"
                     f"☢️ All economic actions are disabled for everyone until <t:{int(locked_until.timestamp())}:R>."
                 ),
@@ -2588,6 +2598,56 @@ class RewardsCog(commands.Cog):
             await self._log_activity("☢️ Nuke detonated", f"{interaction.user.mention} struck {target.mention}; economy locked for one minute.", discord.Color.red())
         finally:
             self._active_nukes.discard(interaction.user.id)
+
+    @app_commands.command(name="sue", description="File a lawsuit against a classmate (min 20k pts). Deducts amount from both parties!")
+    @app_commands.describe(target="The classmate you want to sue.", amount="Amount to sue for (minimum 20,000 pts).")
+    async def sue(self, interaction: discord.Interaction, target: discord.Member, amount: int) -> None:
+        """Sue another user for at least 20,000 pts. Deducts from wallet and bank of both users."""
+        try:
+            res = self.rewards_service.sue_user(interaction.user.id, target.id, amount)
+            embed = discord.Embed(
+                title="⚖️ COURTROOM VERDICT — LAWSUIT SETTLED",
+                description=(
+                    f"**{interaction.user.mention}** filed a lawsuit against {target.mention} for **{res['amount']:,} Uno Points**!\n\n"
+                    f"💸 **{interaction.user.display_name}** paid **-{res['suer_loss']:,} pts** in court fees & damages.\n"
+                    f"• Wallet: `{res['suer_new_wallet']:,} pts` | Bank: `{res['suer_new_bank']:,} pts`\n\n"
+                    f"💥 {target.mention} lost **-{res['target_loss']:,} pts** (wallet & bank vault).\n"
+                    f"• Wallet: `{res['target_new_wallet']:,} pts` | Bank: `{res['target_new_bank']:,} pts`"
+                ),
+                color=discord.Color.dark_red(),
+            )
+            await interaction.response.send_message(embed=embed)
+            await self._log_activity(
+                "⚖️ Lawsuit filed",
+                f"{interaction.user.mention} sued {target.mention} for {amount:,} pts.",
+                discord.Color.red(),
+            )
+        except (InsufficientPointsError, RewardsError) as exc:
+            await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
+
+    @app_commands.command(name="arrest", description="Pay 50,000 pts to arrest a classmate and freeze their economic commands for 1 hour.")
+    @app_commands.describe(target="The classmate to put under arrest.")
+    async def arrest(self, interaction: discord.Interaction, target: discord.Member) -> None:
+        """Pay 50,000 pts to place a target user under arrest for 1 hour."""
+        try:
+            cost, arrested_until = self.rewards_service.arrest_user(interaction.user.id, target.id)
+            embed = discord.Embed(
+                title="🚨 CITIZEN'S ARREST — SUSPECT IN CUSTODY",
+                description=(
+                    f"**{interaction.user.mention}** paid **{cost:,} Uno Points** to put {target.mention} under arrest!\n\n"
+                    f"🔒 {target.mention} is locked in jail and **cannot use any economic commands** until <t:{int(arrested_until.timestamp())}:R> (<t:{int(arrested_until.timestamp())}:f>)."
+                ),
+                color=discord.Color.red(),
+            )
+            await interaction.response.send_message(embed=embed)
+            await self._log_activity(
+                "🚨 Citizen's Arrest",
+                f"{interaction.user.mention} arrested {target.mention} for 1 hour (cost: 50,000 pts).",
+                discord.Color.red(),
+            )
+        except (InsufficientPointsError, RewardsError) as exc:
+            await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
+
 
     @app_commands.command(name="daily", description="Claim your daily attendance Uno Points & build your streak!")
     async def daily(self, interaction: discord.Interaction) -> None:
@@ -3774,7 +3834,7 @@ class RewardsCog(commands.Cog):
         app_commands.Choice(name="🌧️ Point Airdrop (120 pts)", value="airdrop"),
         app_commands.Choice(name="📦 Mystery Gacha Box (150 pts)", value="gacha_box"),
         app_commands.Choice(name="🔨 EMP Shield Breaker (140 pts)", value="shield_breaker"),
-        app_commands.Choice(name="🕵️ Class Treasurer Audit (200 pts)", value="tax_audit"),
+        app_commands.Choice(name="🕵️ Class Treasurer Audit (10,000 pts)", value="tax_audit"),
         app_commands.Choice(name="☕ Dean's Coffee Bribe (100 pts)", value="coffee_bribe"),
         app_commands.Choice(name="☕ Intramuros Coffee Treat (50,000 pts)", value="coffee"),
         app_commands.Choice(name="💳 GCash Gift Card ₱100 (65,000 pts)", value="gcash_100"),

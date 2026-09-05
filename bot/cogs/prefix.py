@@ -95,9 +95,18 @@ class PrefixCommandsCog(commands.Cog):
             return
 
         if cog_name == "RewardsCog":
-            locked_until = target_cog.rewards_service.is_economy_locked()
+            user_id = context.author.id
             read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild_view", "quests"}
-            if locked_until and command_attribute not in read_only:
+
+            arrested_until = target_cog.rewards_service.is_user_arrested(user_id)
+            if arrested_until and command_attribute not in read_only:
+                await context.reply(
+                    f"🚨 **You are under arrest!** You cannot perform economic actions until <t:{int(arrested_until.timestamp())}:R>."
+                )
+                return
+
+            locked_until = target_cog.rewards_service.is_economy_locked()
+            if locked_until and command_attribute not in read_only and command_attribute != "nuke":
                 await context.reply(
                     f"☢️ **Global Economic Crisis in effect.** Economic actions resume <t:{int(locked_until.timestamp())}:R>."
                 )
@@ -313,6 +322,17 @@ class PrefixCommandsCog(commands.Cog):
     async def give_prefix(self, context: commands.Context, member: discord.Member, amount: int) -> None:
         """Prefix alias for /give."""
         await self._invoke_app_command(context, "RewardsCog", "give", member, amount)
+
+    @commands.command(name="sue")
+    async def sue_prefix(self, context: commands.Context, member: discord.Member, amount: int) -> None:
+        """Prefix alias for /sue."""
+        await self._invoke_app_command(context, "RewardsCog", "sue", member, amount)
+
+    @commands.command(name="arrest", aliases=["jail"])
+    async def arrest_prefix(self, context: commands.Context, member: discord.Member) -> None:
+        """Prefix alias for /arrest."""
+        await self._invoke_app_command(context, "RewardsCog", "arrest", member)
+
 
     @commands.command(name="inventory", aliases=["inv", "bag"])
     async def inventory_prefix(self, context: commands.Context) -> None:

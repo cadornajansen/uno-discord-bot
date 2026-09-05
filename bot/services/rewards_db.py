@@ -425,7 +425,7 @@ ITEM_DEFINITIONS = {
     },
     "tax_audit": {
         "name": "🕵️ Class Treasurer Audit",
-        "description": "Target a Top-3 Leaderboard player to audit 20% of their points into your wallet without deducting from them!",
+        "description": "Target a Top-3 Leaderboard player to audit 5% of their points into your wallet!",
         "usable": True,
     },
     "coffee_bribe": {
@@ -435,7 +435,7 @@ ITEM_DEFINITIONS = {
     },
     "nuke": {
         "name": "☢️ Nuke Card",
-        "description": "Launches a 20-second public strike that removes 30% of a target's wallet and freezes economic actions for one minute.",
+        "description": "Launches a 20-second public strike that removes 50% of a target's wallet and bank vault, then freezes economic actions for one minute.",
         "usable": False,
     },
 }
@@ -493,10 +493,10 @@ SHOP_CATALOG = {
     },
     "tax_audit": {
         "name": "🕵️ Class Treasurer Audit",
-        "cost": 200,
+        "cost": 10000,
         "category": "consumable",
         "subcategory": "offense",
-        "description": "Target a Top-3 Leaderboard player to audit 20% of their points into your wallet (no deduction from target).",
+        "description": "Target a Top-3 Leaderboard player to audit 5% of their points into your wallet.",
     },
     "coffee_bribe": {
         "name": "☕ Dean's Coffee Bribe",
@@ -1110,6 +1110,7 @@ class UserRecord:
     last_duel_time: Optional[str] = None
     last_give_time: Optional[str] = None
     cups_rounds_played: int = 0
+    arrested_until: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -1164,6 +1165,7 @@ class UserProfile:
     duel_losses: int = 0
     duel_streak: int = 0
     bounties_claimed: int = 0
+    arrested_until: Optional[datetime] = None
 
 
 STARTER_PET_CHOICES: list[str] = ["tuxedo_cat", "golden_dog", "brown_bunny"]
@@ -1496,6 +1498,8 @@ class RewardsDBService:
             conn.execute("ALTER TABLE users ADD COLUMN last_give_time TEXT")
         if "cups_rounds_played" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN cups_rounds_played INTEGER DEFAULT 0")
+        if "arrested_until" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN arrested_until TEXT")
         conn.commit()
 
     def get_or_create_user(self, user_id: int) -> UserRecord:
@@ -1539,6 +1543,7 @@ class RewardsDBService:
                 last_duel_time=row["last_duel_time"] if "last_duel_time" in keys else None,
                 last_give_time=row["last_give_time"] if "last_give_time" in keys else None,
                 cups_rounds_played=row["cups_rounds_played"] if "cups_rounds_played" in keys else 0,
+                arrested_until=row["arrested_until"] if "arrested_until" in keys else None,
             )
 
     def get_balance(self, user_id: int) -> int:
@@ -2250,13 +2255,161 @@ class RewardsDBService:
 
     def detonate_nuke(self, user_id: int, target_id: int, now: Optional[datetime] = None) -> tuple[int, int, datetime]:
         target = self.get_or_create_user(target_id)
-        loss = int(target.points * 0.30)
-        new_balance = self.deduct_points(target_id, loss, "NUKE_STRIKE", f"Nuked by user {user_id}") if loss else target.points
+        wallet_loss = int(target.points * 0.50)
+        bank_loss = int(getattr(target, "bank_points", 0) * 0.50)
+        total_loss = wallet_loss + bank_loss
+        new_balance = self.deduct_points(target_id, wallet_loss, "NUKE_STRIKE", f"Nuked by user {user_id}") if wallet_loss else target.points
         locked_until = (now or datetime.now(timezone.utc)) + timedelta(minutes=1)
         with self._get_connection() as conn:
+            if bank_loss > 0:
+                conn.execute(
+                    "UPDATE users SET bank_points = bank_points - ? WHERE user_id = ?",
+                    (bank_loss, target_id),
+                )
+                conn.execute(
+                    "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'NUKE_BANK_STRIKE', ?)",
+                    (target_id, -bank_loss, f"Bank vault nuked by user {user_id}"),
+                )
             conn.execute("INSERT INTO economy_state (state_key, state_value) VALUES ('economy_lock_until', ?) ON CONFLICT(state_key) DO UPDATE SET state_value = excluded.state_value", (locked_until.isoformat(),))
             conn.commit()
-        return loss, new_balance, locked_until
+        return total_loss, new_balance, locked_until
+
+    def is_user_arrested(self, user_id: int, now: Optional[datetime] = None) -> Optional[datetime]:
+        """Check if user is currently under arrest. Returns expiration datetime or None."""
+        user = self.get_or_create_user(user_id)
+        if not user.arrested_until:
+            return None
+        try:
+            arrest_until = datetime.fromisoformat(user.arrested_until)
+            if arrest_until.tzinfo is None:
+                arrest_until = arrest_until.replace(tzinfo=timezone.utc)
+            current_time = now or datetime.now(timezone.utc)
+            if current_time.tzinfo is None:
+                current_time = current_time.replace(tzinfo=timezone.utc)
+            return arrest_until if arrest_until > current_time else None
+        except ValueError:
+            return None
+
+    def arrest_user(self, user_id: int, target_id: int, now: Optional[datetime] = None) -> tuple[int, datetime]:
+        """Pay 50,000 pts to place a target user under arrest for 1 hour."""
+        if user_id == target_id:
+            raise RewardsError("You cannot arrest yourself!")
+
+        active_arrest = self.is_user_arrested(target_id, now=now)
+        if active_arrest:
+            raise RewardsError(
+                f"That classmate is already under arrest until <t:{int(active_arrest.timestamp())}:R>!"
+            )
+
+        user = self.get_or_create_user(user_id)
+        user_total = user.points + user.bank_points
+        cost = 50_000
+        if user_total < cost:
+            raise InsufficientPointsError(
+                f"Arresting a classmate requires 50,000 Uno Points (wallet + bank)! You have {user_total:,} pts."
+            )
+
+        wallet_deduct = min(user.points, cost)
+        bank_deduct = cost - wallet_deduct
+
+        if wallet_deduct > 0:
+            self.deduct_points(user_id, wallet_deduct, "ARREST_WARRANT", f"Warrant fee to arrest user {target_id}")
+
+        if bank_deduct > 0:
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET bank_points = bank_points - ? WHERE user_id = ?",
+                    (bank_deduct, user_id),
+                )
+                conn.execute(
+                    "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'ARREST_WARRANT_BANK', ?)",
+                    (user_id, -bank_deduct, f"Bank vault fee to arrest user {target_id}"),
+                )
+                conn.commit()
+
+        current_time = now or datetime.now(timezone.utc)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+        arrest_until = current_time + timedelta(hours=1)
+
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE users SET arrested_until = ? WHERE user_id = ?",
+                (arrest_until.isoformat(), target_id),
+            )
+            conn.commit()
+
+        return cost, arrest_until
+
+    def sue_user(self, user_id: int, target_id: int, amount: int) -> dict:
+        """File a lawsuit against a classmate. Deducts amount from suer and target (wallet + bank)."""
+        if amount < 20_000:
+            raise RewardsError("The minimum lawsuit amount is 20,000 Uno Points!")
+        if user_id == target_id:
+            raise RewardsError("You cannot sue yourself!")
+
+        suer = self.get_or_create_user(user_id)
+        suer_total = suer.points + suer.bank_points
+        if suer_total < amount:
+            raise InsufficientPointsError(
+                f"Insufficient funds to sue! You need {amount:,} Uno Points (wallet + bank), but only have {suer_total:,} pts."
+            )
+
+        suer_wallet_loss = min(suer.points, amount)
+        suer_bank_loss = amount - suer_wallet_loss
+
+        if suer_wallet_loss > 0:
+            self.deduct_points(user_id, suer_wallet_loss, "LAWSUIT_FILED", f"Filed lawsuit against user {target_id} for {amount:,} pts")
+
+        if suer_bank_loss > 0:
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET bank_points = bank_points - ? WHERE user_id = ?",
+                    (suer_bank_loss, user_id),
+                )
+                conn.execute(
+                    "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'LAWSUIT_FILED_BANK', ?)",
+                    (user_id, -suer_bank_loss, f"Bank vault fee for lawsuit against user {target_id}"),
+                )
+                conn.commit()
+
+        target = self.get_or_create_user(target_id)
+        target_wallet_loss = min(target.points, amount)
+        target_remainder = amount - target_wallet_loss
+        target_bank_loss = min(target.bank_points, target_remainder)
+        total_target_loss = target_wallet_loss + target_bank_loss
+
+        if target_wallet_loss > 0:
+            self.deduct_points(target_id, target_wallet_loss, "SUED_BY_CLASSMATE", f"Sued by user {user_id} for {amount:,} pts")
+
+        if target_bank_loss > 0:
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET bank_points = bank_points - ? WHERE user_id = ?",
+                    (target_bank_loss, target_id),
+                )
+                conn.execute(
+                    "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'SUED_BY_CLASSMATE_BANK', ?)",
+                    (target_id, -target_bank_loss, f"Bank vault loss from lawsuit by user {user_id}"),
+                )
+                conn.commit()
+
+        suer_updated = self.get_or_create_user(user_id)
+        target_updated = self.get_or_create_user(target_id)
+
+        return {
+            "amount": amount,
+            "suer_loss": amount,
+            "suer_wallet_loss": suer_wallet_loss,
+            "suer_bank_loss": suer_bank_loss,
+            "suer_new_wallet": suer_updated.points,
+            "suer_new_bank": suer_updated.bank_points,
+            "target_loss": total_target_loss,
+            "target_wallet_loss": target_wallet_loss,
+            "target_bank_loss": target_bank_loss,
+            "target_new_wallet": target_updated.points,
+            "target_new_bank": target_updated.bank_points,
+        }
 
     def get_leaderboard(self, limit: int = 10, offset: int = 0) -> tuple[list[UserLeaderboardEntry], int]:
         """Fetch sorted leaderboard entries with pagination."""
@@ -2297,7 +2450,7 @@ class RewardsDBService:
             ).fetchone()
             user_rank = rank_row["rank"]
 
-        # Parse shield
+        # Parse shield & arrest
         has_shield = False
         shield_dt = None
         if user.shield_until:
@@ -2308,6 +2461,17 @@ class RewardsDBService:
                 if s_dt > current_time:
                     has_shield = True
                     shield_dt = s_dt
+            except ValueError:
+                pass
+
+        arrested_dt = None
+        if user.arrested_until:
+            try:
+                a_dt = datetime.fromisoformat(user.arrested_until)
+                if a_dt.tzinfo is None:
+                    a_dt = a_dt.replace(tzinfo=timezone.utc)
+                if a_dt > current_time:
+                    arrested_dt = a_dt
             except ValueError:
                 pass
 
@@ -2350,6 +2514,7 @@ class RewardsDBService:
             duel_losses=user.duel_losses,
             duel_streak=user.duel_streak,
             bounties_claimed=user.bounties_claimed,
+            arrested_until=arrested_dt,
         )
 
     def record_redemption(self, user_id: int, item_id: str) -> dict:
@@ -4468,11 +4633,16 @@ class RewardsDBService:
                 raise RewardsError(
                     f"That classmate is ranked #{target_profile.rank}. The Class Treasurer Audit can only target students in the Top 3!"
                 )
+            if target_profile.points <= 0:
+                raise RewardsError("That classmate has no points to audit!")
             self.remove_item(user_id, item_id, 1)
-            tax_amount = max(int(target_profile.points * 0.20), 10)
-            new_balance = self.add_points(user_id, tax_amount, "TAX_COLLECTED", f"Collected 20% Class Tax based on {target_id}")
+            tax_amount = max(1, int(target_profile.points * 0.05))
+            if tax_amount > target_profile.points:
+                tax_amount = target_profile.points
+            self.deduct_points(target_id, tax_amount, "TAX_AUDITED", f"Audited by Class Treasurer {user_id}")
+            new_balance = self.add_points(user_id, tax_amount, "TAX_COLLECTED", f"Collected 5% Class Tax from {target_id}")
             points_awarded = tax_amount
-            desc = f"🕵️ Class Treasurer Audit executed! You audited a 20% Class Fund Tax (**+{tax_amount:,} Uno Points**) from <@{target_id}>!"
+            desc = f"🕵️ Class Treasurer Audit executed! You audited a 5% Class Fund Tax (**+{tax_amount:,} Uno Points**) from <@{target_id}>!"
 
         elif item_id == "coffee_bribe":
             self.remove_item(user_id, item_id, 1)
