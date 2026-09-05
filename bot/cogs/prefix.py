@@ -96,21 +96,35 @@ class PrefixCommandsCog(commands.Cog):
 
         if cog_name == "RewardsCog":
             user_id = context.author.id
-            read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild_view", "quests"}
+            from bot.services.rewards_db import OWNER_ECONOMY_OVERRIDE_USER_ID
 
-            arrested_until = target_cog.rewards_service.is_user_arrested(user_id)
-            if arrested_until and command_attribute not in read_only:
-                await context.reply(
-                    f"🚨 **You are under arrest!** You cannot perform economic actions until <t:{int(arrested_until.timestamp())}:R>."
-                )
-                return
+            if user_id != OWNER_ECONOMY_OVERRIDE_USER_ID:
+                if target_cog.rewards_service.is_martial_law_active():
+                    allowed_under_martial_law = {
+                        "balance", "profile", "rank", "leaderboard", "inventory",
+                        "guide", "guild_view", "quests", "daily", "martial_law"
+                    }
+                    if command_attribute not in allowed_under_martial_law:
+                        await context.reply(
+                            f"🪖 **STATE OF MARTIAL LAW ACTIVE**\n"
+                            f"By order of Supreme Chancellor <@{OWNER_ECONOMY_OVERRIDE_USER_ID}>, gambling, theft, duels, transfers, and lawsuits are **frozen**!"
+                        )
+                        return
 
-            locked_until = target_cog.rewards_service.is_economy_locked()
-            if locked_until and command_attribute not in read_only and command_attribute != "nuke":
-                await context.reply(
-                    f"☢️ **Global Economic Crisis in effect.** Economic actions resume <t:{int(locked_until.timestamp())}:R>."
-                )
-                return
+                read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild_view", "quests", "martial_law"}
+                arrested_until = target_cog.rewards_service.is_user_arrested(user_id)
+                if arrested_until and command_attribute not in read_only:
+                    await context.reply(
+                        f"🚨 **You are under arrest!** You cannot perform economic actions until <t:{int(arrested_until.timestamp())}:R>."
+                    )
+                    return
+
+                locked_until = target_cog.rewards_service.is_economy_locked()
+                if locked_until and command_attribute not in read_only and command_attribute != "nuke":
+                    await context.reply(
+                        f"☢️ **Global Economic Crisis in effect.** Economic actions resume <t:{int(locked_until.timestamp())}:R>."
+                    )
+                    return
 
         app_command = getattr(type(target_cog), command_attribute)
         interaction = PrefixInteraction(context)
@@ -332,6 +346,15 @@ class PrefixCommandsCog(commands.Cog):
     async def arrest_prefix(self, context: commands.Context, member: discord.Member) -> None:
         """Prefix alias for /arrest."""
         await self._invoke_app_command(context, "RewardsCog", "arrest", member)
+
+    @commands.command(name="martial_law", aliases=["martiallaw", "ml"])
+    async def martial_law_prefix(self, context: commands.Context, state: str = "on") -> None:
+        """Prefix alias for /martial_law."""
+        clean = state.lower().strip()
+        val = "on" if clean in ("on", "enable", "start", "1", "true") else "off"
+        choice = app_commands.Choice(name=val.upper(), value=val)
+        await self._invoke_app_command(context, "RewardsCog", "martial_law", choice)
+
 
 
     @commands.command(name="inventory", aliases=["inv", "bag"])

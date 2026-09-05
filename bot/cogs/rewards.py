@@ -11,6 +11,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from bot.services.rewards_db import (
+    OWNER_ECONOMY_OVERRIDE_USER_ID,
     BetOutcome,
     DailyAlreadyClaimedError,
     InsufficientPointsError,
@@ -2381,11 +2382,31 @@ class RewardsCog(commands.Cog):
         self._active_nukes: set[int] = set()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Pause reward-changing slash commands if user is arrested or during a Nuke Card crisis."""
+        """Pause reward-changing slash commands during Martial Law, arrest, or crisis."""
         user_id = interaction.user.id
         command = getattr(interaction, "command", None)
         command_name = getattr(command, "qualified_name", "")
-        read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild view", "quests"}
+
+        # Supreme Chancellor is exempt from all restrictions
+        if user_id == OWNER_ECONOMY_OVERRIDE_USER_ID:
+            return True
+
+        # Martial Law enforcement
+        if self.rewards_service.is_martial_law_active():
+            allowed_under_martial_law = {
+                "balance", "profile", "rank", "leaderboard", "inventory",
+                "guide", "guild view", "quests", "daily", "martial_law"
+            }
+            if command_name not in allowed_under_martial_law:
+                await interaction.response.send_message(
+                    f"🪖 **STATE OF MARTIAL LAW ACTIVE**\n"
+                    f"By order of Supreme Chancellor <@{OWNER_ECONOMY_OVERRIDE_USER_ID}>, gambling, duels, crime, transfers, and lawsuits are **frozen**!\n"
+                    f"Only view commands and `/daily` rations are permitted.",
+                    ephemeral=True,
+                )
+                return False
+
+        read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild view", "quests", "martial_law"}
 
         arrested_until = self.rewards_service.is_user_arrested(user_id)
         if arrested_until and command_name not in read_only:
@@ -2647,6 +2668,68 @@ class RewardsCog(commands.Cog):
             )
         except (InsufficientPointsError, RewardsError) as exc:
             await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
+
+    @app_commands.command(name="martial_law", description="[OWNER ONLY] Declare or lift state of Martial Law across the server economy.")
+    @app_commands.describe(mode="Enable ('on') or Disable ('off') Martial Law.")
+    @app_commands.choices(mode=[
+        app_commands.Choice(name="🚨 ON (Declare Martial Law & Freeze High-Stakes Actions)", value="on"),
+        app_commands.Choice(name="🕊️ OFF (Lift Martial Law & Restore Civilian Economy)", value="off"),
+    ])
+    async def martial_law(self, interaction: discord.Interaction, mode: app_commands.Choice[str]) -> None:
+        """Toggle Martial Law state."""
+        user_id = interaction.user.id
+        if user_id != OWNER_ECONOMY_OVERRIDE_USER_ID:
+            await interaction.response.send_message(
+                f"⛔ **Access Denied**: Only the Supreme Chancellor (<@{OWNER_ECONOMY_OVERRIDE_USER_ID}>) can declare or lift Martial Law!",
+                ephemeral=True,
+            )
+            return
+
+        is_on = (mode.value == "on")
+        self.rewards_service.set_martial_law(user_id, is_on)
+
+        if is_on:
+            embed = discord.Embed(
+                title="🪖 EXECUTIVE ORDER — STATE OF MARTIAL LAW DECLARED",
+                description=(
+                    f"By decree of **Supreme Chancellor {interaction.user.mention}**, a **State of Martial Law** has been declared across the campus!\n\n"
+                    "⚠️ **Emergency Decrees & Restrictions in Effect:**\n"
+                    "• 🎰 **Gambling & Casino Curfew:** `/bet`, `/slots`, `/coinflip`, `/blackjack`, `/highlow`, and `/cups` are **SHUT DOWN**.\n"
+                    "• ⚔️ **Anti-Crime Mandate:** `/steal`, `/duel`, and bounties are **PROHIBITED**.\n"
+                    "• 🏦 **Capital Controls:** Direct point transfers (`/give`) and bank vault withdrawals (`/bank withdraw`) are **FROZEN**.\n"
+                    "• ⚖️ **Civil Courts Suspended:** Lawsuits (`/sue`) and citizen arrests (`/arrest`) are **HALTED**.\n"
+                    "• 🍞 **Permitted Actions:** Daily rations (`/daily`), balance checks (`/balance`, `/profile`), and bank deposits.\n\n"
+                    "🛡️ *The Supreme Chancellor retains full executive discretion. Order must be maintained.*"
+                ),
+                color=discord.Color.dark_red(),
+            )
+            await interaction.response.send_message(embed=embed)
+            await self._log_activity(
+                "🚨 MARTIAL LAW DECLARED",
+                f"{interaction.user.mention} declared Martial Law. Economic restrictions engaged.",
+                discord.Color.red(),
+            )
+        else:
+            embed = discord.Embed(
+                title="🕊️ EXECUTIVE DECREE — MARTIAL LAW LIFTED",
+                description=(
+                    f"**Supreme Chancellor {interaction.user.mention}** has officially **LIFTED** the state of Martial Law!\n\n"
+                    "✅ **Civilian Order & Economy Restored:**\n"
+                    "• 🎰 Casino & gaming street bets are reopened.\n"
+                    "• 🏦 Bank vault withdrawals and direct transfers are re-enabled.\n"
+                    "• ⚔️ Duels, lawsuits, shop items, and skill cards resume standard operations.\n\n"
+                    "🎉 *Civil liberties have been restored to all students.*"
+                ),
+                color=discord.Color.green(),
+            )
+            await interaction.response.send_message(embed=embed)
+            await self._log_activity(
+                "🕊️ MARTIAL LAW LIFTED",
+                f"{interaction.user.mention} lifted Martial Law. Normal operations resumed.",
+                discord.Color.green(),
+            )
+
+
 
 
     @app_commands.command(name="daily", description="Claim your daily attendance Uno Points & build your streak!")

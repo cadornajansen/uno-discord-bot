@@ -1059,3 +1059,78 @@ def test_arrested_user_interaction_check():
 
     asyncio.run(_test())
 
+def test_martial_law_cog_command_and_interaction_check():
+    """Test /martial_law command execution and interaction_check freezing non-essential commands."""
+    async def _test():
+        cog, service, _ = _make_rewards_cog()
+        owner_id = 1522620190142107746
+        citizen_id = 9999
+
+        # 1. Citizen cannot run /martial_law
+        interaction_cit = MagicMock()
+        interaction_cit.user.id = citizen_id
+        interaction_cit.response.send_message = AsyncMock()
+        mode_on = MagicMock()
+        mode_on.value = "on"
+
+        await cog.martial_law.callback(cog, interaction_cit, mode=mode_on)
+        interaction_cit.response.send_message.assert_awaited_once()
+        assert "Access Denied" in interaction_cit.response.send_message.call_args.args[0]
+        assert not service.is_martial_law_active()
+
+        # 2. Owner declares martial law
+        interaction_own = MagicMock()
+        interaction_own.user.id = owner_id
+        interaction_own.user.mention = f"<@{owner_id}>"
+        interaction_own.response.send_message = AsyncMock()
+
+        await cog.martial_law.callback(cog, interaction_own, mode=mode_on)
+        interaction_own.response.send_message.assert_awaited_once()
+        embed = interaction_own.response.send_message.call_args.kwargs["embed"]
+        assert "STATE OF MARTIAL LAW DECLARED" in embed.title
+        assert service.is_martial_law_active()
+
+        # 3. Citizen trying economic command /bet is blocked
+        interaction_bet = MagicMock()
+        interaction_bet.user.id = citizen_id
+        interaction_bet.command.qualified_name = "bet"
+        interaction_bet.response.send_message = AsyncMock()
+
+        allowed = await cog.interaction_check(interaction_bet)
+        assert allowed is False
+        interaction_bet.response.send_message.assert_awaited_once()
+        assert "STATE OF MARTIAL LAW ACTIVE" in interaction_bet.response.send_message.call_args.args[0]
+
+        # 4. Citizen permitted for /balance and /daily
+        interaction_bal = MagicMock()
+        interaction_bal.user.id = citizen_id
+        interaction_bal.command.qualified_name = "balance"
+        interaction_bal.response.send_message = AsyncMock()
+        assert await cog.interaction_check(interaction_bal) is True
+
+        interaction_daily = MagicMock()
+        interaction_daily.user.id = citizen_id
+        interaction_daily.command.qualified_name = "daily"
+        interaction_daily.response.send_message = AsyncMock()
+        assert await cog.interaction_check(interaction_daily) is True
+
+        # 5. Owner is exempt from restrictions
+        interaction_own_bet = MagicMock()
+        interaction_own_bet.user.id = owner_id
+        interaction_own_bet.command.qualified_name = "bet"
+        interaction_own_bet.response.send_message = AsyncMock()
+        assert await cog.interaction_check(interaction_own_bet) is True
+
+        # 6. Owner lifts martial law
+        mode_off = MagicMock()
+        mode_off.value = "off"
+        interaction_off = MagicMock()
+        interaction_off.user.id = owner_id
+        interaction_off.user.mention = f"<@{owner_id}>"
+        interaction_off.response.send_message = AsyncMock()
+
+        await cog.martial_law.callback(cog, interaction_off, mode=mode_off)
+        assert not service.is_martial_law_active()
+
+    asyncio.run(_test())
+

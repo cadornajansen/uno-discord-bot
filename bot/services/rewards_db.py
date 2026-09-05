@@ -2247,6 +2247,27 @@ class RewardsDBService:
         except ValueError:
             return None
 
+    def is_martial_law_active(self) -> bool:
+        """Check if Martial Law has been declared."""
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT state_value FROM economy_state WHERE state_key = 'martial_law'").fetchone()
+            return bool(row and row["state_value"] == "1")
+
+    def set_martial_law(self, user_id: int, active: bool) -> bool:
+        """Toggle Martial Law status. Restricted exclusively to OWNER_ECONOMY_OVERRIDE_USER_ID."""
+        if user_id != OWNER_ECONOMY_OVERRIDE_USER_ID:
+            raise RewardsError(
+                f"⛔ Access Denied: Only the Supreme Chancellor (<@{OWNER_ECONOMY_OVERRIDE_USER_ID}>) can declare or lift Martial Law!"
+            )
+        val = "1" if active else "0"
+        with self._get_connection() as conn:
+            conn.execute(
+                "INSERT INTO economy_state (state_key, state_value) VALUES ('martial_law', ?) ON CONFLICT(state_key) DO UPDATE SET state_value = excluded.state_value",
+                (val,),
+            )
+            conn.commit()
+        return active
+
     def begin_nuke(self, user_id: int, target_id: int) -> None:
         if user_id == target_id:
             raise RewardsError("You cannot target yourself with a Nuke Card.")
@@ -4339,6 +4360,9 @@ class RewardsDBService:
         """Withdraw points from bank vault into wallet (10% withdrawal fee)."""
         if amount <= 0:
             raise RewardsError("Withdrawal amount must be greater than 0!")
+
+        if self.is_martial_law_active() and user_id != OWNER_ECONOMY_OVERRIDE_USER_ID:
+            raise RewardsError("🏦 Emergency Capital Controls: Bank vault withdrawals are frozen under Martial Law!")
 
         user = self.get_or_create_user(user_id)
         if user.bank_points < amount:

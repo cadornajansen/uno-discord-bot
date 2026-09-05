@@ -1168,3 +1168,42 @@ def test_arrest_user_rules_and_cost(rewards_service: RewardsDBService):
     with pytest.raises(RewardsError, match="already under arrest"):
         rewards_service.arrest_user(1001, 1002, now=now + timedelta(minutes=10))
 
+def test_martial_law_state_and_restrictions(rewards_service: RewardsDBService):
+    """Test Martial Law activation, non-owner restrictions, and owner bypass."""
+    owner_id = OWNER_ECONOMY_OVERRIDE_USER_ID
+    citizen_id = 9999
+
+    assert not rewards_service.is_martial_law_active()
+
+    # Non-owner cannot declare martial law
+    with pytest.raises(RewardsError, match="Only the Supreme Chancellor"):
+        rewards_service.set_martial_law(citizen_id, True)
+
+    # Owner declares martial law
+    assert rewards_service.set_martial_law(owner_id, True) is True
+    assert rewards_service.is_martial_law_active() is True
+
+    # Setup bank points for citizen and owner
+    rewards_service.get_or_create_user(citizen_id)
+    rewards_service.get_or_create_user(owner_id)
+    with rewards_service._get_connection() as conn:
+        conn.execute("UPDATE users SET points = 1000, bank_points = 10000 WHERE user_id = ?", (citizen_id,))
+        conn.execute("UPDATE users SET points = 1000, bank_points = 10000 WHERE user_id = ?", (owner_id,))
+        conn.commit()
+
+    # Citizen cannot withdraw from bank under martial law
+    with pytest.raises(RewardsError, match="Emergency Capital Controls"):
+        rewards_service.bank_withdraw(citizen_id, 1000)
+
+    # Owner CAN withdraw from bank under martial law
+    res = rewards_service.bank_withdraw(owner_id, 1000)
+    assert res["amount_withdrawn"] == 1000
+
+    # Owner lifts martial law
+    assert rewards_service.set_martial_law(owner_id, False) is False
+    assert rewards_service.is_martial_law_active() is False
+
+    # Citizen can now withdraw
+    res_cit = rewards_service.bank_withdraw(citizen_id, 1000)
+    assert res_cit["amount_withdrawn"] == 1000
+
