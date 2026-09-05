@@ -423,6 +423,11 @@ ITEM_DEFINITIONS = {
         "description": "Target a protected classmate to instantly shatter their active Immunity Shield!",
         "usable": True,
     },
+    "tax_audit": {
+        "name": "🕵️ Class Treasurer Audit",
+        "description": "Target a Top-3 Leaderboard player to audit 5% of their liquid wallet (max 25,000 pts) into your wallet!",
+        "usable": True,
+    },
     "coffee_bribe": {
         "name": "☕ Dean's Coffee Bribe",
         "description": "Instant lucky grant of +100 to +180 Uno Points from the CS Faculty coffee fund!",
@@ -485,6 +490,13 @@ SHOP_CATALOG = {
         "category": "consumable",
         "subcategory": "offense",
         "description": "Target a protected classmate to instantly shatter their active Immunity Shield.",
+    },
+    "tax_audit": {
+        "name": "🕵️ Class Treasurer Audit",
+        "cost": 10000,
+        "category": "consumable",
+        "subcategory": "offense",
+        "description": "Target a Top-3 Leaderboard player to audit 5% of their liquid wallet (capped at 25,000 pts).",
     },
     "coffee_bribe": {
         "name": "☕ Dean's Coffee Bribe",
@@ -1099,6 +1111,7 @@ class UserRecord:
     last_give_time: Optional[str] = None
     cups_rounds_played: int = 0
     arrested_until: Optional[str] = None
+    last_tax_audited_time: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -1488,6 +1501,8 @@ class RewardsDBService:
             conn.execute("ALTER TABLE users ADD COLUMN cups_rounds_played INTEGER DEFAULT 0")
         if "arrested_until" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN arrested_until TEXT")
+        if "last_tax_audited_time" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN last_tax_audited_time TEXT")
         conn.commit()
 
     def get_or_create_user(self, user_id: int) -> UserRecord:
@@ -1532,6 +1547,7 @@ class RewardsDBService:
                 last_give_time=row["last_give_time"] if "last_give_time" in keys else None,
                 cups_rounds_played=row["cups_rounds_played"] if "cups_rounds_played" in keys else 0,
                 arrested_until=row["arrested_until"] if "arrested_until" in keys else None,
+                last_tax_audited_time=row["last_tax_audited_time"] if "last_tax_audited_time" in keys else None,
             )
 
     def get_balance(self, user_id: int) -> int:
@@ -2875,6 +2891,7 @@ class RewardsDBService:
                 "airdrop",
                 "gacha_box",
                 "shield_breaker",
+                "tax_audit",
                 "coffee_bribe",
             ]
             reward_item_id = fixed_skill if fixed_skill in possible_skills else random.choice(possible_skills)
@@ -4673,6 +4690,78 @@ class RewardsDBService:
                 conn.execute("UPDATE users SET shield_until = NULL WHERE user_id = ?", (target_id,))
                 conn.commit()
             desc = f"🔨 EMP Shatter! You struck <@{target_id}> with an EMP shockwave and completely destroyed their Immunity Shield!"
+
+        elif item_id == "tax_audit":
+            if not target_id:
+                raise RewardsError("You must specify a Top-3 classmate to audit with `/use tax_audit @classmate`!")
+            if target_id == user_id:
+                raise RewardsError("You cannot audit yourself!")
+            if target_id == OWNER_ECONOMY_OVERRIDE_USER_ID:
+                raise RewardsError(
+                    "⛔ Sovereign Immunity: The Class IRS cannot audit Supreme Chancellor Jansen! Your audit warrant has been revoked."
+                )
+
+            current_time = now or datetime.now(timezone.utc)
+            target_user = self.get_or_create_user(target_id)
+
+            # Check target rank excluding owner
+            with self._get_connection() as conn:
+                rank_row = conn.execute(
+                    "SELECT COUNT(*) + 1 as rank FROM users WHERE points > ? AND user_id != ?",
+                    (target_user.points, OWNER_ECONOMY_OVERRIDE_USER_ID),
+                ).fetchone()
+                target_rank = rank_row["rank"]
+
+            if target_rank > 3:
+                raise RewardsError(
+                    f"That classmate is ranked #{target_rank} among students. The Class Treasurer Audit can only target students in the Top 3!"
+                )
+
+            if target_user.points < 20000:
+                raise RewardsError(
+                    f"That classmate only has {target_user.points:,} pts in their wallet. Their liquid balance is too low to audit (< 20,000 pts)!"
+                )
+
+            # 2-Hour Audit Cooldown / Tax Clearance Certificate on target
+            if target_user.last_tax_audited_time:
+                try:
+                    last_audited_dt = datetime.fromisoformat(target_user.last_tax_audited_time)
+                    if last_audited_dt.tzinfo is None:
+                        last_audited_dt = last_audited_dt.replace(tzinfo=timezone.utc)
+                    diff = (current_time - last_audited_dt).total_seconds()
+                    AUDIT_COOLDOWN_SECONDS = 7200  # 2 hours
+                    if diff < AUDIT_COOLDOWN_SECONDS:
+                        rem_minutes = int((AUDIT_COOLDOWN_SECONDS - diff) // 60)
+                        rem_seconds = int((AUDIT_COOLDOWN_SECONDS - diff) % 60)
+                        raise RewardsError(
+                            f"That classmate passed a tax audit recently! Protected by a Tax Clearance Certificate for {rem_minutes}m {rem_seconds}s."
+                        )
+                except ValueError:
+                    pass
+
+            self.remove_item(user_id, item_id, 1)
+
+            MAX_AUDIT_PAYOUT = 25000
+            raw_tax = int(target_user.points * 0.05)
+            tax_amount = min(MAX_AUDIT_PAYOUT, max(1, raw_tax))
+            if tax_amount > target_user.points:
+                tax_amount = target_user.points
+
+            self.deduct_points(target_id, tax_amount, "TAX_AUDITED", f"Audited by Class Treasurer {user_id}")
+            new_balance = self.add_points(
+                user_id, tax_amount, "TAX_COLLECTED", f"Collected 5% Class Tax from {target_id} (Capped at {MAX_AUDIT_PAYOUT:,} pts)"
+            )
+            points_awarded = tax_amount
+
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET last_tax_audited_time = ? WHERE user_id = ?",
+                    (current_time.isoformat(), target_id),
+                )
+                conn.commit()
+
+            cap_note = " *(Max Payout Cap Reached!)*" if tax_amount == MAX_AUDIT_PAYOUT else ""
+            desc = f"🕵️ Class Treasurer Audit executed! You audited 5% of <@{target_id}>'s liquid wallet (**+{tax_amount:,} Uno Points**){cap_note}!"
 
         elif item_id == "coffee_bribe":
             self.remove_item(user_id, item_id, 1)

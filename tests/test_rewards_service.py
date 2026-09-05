@@ -418,7 +418,7 @@ def test_uno_reverse_card_counter_steals(rewards_service: RewardsDBService):
 
 
 def test_shield_breaker(rewards_service: RewardsDBService):
-    """Test EMP Shield Breaker destroying shields and verify Tax Audit is retired."""
+    """Test EMP Shield Breaker destroying shields."""
     now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
     rewards_service.add_points(1001, 500, "TOP1")
     rewards_service.add_points(1002, 100, "ATTACKER")
@@ -435,10 +435,58 @@ def test_shield_breaker(rewards_service: RewardsDBService):
     assert not rewards_service.has_active_shield(1001, now=now)
     assert "shield_breaker" not in rewards_service.get_inventory(1002)
 
-    # 3. Verify tax_audit is no longer in shop catalog or item definitions
-    from bot.services.rewards_db import ITEM_DEFINITIONS, SHOP_CATALOG
-    assert "tax_audit" not in ITEM_DEFINITIONS
-    assert "tax_audit" not in SHOP_CATALOG
+
+def test_tax_audit_exploit_protections(rewards_service: RewardsDBService):
+    """Test Tax Audit anti-exploit protections: Sovereign Immunity, 25k cap, 2h cooldown, and min wallet threshold."""
+    now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
+
+    # Setup players
+    # Owner has 99,999,999 points
+    rewards_service.add_points(OWNER_ECONOMY_OVERRIDE_USER_ID, 99999999, "OWNER_TEST")
+    # Top 1 Student (1,000,000 pts)
+    rewards_service.add_points(2001, 1000000, "WHALE")
+    # Top 2 Student (50,000 pts)
+    rewards_service.add_points(2002, 50000, "STUDENT_2")
+    # Top 3 Student (25,000 pts)
+    rewards_service.add_points(2003, 25000, "STUDENT_3")
+    # Rank 4 Student (5,000 pts)
+    rewards_service.add_points(2004, 5000, "STUDENT_4")
+    # Auditor (1,000 pts)
+    rewards_service.add_points(2005, 1000, "AUDITOR")
+
+    # 1. Sovereign Immunity: Cannot audit Supreme Chancellor / Owner
+    rewards_service.add_item(2005, "tax_audit", 1)
+    with pytest.raises(RewardsError, match="Sovereign Immunity"):
+        rewards_service.use_item(2005, "tax_audit", target_id=OWNER_ECONOMY_OVERRIDE_USER_ID, now=now)
+
+    # 2. Cannot audit self
+    with pytest.raises(RewardsError, match="cannot audit yourself"):
+        rewards_service.use_item(2005, "tax_audit", target_id=2005, now=now)
+
+    # 3. Cannot audit beyond Top 3 students (Student 2004 is #4)
+    with pytest.raises(RewardsError, match="Top 3"):
+        rewards_service.use_item(2005, "tax_audit", target_id=2004, now=now)
+
+    # 4. Target liquid wallet balance < 20,000 pts while staying in Top 3 (19,000 pts is #3)
+    rewards_service.deduct_points(2003, 6000, "SPENT")  # 25k - 6k = 19,000 pts
+    with pytest.raises(RewardsError, match="liquid balance is too low to audit"):
+        rewards_service.use_item(2005, "tax_audit", target_id=2003, now=now)
+
+    # 5. Hard Cap on Whales (Target with 1,000,000 pts -> 5% is 50,000, but capped at 25,000!)
+    res_whale = rewards_service.use_item(2005, "tax_audit", target_id=2001, now=now)
+    assert res_whale.points_awarded == 25000
+    assert "Max Payout Cap Reached" in res_whale.description
+    assert rewards_service.get_balance(2001) == 975000  # Target lost 25,000 (not 50,000!)
+    assert rewards_service.get_balance(2005) == 26000  # Auditor received 25,000 (1k + 25k)
+
+    # 6. 2-Hour Cooldown (Tax Clearance Certificate)
+    rewards_service.add_item(2005, "tax_audit", 1)
+    with pytest.raises(RewardsError, match="Tax Clearance Certificate"):
+        rewards_service.use_item(2005, "tax_audit", target_id=2001, now=now + timedelta(minutes=30))
+
+    # After 2 hours, audit protection expires
+    res_expired = rewards_service.use_item(2005, "tax_audit", target_id=2001, now=now + timedelta(hours=2, seconds=5))
+    assert res_expired.points_awarded == 25000
 
 
 def test_coffee_bribe_and_gacha_box(rewards_service: RewardsDBService):
