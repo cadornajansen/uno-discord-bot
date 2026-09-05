@@ -310,33 +310,33 @@ def test_use_item_activation(rewards_service: RewardsDBService):
 
 
 def test_record_and_update_redemptions(rewards_service: RewardsDBService):
-    """Test purchasing shop items, approvals, and refunds."""
-    rewards_service.add_points(1001, 100000, "TEST")
+    """Test purchasing shop items, approvals, and refunds with 5x prize values."""
+    rewards_service.add_points(1001, 600000, "TEST")
 
     # 1. Consumable purchase -> auto-granted to inventory
     res_cons = rewards_service.record_redemption(1001, "pickpocket")
     assert res_cons["status"] == "DELIVERED"
-    assert rewards_service.get_balance(1001) == 99900
+    assert rewards_service.get_balance(1001) == 599900
     assert rewards_service.get_inventory(1001)["pickpocket"] == 1
 
-    # 2. Physical prize purchase -> PENDING status (50,000 pts)
+    # 2. Physical prize purchase -> PENDING status (250,000 pts)
     res_coffee = rewards_service.record_redemption(1001, "coffee")
     assert res_coffee["status"] == "PENDING"
-    assert rewards_service.get_balance(1001) == 49900
+    assert rewards_service.get_balance(1001) == 349900
 
     # 3. Approve redemption
     app_res = rewards_service.update_redemption_status(res_coffee["id"], "APPROVED")
     assert app_res["status"] == "APPROVED"
 
-    # 4. Another redemption -> REJECT & REFUND (65,000 pts)
-    rewards_service.add_points(1001, 50000, "TEST")  # 49900 + 50000 = 99900
+    # 4. Another redemption -> REJECT & REFUND (325,000 pts)
+    rewards_service.add_points(1001, 25000, "TEST")  # 349900 + 25000 = 374900
     res_gcash = rewards_service.record_redemption(1001, "gcash_100")
-    assert rewards_service.get_balance(1001) == 34900
+    assert rewards_service.get_balance(1001) == 49900
 
-    # Reject -> refund 65000 points
+    # Reject -> refund 325,000 points
     rej_res = rewards_service.update_redemption_status(res_gcash["id"], "REJECTED")
     assert rej_res["status"] == "REJECTED"
-    assert rewards_service.get_balance(1001) == 99900
+    assert rewards_service.get_balance(1001) == 374900
 
 
 def test_trivia_service_mechanics(rewards_service: RewardsDBService):
@@ -1303,4 +1303,280 @@ def test_pay_fine_rules_and_cost(rewards_service: RewardsDBService):
     assert target_b == user_id
     assert rewards_service.is_user_arrested(user_id) is None
     assert rewards_service.get_balance(friend_id) == 5_000
+
+
+def test_loan_take_and_repay(rewards_service: RewardsDBService):
+    """Test taking a loan and repaying it."""
+    user_id = 9911
+    now = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+
+    # Take micro loan
+    loan = rewards_service.take_loan(user_id, "micro", now=now)
+    assert loan.principal == 5_000
+    assert loan.total_due == 6_000
+    assert loan.remaining_due == 6_000
+    assert rewards_service.get_balance(user_id) == 5_000
+
+    # Cannot take another loan while active
+    with pytest.raises(RewardsError, match="already have an outstanding"):
+        rewards_service.take_loan(user_id, "micro", now=now)
+
+    # Partial repayment
+    res_partial = rewards_service.repay_loan(user_id, 2_000, now=now)
+    assert res_partial["amount_paid"] == 2_000
+    assert res_partial["remaining_due"] == 4_000
+    assert res_partial["is_settled"] is False
+    assert rewards_service.get_balance(user_id) == 3_000
+
+    # Add points to repay remainder
+    rewards_service.add_points(user_id, 2_000, "BONUS")
+    assert rewards_service.get_balance(user_id) == 5_000
+
+    # Full repayment (leaving amount None auto-repaies up to wallet or remaining)
+    res_full = rewards_service.repay_loan(user_id, None, now=now)
+    assert res_full["amount_paid"] == 4_000
+    assert res_full["remaining_due"] == 0
+    assert res_full["is_settled"] is True
+    assert rewards_service.get_balance(user_id) == 1_000
+
+    # Active loan is now None or settled
+    assert rewards_service.get_active_loan(user_id, now=now) is None
+
+
+def test_loan_default_and_wage_garnishment(rewards_service: RewardsDBService):
+    """Test loan defaulting after due date and wage garnishment on daily/work/study."""
+    user_id = 9922
+    t0 = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+    rewards_service.take_loan(user_id, "micro", now=t0)
+    assert rewards_service.get_balance(user_id) == 5_000
+
+    # Zero wallet so they don't have funds
+    rewards_service.deduct_points(user_id, 5_000, "SPENT")
+
+    # Fast forward 3 days (past 48h due date)
+    t1 = t0 + timedelta(days=3)
+    loan = rewards_service.get_active_loan(user_id, now=t1)
+    assert loan.is_overdue is True
+    assert loan.status == "DEFAULTED"
+
+    # Daily claim with garnishment
+    daily_res = rewards_service.claim_daily(user_id, now=t1)
+    assert daily_res.base_points == 20
+    assert daily_res.garnished_amount == 10  # 50% of 20
+    assert daily_res.points_awarded == 10
+    assert daily_res.garnishment_notice is not None
+    assert rewards_service.get_balance(user_id) == 10
+
+    # Work with garnishment
+    work_res = rewards_service.execute_work(user_id, now=t1, fixed_job_index=0)
+    assert work_res.garnished_amount > 0
+    assert work_res.points_earned < work_res.points_earned + work_res.garnished_amount
+    assert work_res.garnishment_notice is not None
+
+    # Study with garnishment
+    t_study = t1 + timedelta(hours=2)
+    study_res = rewards_service.execute_study(user_id, now=t_study, fixed_points=200)
+    assert study_res.garnished_amount == 100
+    assert study_res.points_earned == 100
+    assert study_res.garnishment_notice is not None
+
+
+def test_bankruptcy_consequences(rewards_service: RewardsDBService):
+    """Test declaring bankruptcy discharges debt, clears wallet, and triggers casino lockout."""
+    user_id = 9933
+    t0 = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+    rewards_service.take_loan(user_id, "micro", now=t0)
+    rewards_service.add_points(user_id, 1_500, "OTHER")
+    assert rewards_service.get_balance(user_id) == 6_500
+
+    # File bankruptcy
+    res = rewards_service.declare_bankruptcy(user_id, now=t0)
+    assert res.discharged_amount == 6_000
+    assert res.wallet_cleared == 6_500
+    assert rewards_service.get_balance(user_id) == 0
+
+    # No active loan remains
+    assert rewards_service.get_active_loan(user_id, now=t0) is None
+
+    # User cannot borrow again during lockout
+    with pytest.raises(RewardsError, match="Bankruptcy Lockout"):
+        rewards_service.take_loan(user_id, "micro", now=t0)
+
+    # Casino check raises error
+    u = rewards_service.get_or_create_user(user_id)
+    with pytest.raises(RewardsError, match=r"Bankruptcy.*Lockout"):
+        rewards_service._check_and_update_casino_limit(u, now=t0)
+
+
+def test_lottery_purchase_and_draw(rewards_service: RewardsDBService):
+    """Test purchasing lottery tickets, jackpot growth, and drawing a winner."""
+    u1, u2 = 8001, 8002
+    rewards_service.add_points(u1, 1000, "START")
+    rewards_service.add_points(u2, 1000, "START")
+
+    # Initial lottery info
+    info = rewards_service.get_lottery_info(u1)
+    assert info.jackpot_pool == 50000
+    assert info.total_tickets == 0
+    assert info.user_tickets == 0
+
+    # User 1 buys 2 tickets (400 pts -> 320 pts added to jackpot)
+    res_b = rewards_service.buy_lottery_tickets(u1, 2)
+    assert res_b["tickets_bought"] == 2
+    assert res_b["new_jackpot"] == 50320
+    assert res_b["user_total_tickets"] == 2
+    assert rewards_service.get_balance(u1) == 600
+
+    # User 2 buys 1 ticket
+    rewards_service.buy_lottery_tickets(u2, 1)
+    assert rewards_service.get_balance(u2) == 800
+
+    info2 = rewards_service.get_lottery_info(u1)
+    assert info2.total_tickets == 3
+    assert info2.user_tickets == 2
+
+    # Draw lottery
+    res_draw = rewards_service.draw_lottery()
+    assert res_draw["has_winner"] is True
+    assert res_draw["winner_id"] in (u1, u2)
+    assert res_draw["jackpot_won"] >= 50320
+    assert res_draw["next_draw_id"] == 2
+
+    # New draw reset to 50k
+    info3 = rewards_service.get_lottery_info()
+    assert info3.draw_id == 2
+    assert info3.jackpot_pool == 50000
+    assert info3.total_tickets == 0
+
+
+def test_stock_market_trading(rewards_service: RewardsDBService):
+    """Test stock board, buying shares, portfolio tracking, and selling."""
+    user_id = 8101
+    rewards_service.add_points(user_id, 10000, "START")
+
+    quotes = rewards_service.get_stock_market(simulate=False)
+    assert len(quotes) == 4
+    coffee = next(q for q in quotes if q.ticker == "COFFEE")
+    assert coffee.current_price == 100
+
+    # Buy 10 shares of $COFFEE (1,000 pts)
+    buy_res = rewards_service.buy_stock(user_id, "COFFEE", 10)
+    assert buy_res["shares_bought"] == 10
+    assert buy_res["total_cost"] == 1000
+    assert rewards_service.get_balance(user_id) == 9000
+
+    # Check portfolio
+    pf = rewards_service.get_portfolio(user_id)
+    assert len(pf.holdings) == 1
+    assert pf.holdings[0].shares == 10
+    assert pf.total_invested == 1000
+    assert pf.total_value == 1000
+
+    # Sell 4 shares of $COFFEE
+    sell_res = rewards_service.sell_stock(user_id, "COFFEE", 4)
+    assert sell_res["shares_sold"] == 4
+    assert sell_res["total_payout"] == 400
+    assert sell_res["remaining_shares"] == 6
+    assert rewards_service.get_balance(user_id) == 9400
+
+    pf2 = rewards_service.get_portfolio(user_id)
+    assert pf2.holdings[0].shares == 6
+
+
+def test_blackmarket_items_and_perks(rewards_service: RewardsDBService):
+    """Test buying contraband and their special perks (ski_mask, fake_clearance, bribe_waiver)."""
+    thief_id = 8201
+    victim_id = 8202
+    rewards_service.add_points(thief_id, 20000, "START")
+    rewards_service.add_points(victim_id, 20000, "START")
+
+    # Blackmarket open at midnight PHT
+    from bot.services.rewards_db import PHT
+    midnight_pht = datetime(2026, 9, 1, 0, 30, tzinfo=PHT)
+    assert rewards_service.is_blackmarket_open(now=midnight_pht) is True
+
+    # Buy ski_mask
+    bm_res = rewards_service.buy_blackmarket_item(thief_id, "ski_mask", now=midnight_pht)
+    assert bm_res["item_id"] == "ski_mask"
+    assert rewards_service.get_inventory(thief_id)["ski_mask"] == 1
+
+    # Buy fake_clearance
+    bm_res2 = rewards_service.buy_blackmarket_item(victim_id, "fake_clearance", now=midnight_pht)
+    assert bm_res2["item_id"] == "fake_clearance"
+
+    # Victim activates fake_clearance
+    use_fc = rewards_service.use_item(victim_id, "fake_clearance", now=midnight_pht)
+    assert "protected" in use_fc.description.lower()
+
+    # Tax audit against victim should fail due to fake clearance!
+    rewards_service.add_item(thief_id, "tax_audit", 1)
+    with pytest.raises(RewardsError, match="Forged Tax Clearance"):
+        rewards_service.use_item(thief_id, "tax_audit", target_id=victim_id, now=midnight_pht)
+
+    # Buy bribe_waiver for victim
+    rewards_service.buy_blackmarket_item(victim_id, "bribe_waiver", now=midnight_pht)
+    assert rewards_service.get_inventory(victim_id)["bribe_waiver"] == 1
+
+    # Thief sues victim for 20,000 pts -> bribe waiver quashes lawsuit!
+    rewards_service.add_points(thief_id, 25000, "FUNDS")
+    sue_res = rewards_service.sue_user(thief_id, victim_id, 20000)
+    assert sue_res["bribe_waived"] is True
+    assert sue_res["target_loss"] == 0
+    assert rewards_service.get_inventory(victim_id).get("bribe_waiver", 0) == 0
+
+
+def test_campus_businesses_passive_income(rewards_service: RewardsDBService):
+    """Test purchasing business franchise, upgrading, and collecting revenue."""
+    user_id = 8301
+    t0 = datetime(2026, 9, 1, 10, 0, tzinfo=timezone.utc)
+    rewards_service.add_points(user_id, 100000, "START")
+
+    # Buy Pares Cart (15k pts, 400 pts/day)
+    biz = rewards_service.buy_business(user_id, "pares_cart", now=t0)
+    assert biz.business_id == "pares_cart"
+    assert biz.daily_yield == 400
+    assert rewards_service.get_balance(user_id) == 85000
+
+    # Upgrade to level 2
+    biz_up = rewards_service.upgrade_business(user_id, "pares_cart")
+    assert biz_up.level == 2
+    assert biz_up.daily_yield == 800
+
+    # Fast forward 24 hours
+    t1 = t0 + timedelta(days=1)
+    rev_pts, breakdown = rewards_service.collect_business_revenue(user_id, now=t1)
+    assert rev_pts == 800
+    assert len(breakdown) == 1
+    assert rewards_service.get_balance(user_id) == 63300
+
+
+def test_bank_heist_operation(rewards_service: RewardsDBService):
+    """Test starting heist lobby, joining roles, and executing heist."""
+    guild_id = 999
+    leader = 8401
+    hacker = 8402
+    rewards_service.add_points(leader, 5000, "START")
+    rewards_service.add_points(hacker, 5000, "START")
+
+    # Start heist
+    lobby = rewards_service.start_heist_lobby(guild_id, leader)
+    assert lobby["leader_id"] == leader
+    assert len(lobby["crew"]) == 1
+
+    # Hacker joins
+    lobby2 = rewards_service.join_heist_lobby(guild_id, hacker, "Hacker")
+    assert len(lobby2["crew"]) == 2
+
+    # Execute heist
+    res = rewards_service.execute_heist(guild_id, leader)
+    assert "success" in res
+    assert res["crew_size"] == 2
+    if res["success"]:
+        assert res["total_vault"] >= 30000
+        assert rewards_service.get_balance(leader) > 5000
+    else:
+        assert rewards_service.is_user_arrested(leader) is not None
+        assert rewards_service.is_user_arrested(hacker) is not None
+
+
 

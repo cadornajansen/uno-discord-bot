@@ -28,48 +28,48 @@ def test_get_prize_benchmark_win_cap_curve(test_db_service: RewardsDBService):
     """Verify exact dampener mathematical curve across points tiers."""
     user = test_db_service.get_or_create_user(99901)
 
-    # 1. Below 49,000 pts -> None (standard odds)
+    # 1. Below 245,000 pts -> None (standard odds)
     _set_points(test_db_service, user.user_id, 0)
     user = test_db_service.get_or_create_user(user.user_id)
     assert test_db_service.get_prize_benchmark_win_cap(user) is None
 
-    _set_points(test_db_service, user.user_id, 48_999)
+    _set_points(test_db_service, user.user_id, 244_999)
     user = test_db_service.get_or_create_user(user.user_id)
     assert test_db_service.get_prize_benchmark_win_cap(user) is None
 
-    # 2. Exactly 49,000 pts (1,000 away from Coffee Treat @ 50k) -> 10% (0.10)
-    _set_points(test_db_service, user.user_id, 49_000)
+    # 2. Exactly 245,000 pts (5,000 away from Coffee Treat @ 250k) -> 10% (0.10)
+    _set_points(test_db_service, user.user_id, 245_000)
     user = test_db_service.get_or_create_user(user.user_id)
     assert test_db_service.get_prize_benchmark_win_cap(user) == 0.10
 
-    _set_points(test_db_service, user.user_id, 49_999)
+    _set_points(test_db_service, user.user_id, 249_999)
     user = test_db_service.get_or_create_user(user.user_id)
     assert test_db_service.get_prize_benchmark_win_cap(user) == 0.10
 
-    # 3. 50,000 pts (Coffee Treat reached / 50k away from Nitro) -> 10% (0.10)
-    _set_points(test_db_service, user.user_id, 50_000)
+    # 3. 250,000 pts (Coffee Treat reached / 250k away from Nitro) -> 10% (0.10)
+    _set_points(test_db_service, user.user_id, 250_000)
     user = test_db_service.get_or_create_user(user.user_id)
     assert test_db_service.get_prize_benchmark_win_cap(user) == 0.10
 
-    # 4. 65,000 pts (GCash ₱100 benchmark) -> 7.3%
-    _set_points(test_db_service, user.user_id, 65_000)
+    # 4. 325,000 pts (GCash ₱100 benchmark) -> 7.3%
+    _set_points(test_db_service, user.user_id, 325_000)
     user = test_db_service.get_or_create_user(user.user_id)
-    cap_65k = test_db_service.get_prize_benchmark_win_cap(user)
-    assert cap_65k == 0.073
+    cap_325k = test_db_service.get_prize_benchmark_win_cap(user)
+    assert cap_325k == 0.073
 
-    # 5. 80,000 pts (Free Printing benchmark) -> 4.6%
-    _set_points(test_db_service, user.user_id, 80_000)
+    # 5. 400,000 pts (Free Printing benchmark) -> 4.6%
+    _set_points(test_db_service, user.user_id, 400_000)
     user = test_db_service.get_or_create_user(user.user_id)
-    cap_80k = test_db_service.get_prize_benchmark_win_cap(user)
-    assert cap_80k == 0.046
+    cap_400k = test_db_service.get_prize_benchmark_win_cap(user)
+    assert cap_400k == 0.046
 
-    # 6. 100,000 pts (1 Month Discord Nitro benchmark) -> 1.0% (0.01)
-    _set_points(test_db_service, user.user_id, 100_000)
+    # 6. 500,000 pts (1 Month Discord Nitro benchmark) -> 1.0% (0.01)
+    _set_points(test_db_service, user.user_id, 500_000)
     user = test_db_service.get_or_create_user(user.user_id)
     assert test_db_service.get_prize_benchmark_win_cap(user) == 0.01
 
-    # 7. > 100,000 pts -> 1.0% (0.01)
-    _set_points(test_db_service, user.user_id, 150_000)
+    # 7. > 500,000 pts -> 1.0% (0.01)
+    _set_points(test_db_service, user.user_id, 750_000)
     user = test_db_service.get_or_create_user(user.user_id)
     assert test_db_service.get_prize_benchmark_win_cap(user) == 0.01
 
@@ -77,31 +77,31 @@ def test_get_prize_benchmark_win_cap_curve(test_db_service: RewardsDBService):
 def test_bank_vault_assets_included_in_benchmark_cap(test_db_service: RewardsDBService):
     """Verify players cannot bypass the dampener by stashing points in bank vault."""
     user = test_db_service.get_or_create_user(99902)
-    # Wallet has only 500 points, but Bank has 49,000 points (Total = 49,500)
+    # Wallet has only 500 points, but Bank has 245,000 points (Total = 245,500)
     _set_points(test_db_service, user.user_id, 500)
     with test_db_service._get_connection() as conn:
-        conn.execute("UPDATE users SET bank_points = 49000 WHERE user_id = ?", (user.user_id,))
+        conn.execute("UPDATE users SET bank_points = 245000 WHERE user_id = ?", (user.user_id,))
         conn.commit()
 
     user = test_db_service.get_or_create_user(user.user_id)
     assert user.points == 500
-    assert user.bank_points == 49000
-    # Total assets = 49,500 -> triggers 10% cap
+    assert user.bank_points == 245000
+    # Total assets = 245,500 -> triggers 10% cap
     assert test_db_service.get_prize_benchmark_win_cap(user) == 0.10
 
-    # Total assets = 100,000 (Wallet 1,000 + Bank 99,000) -> triggers 1% cap
+    # Total assets = 500,000 (Wallet 1,000 + Bank 499,000) -> triggers 1% cap
     _set_points(test_db_service, user.user_id, 1_000)
     with test_db_service._get_connection() as conn:
-        conn.execute("UPDATE users SET bank_points = 99000 WHERE user_id = ?", (user.user_id,))
+        conn.execute("UPDATE users SET bank_points = 499000 WHERE user_id = ?", (user.user_id,))
         conn.commit()
     user = test_db_service.get_or_create_user(user.user_id)
     assert test_db_service.get_prize_benchmark_win_cap(user) == 0.01
 
 
 def test_deterministic_fixed_outcomes_unaffected(test_db_service: RewardsDBService):
-    """Ensure fixed tests still work even when player has 100,000 points."""
+    """Ensure fixed tests still work even when player has 500,000 points."""
     user_id = 99903
-    _set_points(test_db_service, user_id, 100_000)
+    _set_points(test_db_service, user_id, 500_000)
 
     # Fixed bet
     res_bet = test_db_service.play_bet(user_id, wager=50, fixed_outcome=BetOutcome.JACKPOT)
@@ -121,9 +121,9 @@ def test_deterministic_fixed_outcomes_unaffected(test_db_service: RewardsDBServi
 
 
 def test_coinflip_and_cups_dampener_simulation(test_db_service: RewardsDBService):
-    """Simulate 60 coinflips and cups at 100k points to verify win rate drops to ~1%."""
+    """Simulate 60 coinflips and cups at 500k points to verify win rate drops to ~1%."""
     user_id = 99904
-    _set_points(test_db_service, user_id, 100_000)
+    _set_points(test_db_service, user_id, 500_000)
 
     random.seed(42)
     flips_won = 0
@@ -143,9 +143,9 @@ def test_coinflip_and_cups_dampener_simulation(test_db_service: RewardsDBService
 
 
 def test_slots_and_bet_dampener_simulation(test_db_service: RewardsDBService):
-    """Simulate slots and bet at 100k points to verify bust rate is massive."""
+    """Simulate slots and bet at 500k points to verify bust rate is massive."""
     user_id = 99905
-    _set_points(test_db_service, user_id, 100_000)
+    _set_points(test_db_service, user_id, 500_000)
 
     random.seed(42)
     slots_wins = 0
@@ -168,7 +168,7 @@ def test_steal_and_duel_dampener(test_db_service: RewardsDBService):
     """Verify steal success rate is capped and duel rolls dampened for high-asset users."""
     thief_id = 99906
     target_id = 99907
-    _set_points(test_db_service, thief_id, 100_000)
+    _set_points(test_db_service, thief_id, 500_000)
     _set_points(test_db_service, target_id, 1_000)
     test_db_service.add_item(thief_id, "pickpocket", 100)
 

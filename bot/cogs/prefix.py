@@ -102,7 +102,8 @@ class PrefixCommandsCog(commands.Cog):
                 if target_cog.rewards_service.is_martial_law_active():
                     allowed_under_martial_law = {
                         "balance", "profile", "rank", "leaderboard", "inventory",
-                        "guide", "guild_view", "quests", "daily", "martial_law", "fine", "bail"
+                        "guide", "guild_view", "quests", "daily", "martial_law", "fine", "bail",
+                        "loan_view", "lottery_view", "stonks_market", "stonks_portfolio", "blackmarket_view", "business_view", "bankruptcy"
                     }
                     if command_attribute not in allowed_under_martial_law:
                         await context.reply(
@@ -111,7 +112,7 @@ class PrefixCommandsCog(commands.Cog):
                         )
                         return
 
-                read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild_view", "quests", "martial_law", "fine", "bail"}
+                read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild_view", "quests", "martial_law", "fine", "bail", "loan_view", "lottery_view", "stonks_market", "stonks_portfolio", "blackmarket_view", "business_view"}
                 arrested_until = target_cog.rewards_service.is_user_arrested(user_id)
                 if arrested_until and command_attribute not in read_only:
                     await context.reply(
@@ -503,6 +504,171 @@ class PrefixCommandsCog(commands.Cog):
     async def study_prefix(self, context: commands.Context) -> None:
         """Prefix alias for /study."""
         await self._invoke_app_command(context, "RewardsCog", "study")
+
+
+    # -------------------------------------------------------------------------
+    # Loans & Bankruptcy
+    # -------------------------------------------------------------------------
+    @commands.command(name="loan")
+    async def loan_prefix(
+        self,
+        context: commands.Context,
+        action: str = "view",
+        arg: Optional[str] = None,
+    ) -> None:
+        """Prefix alias for /loan [view|take|repay]."""
+        clean_action = action.strip().lower()
+        if clean_action in ("view", "status", "info"):
+            await self._invoke_app_command(context, "RewardsCog", "loan_view")
+        elif clean_action in ("take", "borrow"):
+            if not arg:
+                await context.reply("Usage: `!loan take <micro|tuition|deans>`", suppress_embeds=True)
+                return
+            tier_choice = discord.app_commands.Choice(name=arg, value=arg.lower())
+            await self._invoke_app_command(context, "RewardsCog", "loan_take", tier_choice)
+        elif clean_action in ("repay", "pay"):
+            amount = int(arg) if arg and arg.isdigit() else None
+            await self._invoke_app_command(context, "RewardsCog", "loan_repay", amount)
+        else:
+            await context.reply("Usage: `!loan [view|take <tier>|repay [amount]]`", suppress_embeds=True)
+
+    @commands.command(name="bankruptcy")
+    async def bankruptcy_prefix(self, context: commands.Context) -> None:
+        """Prefix alias for /bankruptcy."""
+        await self._invoke_app_command(context, "RewardsCog", "bankruptcy")
+
+    # -------------------------------------------------------------------------
+    # Server Mega Lottery
+    # -------------------------------------------------------------------------
+    @commands.command(name="lottery")
+    async def lottery_prefix(
+        self,
+        context: commands.Context,
+        action: str = "view",
+        tickets: Optional[int] = 1,
+    ) -> None:
+        """Prefix alias for /lottery [view|buy|draw]."""
+        clean_action = action.strip().lower()
+        if clean_action in ("view", "pool", "pot", "info"):
+            await self._invoke_app_command(context, "RewardsCog", "lottery_view")
+        elif clean_action in ("buy", "ticket", "tickets"):
+            count = tickets if tickets and tickets > 0 else 1
+            await self._invoke_app_command(context, "RewardsCog", "lottery_buy", count)
+        elif clean_action in ("draw", "winner"):
+            await self._invoke_app_command(context, "RewardsCog", "lottery_draw")
+        else:
+            await context.reply("Usage: `!lottery [view|buy [count]|draw]`", suppress_embeds=True)
+
+    # -------------------------------------------------------------------------
+    # Campus Stock Market
+    # -------------------------------------------------------------------------
+    @commands.command(name="stonks")
+    async def stonks_prefix(
+        self,
+        context: commands.Context,
+        action: str = "market",
+        ticker: Optional[str] = None,
+        shares: Optional[int] = 1,
+    ) -> None:
+        """Prefix alias for /stonks [market|buy|sell|portfolio]."""
+        clean_action = action.strip().lower()
+        if clean_action in ("market", "board", "list", "view"):
+            await self._invoke_app_command(context, "RewardsCog", "stonks_market")
+        elif clean_action in ("portfolio", "holdings", "pf"):
+            await self._invoke_app_command(context, "RewardsCog", "stonks_portfolio")
+        elif clean_action == "buy":
+            if not ticker:
+                await context.reply("Usage: `!stonks buy <ticker> [shares]` (e.g. `!stonks buy COFFEE 5`)", suppress_embeds=True)
+                return
+            t_choice = discord.app_commands.Choice(name=ticker.upper(), value=ticker.upper())
+            count = shares if shares and shares > 0 else 1
+            await self._invoke_app_command(context, "RewardsCog", "stonks_buy", t_choice, count)
+        elif clean_action == "sell":
+            if not ticker:
+                await context.reply("Usage: `!stonks sell <ticker> [shares]`", suppress_embeds=True)
+                return
+            t_choice = discord.app_commands.Choice(name=ticker.upper(), value=ticker.upper())
+            count = shares if shares and shares > 0 else 1
+            await self._invoke_app_command(context, "RewardsCog", "stonks_sell", t_choice, count)
+        else:
+            await context.reply("Usage: `!stonks [market|buy <ticker> [shares]|sell <ticker> [shares]|portfolio]`", suppress_embeds=True)
+
+    # -------------------------------------------------------------------------
+    # Midnight Black Market
+    # -------------------------------------------------------------------------
+    @commands.command(name="blackmarket")
+    async def blackmarket_prefix(
+        self,
+        context: commands.Context,
+        action: str = "view",
+        item: Optional[str] = None,
+    ) -> None:
+        """Prefix alias for /blackmarket [view|buy]."""
+        clean_action = action.strip().lower()
+        if clean_action in ("view", "catalog", "items"):
+            await self._invoke_app_command(context, "RewardsCog", "blackmarket_view")
+        elif clean_action == "buy":
+            if not item:
+                await context.reply("Usage: `!blackmarket buy <ski_mask|fake_clearance|bribe_waiver>`", suppress_embeds=True)
+                return
+            item_choice = discord.app_commands.Choice(name=item, value=item.lower())
+            await self._invoke_app_command(context, "RewardsCog", "blackmarket_buy", item_choice)
+        else:
+            await context.reply("Usage: `!blackmarket [view|buy <item>]`", suppress_embeds=True)
+
+    # -------------------------------------------------------------------------
+    # Campus Businesses
+    # -------------------------------------------------------------------------
+    @commands.command(name="business")
+    async def business_prefix(
+        self,
+        context: commands.Context,
+        action: str = "view",
+        biz_name: Optional[str] = None,
+    ) -> None:
+        """Prefix alias for /business [view|buy|upgrade|collect]."""
+        clean_action = action.strip().lower()
+        if clean_action in ("view", "list", "my"):
+            await self._invoke_app_command(context, "RewardsCog", "business_view")
+        elif clean_action == "collect":
+            await self._invoke_app_command(context, "RewardsCog", "business_collect")
+        elif clean_action == "buy":
+            if not biz_name:
+                await context.reply("Usage: `!business buy <pares_cart|photocopy_kiosk|milk_tea_shop>`", suppress_embeds=True)
+                return
+            b_choice = discord.app_commands.Choice(name=biz_name, value=biz_name.lower())
+            await self._invoke_app_command(context, "RewardsCog", "business_buy", b_choice)
+        elif clean_action == "upgrade":
+            if not biz_name:
+                await context.reply("Usage: `!business upgrade <pares_cart|photocopy_kiosk|milk_tea_shop>`", suppress_embeds=True)
+                return
+            b_choice = discord.app_commands.Choice(name=biz_name, value=biz_name.lower())
+            await self._invoke_app_command(context, "RewardsCog", "business_upgrade", b_choice)
+        else:
+            await context.reply("Usage: `!business [view|buy <name>|upgrade <name>|collect]`", suppress_embeds=True)
+
+    # -------------------------------------------------------------------------
+    # Bank Heist
+    # -------------------------------------------------------------------------
+    @commands.command(name="heist")
+    async def heist_prefix(
+        self,
+        context: commands.Context,
+        action: str = "start",
+        role: Optional[str] = None,
+    ) -> None:
+        """Prefix alias for /heist [start|join|execute]."""
+        clean_action = action.strip().lower()
+        if clean_action in ("start", "open", "create"):
+            await self._invoke_app_command(context, "RewardsCog", "heist_start")
+        elif clean_action == "join":
+            role_val = role or "Operative"
+            r_choice = discord.app_commands.Choice(name=role_val, value=role_val)
+            await self._invoke_app_command(context, "RewardsCog", "heist_join", r_choice)
+        elif clean_action in ("execute", "run", "go"):
+            await self._invoke_app_command(context, "RewardsCog", "heist_execute")
+        else:
+            await context.reply("Usage: `!heist [start|join <role>|execute]`", suppress_embeds=True)
 
     # -------------------------------------------------------------------------
     # Slash-Only Explanations

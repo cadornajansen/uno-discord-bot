@@ -367,6 +367,8 @@ class TriviaResult:
     points_awarded: int
     new_balance: int
     trivia_remaining: int
+    garnished_amount: int = 0
+    garnishment_notice: Optional[str] = None
 
 
 class ItemNotFoundError(RewardsError):
@@ -438,6 +440,21 @@ ITEM_DEFINITIONS = {
         "description": "Launches a 20-second public strike that removes 50% of a target's wallet and bank vault, then freezes economic actions for one minute.",
         "usable": False,
     },
+    "ski_mask": {
+        "name": "🎭 Ski Mask",
+        "description": "Contraband: Guarantees 100% stealth on your next `/steal` attempt and obscures identity in crime reports!",
+        "usable": False,
+    },
+    "fake_clearance": {
+        "name": "📄 Forged Tax Clearance",
+        "description": "Contraband: Grants 24 hours of total immunity against Class Treasurer Tax Audits!",
+        "usable": True,
+    },
+    "bribe_waiver": {
+        "name": "⚖️ Bribe Waiver",
+        "description": "Contraband: Automatically quashes the next `/sue` lawsuit brought against you!",
+        "usable": False,
+    },
 }
 
 
@@ -507,33 +524,138 @@ SHOP_CATALOG = {
     },
     "coffee": {
         "name": "☕ Intramuros Coffee Treat",
-        "cost": 50000,
+        "cost": 250000,
         "category": "physical",
         "subcategory": "prizes",
         "description": "₱50–₱80 Iced Coffee / drink treat around PLM / Intramuros (7-Eleven / Lawson).",
     },
     "gcash_100": {
         "name": "💳 GCash Gift Card ₱100",
-        "cost": 65000,
+        "cost": 325000,
         "category": "physical",
         "subcategory": "prizes",
         "description": "₱100 Direct GCash transfer to your Philippine mobile number.",
     },
     "printing_1m": {
         "name": "🖨️ Free Printing Service (1 Month)",
-        "cost": 80000,
+        "cost": 400000,
         "category": "physical",
         "subcategory": "prizes",
         "description": "Free academic reviewer / project paper printing service for 30 days.",
     },
     "nitro_1m": {
         "name": "🚀 1 Month Discord Nitro",
-        "cost": 100000,
+        "cost": 500000,
         "category": "physical",
         "subcategory": "prizes",
         "description": "1 Month Discord Nitro subscription sent directly via Discord gift link.",
     },
 }
+
+LOAN_TIERS: dict[str, dict] = {
+    "micro": {
+        "tier": "micro",
+        "name": "🎒 Student Micro-Loan",
+        "principal": 5000,
+        "interest_rate": 0.20,
+        "total_due": 6000,
+        "duration_hours": 48,
+        "min_lifetime_points": 0,
+        "description": "Borrow 5,000 pts with 20% flat interest (6,000 pts due in 48 hours).",
+    },
+    "tuition": {
+        "tier": "tuition",
+        "name": "📚 Semester Tuition Loan",
+        "principal": 20000,
+        "interest_rate": 0.25,
+        "total_due": 25000,
+        "duration_hours": 120,
+        "min_lifetime_points": 500,
+        "description": "Borrow 20,000 pts with 25% flat interest (25,000 pts due in 5 days).",
+    },
+    "deans": {
+        "tier": "deans",
+        "name": "🏛️ Dean's Line of Credit",
+        "principal": 50000,
+        "interest_rate": 0.30,
+        "total_due": 65000,
+        "duration_hours": 168,
+        "min_lifetime_points": 3000,
+        "description": "Borrow 50,000 pts with 30% flat interest (65,000 pts due in 7 days, requires 3k+ lifetime pts).",
+    },
+}
+BLACKMARKET_CATALOG: dict[str, dict] = {
+    "ski_mask": {
+        "id": "ski_mask",
+        "name": "🎭 Ski Mask",
+        "cost": 1500,
+        "description": "Black Market contraband: Guarantees 100% stealth on your next `/steal` and hides your identity in logs.",
+    },
+    "fake_clearance": {
+        "id": "fake_clearance",
+        "name": "📄 Forged Tax Clearance",
+        "cost": 3500,
+        "description": "Black Market contraband: Grants 24 hours of total immunity against Class Treasurer Tax Audits.",
+    },
+    "bribe_waiver": {
+        "id": "bribe_waiver",
+        "name": "⚖️ Bribe Waiver",
+        "cost": 5000,
+        "description": "Black Market contraband: Automatically throws out the next `/sue` lawsuit filed against you.",
+    },
+}
+
+BUSINESS_CATALOG: dict[str, dict] = {
+    "pares_cart": {
+        "id": "pares_cart",
+        "name": "🍲 Intramuros Pares Cart",
+        "cost": 15000,
+        "daily_yield": 400,
+        "description": "Late-night beef pares stall by the university gates. Low maintenance, steady daily revenue.",
+    },
+    "photocopy_kiosk": {
+        "id": "photocopy_kiosk",
+        "name": "🖨️ Photocopy & Bookbind Kiosk",
+        "cost": 40000,
+        "daily_yield": 1200,
+        "description": "High-traffic printing hub printing exam reviewers and rush thesis binders.",
+    },
+    "milk_tea_shop": {
+        "id": "milk_tea_shop",
+        "name": "🧋 Boba & Milk Tea Station",
+        "cost": 100000,
+        "daily_yield": 3200,
+        "description": "Trendy campus milk tea hangout with premium profit margins.",
+    },
+}
+
+DEFAULT_STOCKS: list[dict] = [
+    {
+        "ticker": "COFFEE",
+        "name": "Dean's Coffee Holdings",
+        "base_price": 100,
+        "initial_headline": "Campus cafeterias report record coffee consumption during midterms.",
+    },
+    {
+        "ticker": "PRINT",
+        "name": "Photocopy Cartel Intramuros",
+        "base_price": 50,
+        "initial_headline": "Thesis submission week causes high demand for heavy-duty toner.",
+    },
+    {
+        "ticker": "NITRO",
+        "name": "Campus Tech & Nitro Speculation",
+        "base_price": 200,
+        "initial_headline": "Student discord servers surge in voice activity and streaming.",
+    },
+    {
+        "ticker": "UNO",
+        "name": "Wild Card Volatility Index",
+        "base_price": 75,
+        "initial_headline": "Late night Uno matches cause unpredictable price swings in the student lounge.",
+    },
+]
+
 
 PET_CATALOG: dict[str, dict] = {
     "tuxedo_cat": {
@@ -957,6 +1079,8 @@ class WorkResult:
     points_earned: int
     bonus_item_name: Optional[str]
     new_balance: int
+    garnished_amount: int = 0
+    garnishment_notice: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -965,12 +1089,16 @@ class ScavengeResult:
     description: str
     points_earned: int
     new_balance: int
+    garnished_amount: int = 0
+    garnishment_notice: Optional[str] = None
 
 
 @dataclass(frozen=True)
 class StudyResult:
     points_earned: int
     new_balance: int
+    garnished_amount: int = 0
+    garnishment_notice: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -1112,6 +1240,38 @@ class UserRecord:
     cups_rounds_played: int = 0
     arrested_until: Optional[str] = None
     last_tax_audited_time: Optional[str] = None
+    last_bankruptcy_date: Optional[str] = None
+    casino_locked_until: Optional[str] = None
+    fake_clearance_until: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class LoanRecord:
+    id: int
+    user_id: int
+    tier: str
+    principal: int
+    interest_rate: float
+    total_due: int
+    amount_repaid: int
+    due_date: str
+    status: str
+    created_at: str
+    tier_name: str = ""
+    remaining_due: int = 0
+    is_overdue: bool = False
+    penalty_accumulated: int = 0
+    effective_total_due: int = 0
+
+
+@dataclass(frozen=True)
+class BankruptcyResult:
+    success: bool
+    discharged_amount: int
+    discharged_loans_count: int
+    wallet_cleared: int
+    casino_locked_until: str
+    description: str
 
 
 @dataclass(frozen=True)
@@ -1130,6 +1290,60 @@ class CupsResult:
 
 
 @dataclass(frozen=True)
+class LotteryInfo:
+    draw_id: int
+    jackpot_pool: int
+    ticket_price: int
+    total_tickets: int
+    user_tickets: int
+    next_draw_time: str
+
+
+@dataclass(frozen=True)
+class StockQuote:
+    ticker: str
+    name: str
+    current_price: int
+    prev_price: int
+    change_pct: float
+    low_24h: int
+    high_24h: int
+    headline: str
+
+
+@dataclass(frozen=True)
+class StockHolding:
+    ticker: str
+    name: str
+    shares: int
+    total_invested: int
+    current_price: int
+    current_value: int
+    profit_loss: int
+    profit_loss_pct: float
+
+
+@dataclass(frozen=True)
+class Portfolio:
+    holdings: list[StockHolding]
+    total_invested: int
+    total_value: int
+    net_profit: int
+    net_profit_pct: float
+
+
+@dataclass(frozen=True)
+class BusinessRecord:
+    business_id: str
+    name: str
+    daily_yield: int
+    level: int
+    accumulated_points: int
+    next_upgrade_cost: int
+    description: str
+
+
+@dataclass(frozen=True)
 class DailyClaimResult:
     points_awarded: int
     base_points: int
@@ -1137,6 +1351,8 @@ class DailyClaimResult:
     streak: int
     new_balance: int
     milestone_3k_unlocked: bool
+    garnished_amount: int = 0
+    garnishment_notice: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -1456,6 +1672,56 @@ class RewardsDBService:
                     state_key TEXT PRIMARY KEY,
                     state_value TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS user_loans (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    tier TEXT NOT NULL,
+                    principal INTEGER NOT NULL,
+                    interest_rate REAL NOT NULL,
+                    total_due INTEGER NOT NULL,
+                    amount_repaid INTEGER NOT NULL DEFAULT 0,
+                    due_date TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'ACTIVE',
+                    created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS lottery_tickets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    draw_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    ticket_number INTEGER NOT NULL,
+                    purchased_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_lottery_tickets_draw ON lottery_tickets(draw_id);
+
+                CREATE TABLE IF NOT EXISTS stocks_state (
+                    ticker TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    current_price INTEGER NOT NULL,
+                    prev_price INTEGER NOT NULL,
+                    low_24h INTEGER NOT NULL,
+                    high_24h INTEGER NOT NULL,
+                    last_headline TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS user_stocks (
+                    user_id INTEGER NOT NULL,
+                    ticker TEXT NOT NULL,
+                    shares INTEGER NOT NULL DEFAULT 0,
+                    total_invested INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY(user_id, ticker)
+                );
+
+                CREATE TABLE IF NOT EXISTS user_businesses (
+                    user_id INTEGER NOT NULL,
+                    business_id TEXT NOT NULL,
+                    level INTEGER NOT NULL DEFAULT 1,
+                    last_collected TEXT NOT NULL,
+                    purchased_at TEXT NOT NULL,
+                    PRIMARY KEY(user_id, business_id)
+                );
+
                 """
         )
         # Migration: ensure extra columns exist
@@ -1503,6 +1769,12 @@ class RewardsDBService:
             conn.execute("ALTER TABLE users ADD COLUMN arrested_until TEXT")
         if "last_tax_audited_time" not in cols:
             conn.execute("ALTER TABLE users ADD COLUMN last_tax_audited_time TEXT")
+        if "last_bankruptcy_date" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN last_bankruptcy_date TEXT")
+        if "casino_locked_until" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN casino_locked_until TEXT")
+        if "fake_clearance_until" not in cols:
+            conn.execute("ALTER TABLE users ADD COLUMN fake_clearance_until TEXT")
         conn.commit()
 
     def get_or_create_user(self, user_id: int) -> UserRecord:
@@ -1548,6 +1820,9 @@ class RewardsDBService:
                 cups_rounds_played=row["cups_rounds_played"] if "cups_rounds_played" in keys else 0,
                 arrested_until=row["arrested_until"] if "arrested_until" in keys else None,
                 last_tax_audited_time=row["last_tax_audited_time"] if "last_tax_audited_time" in keys else None,
+                last_bankruptcy_date=row["last_bankruptcy_date"] if "last_bankruptcy_date" in keys else None,
+                casino_locked_until=row["casino_locked_until"] if "casino_locked_until" in keys else None,
+                fake_clearance_until=row["fake_clearance_until"] if "fake_clearance_until" in keys else None,
             )
 
     def get_balance(self, user_id: int) -> int:
@@ -1919,7 +2194,10 @@ class RewardsDBService:
             streak_bonus *= 2
             total_points *= 2
 
-        new_balance = user.points + total_points
+        actual_points, garnished_amount, garnishment_notice = self.apply_wage_garnishment(
+            user_id, total_points, "Daily Claim", now=current_time
+        )
+        new_balance = user.points + actual_points
         new_lifetime = user.lifetime_points + total_points
         milestone_unlocked = (user.lifetime_points < 3000 <= new_lifetime)
 
@@ -1933,28 +2211,32 @@ class RewardsDBService:
                     last_daily_claim = ?
                 WHERE user_id = ?
                 """,
-                (total_points, total_points, new_streak, today_str, user_id),
+                (actual_points, total_points, new_streak, today_str, user_id),
             )
             desc = f"Daily Claim (Streak: {new_streak}d, Bonus: +{streak_bonus}pts)"
             if active_pet and active_pet.species == "cat":
                 desc += " [🐱 2x Cat Perk!]"
+            if garnished_amount > 0:
+                desc += f" [⚖️ {garnished_amount} pts Garnished for Loan]"
             conn.execute(
                 """
                 INSERT INTO transactions (user_id, amount, action_type, description)
                 VALUES (?, ?, 'DAILY', ?)
                 """,
-                (user_id, total_points, desc),
+                (user_id, actual_points, desc),
             )
             conn.commit()
 
         self.record_quest_progress(user_id, "daily", current_time)
         return DailyClaimResult(
-            points_awarded=total_points,
+            points_awarded=actual_points,
             base_points=base_points,
             streak_bonus=streak_bonus,
             streak=new_streak,
             new_balance=new_balance,
             milestone_3k_unlocked=milestone_unlocked,
+            garnished_amount=garnished_amount,
+            garnishment_notice=garnishment_notice,
         )
 
     def add_points(self, user_id: int, amount: int, action_type: str, description: str = "") -> int:
@@ -2438,26 +2720,42 @@ class RewardsDBService:
                 )
                 conn.commit()
 
+        # Contribute 5% court fee rake to Mega Lottery
+        try:
+            self.contribute_lottery_rake(max(100, int(amount * 0.05)))
+        except Exception:
+            pass
+
         target = self.get_or_create_user(target_id)
-        target_wallet_loss = min(target.points, amount)
-        target_remainder = amount - target_wallet_loss
-        target_bank_loss = min(target.bank_points, target_remainder)
-        total_target_loss = target_wallet_loss + target_bank_loss
+        target_inv = self.get_inventory(target_id)
+        bribe_waived = False
 
-        if target_wallet_loss > 0:
-            self.deduct_points(target_id, target_wallet_loss, "SUED_BY_CLASSMATE", f"Sued by user {user_id} for {amount:,} pts")
+        if target_inv.get("bribe_waiver", 0) > 0:
+            self.remove_item(target_id, "bribe_waiver", 1)
+            bribe_waived = True
+            target_wallet_loss = 0
+            target_bank_loss = 0
+            total_target_loss = 0
+        else:
+            target_wallet_loss = min(target.points, amount)
+            target_remainder = amount - target_wallet_loss
+            target_bank_loss = min(target.bank_points, target_remainder)
+            total_target_loss = target_wallet_loss + target_bank_loss
 
-        if target_bank_loss > 0:
-            with self._get_connection() as conn:
-                conn.execute(
-                    "UPDATE users SET bank_points = bank_points - ? WHERE user_id = ?",
-                    (target_bank_loss, target_id),
-                )
-                conn.execute(
-                    "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'SUED_BY_CLASSMATE_BANK', ?)",
-                    (target_id, -target_bank_loss, f"Bank vault loss from lawsuit by user {user_id}"),
-                )
-                conn.commit()
+            if target_wallet_loss > 0:
+                self.deduct_points(target_id, target_wallet_loss, "SUED_BY_CLASSMATE", f"Sued by user {user_id} for {amount:,} pts")
+
+            if target_bank_loss > 0:
+                with self._get_connection() as conn:
+                    conn.execute(
+                        "UPDATE users SET bank_points = bank_points - ? WHERE user_id = ?",
+                        (target_bank_loss, target_id),
+                    )
+                    conn.execute(
+                        "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'SUED_BY_CLASSMATE_BANK', ?)",
+                        (target_id, -target_bank_loss, f"Bank vault loss from lawsuit by user {user_id}"),
+                    )
+                    conn.commit()
 
         suer_updated = self.get_or_create_user(user_id)
         target_updated = self.get_or_create_user(target_id)
@@ -2474,6 +2772,7 @@ class RewardsDBService:
             "target_bank_loss": target_bank_loss,
             "target_new_wallet": target_updated.points,
             "target_new_bank": target_updated.bank_points,
+            "bribe_waived": bribe_waived,
         }
 
     def get_leaderboard(self, limit: int = 10, offset: int = 0) -> tuple[list[UserLeaderboardEntry], int]:
@@ -2705,6 +3004,22 @@ class RewardsDBService:
             current_time = current_time.astimezone(PHT)
         today_str = current_time.strftime("%Y-%m-%d")
 
+        if user.casino_locked_until:
+            try:
+                lock_dt = datetime.fromisoformat(user.casino_locked_until)
+                if lock_dt.tzinfo is None:
+                    lock_dt = lock_dt.replace(tzinfo=timezone.utc)
+                curr_utc = current_time.astimezone(timezone.utc)
+                if curr_utc < lock_dt:
+                    rem_secs = int((lock_dt - curr_utc).total_seconds())
+                    rem_hours = rem_secs // 3600
+                    rem_mins = (rem_secs % 3600) // 60
+                    raise RewardsError(
+                        f"⛔ Bankruptcy Casino Lockout: Your casino privileges are frozen for **{rem_hours}h {rem_mins}m** due to bankruptcy!"
+                    )
+            except ValueError:
+                pass
+
         if user.last_casino_date == today_str:
             daily_count = user.daily_casino_games_count
         else:
@@ -2763,23 +3078,23 @@ class RewardsDBService:
     def get_prize_benchmark_win_cap(self, user: Any) -> Optional[float]:
         """Return maximum allowed win probability when user approaches real-world prize tiers.
 
-        - Below 49,000 pts (1,000 pts away from 50k Coffee Treat): None (normal odds).
-        - 49,000 <= pts < 50,000: Clamped at 0.10 (10%).
-        - 50,000 <= pts <= 100,000: Scales linearly from 0.10 (10%) down to 0.01 (1%).
-        - Above 100,000 pts (1 Month Discord Nitro): Clamped at 0.01 (1%).
+        - Below 245,000 pts (5,000 pts away from 250k Coffee Treat): None (normal odds).
+        - 245,000 <= pts < 250,000: Clamped at 0.10 (10%).
+        - 250,000 <= pts <= 500,000: Scales linearly from 0.10 (10%) down to 0.01 (1%).
+        - Above 500,000 pts (1 Month Discord Nitro): Clamped at 0.01 (1%).
         """
         bank = getattr(user, "bank_points", 0) or 0
         wallet = getattr(user, "points", 0) or 0
         total_assets = max(wallet, wallet + bank)
-        if total_assets < 49_000:
+        if total_assets < 245_000:
             return None
-        if total_assets < 50_000:
+        if total_assets < 250_000:
             return 0.10
-        if total_assets >= 100_000:
+        if total_assets >= 500_000:
             return 0.01
 
-        # Smooth linear drop from 0.10 down to 0.01 across 50k -> 100k
-        progress = (total_assets - 50_000) / 50_000.0
+        # Smooth linear drop from 0.10 down to 0.01 across 250k -> 500k
+        progress = (total_assets - 250_000) / 250_000.0
         return round(0.10 - (0.09 * progress), 4)
 
     def play_bet(
@@ -3704,7 +4019,10 @@ class RewardsDBService:
             self.add_item(user_id, chosen_skill, 1)
             bonus_item_name = ITEM_DEFINITIONS[chosen_skill]["name"]
 
-        new_balance = user.points + earned
+        actual_earned, garnished_amount, garnishment_notice = self.apply_wage_garnishment(
+            user_id, earned, "Campus Shift", now=current_time
+        )
+        new_balance = user.points + actual_earned
         new_lifetime = user.lifetime_points + earned
 
         with self._get_connection() as conn:
@@ -3715,9 +4033,11 @@ class RewardsDBService:
             act_desc = f"Work: {job['title']} (+{earned} pts)"
             if bonus_item_name:
                 act_desc += f" + Bonus Item {bonus_item_name}"
+            if garnished_amount > 0:
+                act_desc += f" [⚖️ {garnished_amount} pts Garnished for Loan]"
             conn.execute(
                 "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'WORK', ?)",
-                (user_id, earned, act_desc),
+                (user_id, actual_earned, act_desc),
             )
             conn.commit()
 
@@ -3726,9 +4046,11 @@ class RewardsDBService:
             job_title=job["title"],
             company_or_prof=job["company"],
             description=job["desc"],
-            points_earned=earned,
+            points_earned=actual_earned,
             bonus_item_name=bonus_item_name,
             new_balance=new_balance,
+            garnished_amount=garnished_amount,
+            garnishment_notice=garnishment_notice,
         )
 
     def execute_scavenge(
@@ -3758,7 +4080,10 @@ class RewardsDBService:
         loc = SCAVENGE_LOCATIONS[fixed_location_index if fixed_location_index is not None and 0 <= fixed_location_index < len(SCAVENGE_LOCATIONS) else random.randint(0, len(SCAVENGE_LOCATIONS) - 1)]
         earned = random.randint(loc["min_pts"], loc["max_pts"])
 
-        new_balance = user.points + earned
+        actual_earned, garnished_amount, garnishment_notice = self.apply_wage_garnishment(
+            user_id, earned, "Scavenge", now=current_time
+        )
+        new_balance = user.points + actual_earned
         new_lifetime = user.lifetime_points + earned
 
         with self._get_connection() as conn:
@@ -3767,17 +4092,21 @@ class RewardsDBService:
                 (new_balance, new_lifetime, current_time.isoformat(), user_id),
             )
             act_desc = f"Scavenge: {loc['location']} (+{earned} pts)"
+            if garnished_amount > 0:
+                act_desc += f" [⚖️ {garnished_amount} pts Garnished for Loan]"
             conn.execute(
                 "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'SCAVENGE', ?)",
-                (user_id, earned, act_desc),
+                (user_id, actual_earned, act_desc),
             )
             conn.commit()
 
         return ScavengeResult(
             location=loc["location"],
             description=loc["desc"],
-            points_earned=earned,
+            points_earned=actual_earned,
             new_balance=new_balance,
+            garnished_amount=garnished_amount,
+            garnishment_notice=garnishment_notice,
         )
 
     def execute_study(
@@ -3809,20 +4138,31 @@ class RewardsDBService:
         if not 200 <= earned <= 300:
             raise ValueError("Study rewards must be between 200 and 300 points.")
 
-        new_balance = user.points + earned
+        actual_earned, garnished_amount, garnishment_notice = self.apply_wage_garnishment(
+            user_id, earned, "Study Session", now=current_time
+        )
+        new_balance = user.points + actual_earned
         new_lifetime = user.lifetime_points + earned
         with self._get_connection() as conn:
             conn.execute(
                 "UPDATE users SET points = ?, lifetime_points = ?, last_study_time = ? WHERE user_id = ?",
                 (new_balance, new_lifetime, current_time.isoformat(), user_id),
             )
+            act_desc = f"Study session completed (+{earned} pts)"
+            if garnished_amount > 0:
+                act_desc += f" [⚖️ {garnished_amount} pts Garnished for Loan]"
             conn.execute(
                 "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'STUDY', ?)",
-                (user_id, earned, f"Study session completed (+{earned} pts)"),
+                (user_id, actual_earned, act_desc),
             )
             conn.commit()
 
-        return StudyResult(points_earned=earned, new_balance=new_balance)
+        return StudyResult(
+            points_earned=actual_earned,
+            new_balance=new_balance,
+            garnished_amount=garnished_amount,
+            garnishment_notice=garnishment_notice,
+        )
 
     # ==================== BOUNTY SYSTEM ====================
 
@@ -4446,6 +4786,327 @@ class RewardsDBService:
         """Retired compatibility hook; automatic wealth taxes no longer change points."""
         return []
 
+    # ---------------------------------------------------------
+    # CAMPUS LOANS & DEBT SYSTEM
+    # ---------------------------------------------------------
+
+    def get_active_loan(self, user_id: int, now: Optional[datetime] = None) -> Optional[LoanRecord]:
+        """Fetch active or defaulted loan, automatically applying overdue status and daily default interest."""
+        current_time = now or datetime.now(timezone.utc)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM user_loans WHERE user_id = ? AND status IN ('ACTIVE', 'DEFAULTED') ORDER BY id DESC LIMIT 1",
+                (user_id,),
+            ).fetchone()
+            if not row:
+                return None
+
+            due_dt = datetime.fromisoformat(row["due_date"])
+            if due_dt.tzinfo is None:
+                due_dt = due_dt.replace(tzinfo=timezone.utc)
+
+            is_overdue = current_time > due_dt
+            penalty = 0
+            new_status = row["status"]
+
+            if is_overdue:
+                new_status = "DEFAULTED"
+                # 5% daily compounding penalty on principal for each full 24 hours overdue
+                overdue_seconds = (current_time - due_dt).total_seconds()
+                overdue_days = int(overdue_seconds // 86400)
+                if overdue_days > 0:
+                    penalty = int(row["principal"] * 0.05 * overdue_days)
+
+                # If overdue for > 72 hours (3 days), auto-arrest for 24 hours (Debtor's Jail)
+                if overdue_seconds >= 259200:
+                    jail_until = (current_time + timedelta(hours=24)).isoformat()
+                    conn.execute(
+                        "UPDATE users SET arrested_until = ? WHERE user_id = ? AND (arrested_until IS NULL OR arrested_until < ?)",
+                        (jail_until, user_id, current_time.isoformat()),
+                    )
+
+                if row["status"] != "DEFAULTED":
+                    conn.execute("UPDATE user_loans SET status = 'DEFAULTED' WHERE id = ?", (row["id"],))
+                    conn.commit()
+
+            tier_info = LOAN_TIERS.get(row["tier"], {})
+            effective_total_due = row["total_due"] + penalty
+            remaining_due = max(0, effective_total_due - row["amount_repaid"])
+
+            return LoanRecord(
+                id=row["id"],
+                user_id=row["user_id"],
+                tier=row["tier"],
+                principal=row["principal"],
+                interest_rate=row["interest_rate"],
+                total_due=row["total_due"],
+                amount_repaid=row["amount_repaid"],
+                due_date=row["due_date"],
+                status=new_status,
+                created_at=row["created_at"],
+                tier_name=tier_info.get("name", row["tier"].title()),
+                remaining_due=remaining_due,
+                is_overdue=is_overdue,
+                penalty_accumulated=penalty,
+                effective_total_due=effective_total_due,
+            )
+
+    def take_loan(self, user_id: int, tier: str, now: Optional[datetime] = None) -> LoanRecord:
+        """Disburse a campus loan to user's wallet."""
+        tier_clean = tier.strip().lower()
+        if tier_clean not in LOAN_TIERS:
+            tiers_list = ", ".join(f"`{k}` ({v['name']})" for k, v in LOAN_TIERS.items())
+            raise RewardsError(f"Invalid loan tier '{tier}'! Choose from: {tiers_list}.")
+
+        info = LOAN_TIERS[tier_clean]
+        current_time = now or datetime.now(timezone.utc)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+
+        user = self.get_or_create_user(user_id)
+
+        # Check bankruptcy lockout
+        if user.casino_locked_until:
+            try:
+                lock_dt = datetime.fromisoformat(user.casino_locked_until)
+                if lock_dt.tzinfo is None:
+                    lock_dt = lock_dt.replace(tzinfo=timezone.utc)
+                if current_time < lock_dt:
+                    raise RewardsError(
+                        f"⛔ Credit Bureau Blacklist: You cannot take out loans while under a Bankruptcy Lockout (expires <t:{int(lock_dt.timestamp())}:R>)!"
+                    )
+            except ValueError:
+                pass
+
+        # Check if already has an active or defaulted loan
+        existing = self.get_active_loan(user_id, now=current_time)
+        if existing and existing.status in ("ACTIVE", "DEFAULTED") and existing.remaining_due > 0:
+            raise RewardsError(
+                f"You already have an outstanding {existing.tier_name} with **{existing.remaining_due:,} pts** remaining! "
+                f"Repay your debt with `/loan repay` before borrowing again."
+            )
+
+        # Check eligibility requirements (lifetime points)
+        if user.lifetime_points < info["min_lifetime_points"]:
+            raise RewardsError(
+                f"You need at least **{info['min_lifetime_points']:,} Lifetime Points** to qualify for {info['name']}! "
+                f"You currently have {user.lifetime_points:,} Lifetime Points."
+            )
+
+        due_date = current_time + timedelta(hours=info["duration_hours"])
+
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO user_loans (user_id, tier, principal, interest_rate, total_due, amount_repaid, due_date, status, created_at)
+                VALUES (?, ?, ?, ?, ?, 0, ?, 'ACTIVE', ?)
+                """,
+                (
+                    user_id,
+                    tier_clean,
+                    info["principal"],
+                    info["interest_rate"],
+                    info["total_due"],
+                    due_date.isoformat(),
+                    current_time.isoformat(),
+                ),
+            )
+            conn.commit()
+
+        # Disburse points to wallet
+        self.add_points(
+            user_id,
+            info["principal"],
+            "LOAN_DISBURSED",
+            f"Borrowed {info['principal']:,} pts via {info['name']} (Due: {due_date.strftime('%b %d, %Y')})",
+        )
+
+        active = self.get_active_loan(user_id, now=current_time)
+        if not active:
+            raise RewardsError("Failed to initialize loan record.")
+        return active
+
+    def repay_loan(self, user_id: int, amount: Optional[int] = None, now: Optional[datetime] = None) -> dict:
+        """Repay part or all of an outstanding campus loan."""
+        current_time = now or datetime.now(timezone.utc)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+
+        loan = self.get_active_loan(user_id, now=current_time)
+        if not loan or loan.remaining_due <= 0:
+            raise RewardsError("You do not have any outstanding loans to repay!")
+
+        user = self.get_or_create_user(user_id)
+        if user.points <= 0:
+            raise RewardsError("You have 0 Uno Points in your wallet! You need points to repay your loan.")
+
+        if amount is None or amount <= 0:
+            pay_amount = min(user.points, loan.remaining_due)
+        else:
+            pay_amount = min(amount, loan.remaining_due)
+
+        if user.points < pay_amount:
+            raise InsufficientPointsError(
+                f"You only have {user.points:,} pts in your wallet to repay {pay_amount:,} pts!"
+            )
+
+        new_wallet = self.deduct_points(
+            user_id,
+            pay_amount,
+            "LOAN_REPAYMENT",
+            f"Repaid {pay_amount:,} pts toward {loan.tier_name}",
+        )
+
+        new_repaid = loan.amount_repaid + pay_amount
+        is_settled = new_repaid >= loan.effective_total_due
+
+        with self._get_connection() as conn:
+            if is_settled:
+                conn.execute(
+                    "UPDATE user_loans SET status = 'REPAID', amount_repaid = ? WHERE id = ?",
+                    (new_repaid, loan.id),
+                )
+                conn.execute("UPDATE users SET arrested_until = NULL WHERE user_id = ?", (user_id,))
+            else:
+                conn.execute(
+                    "UPDATE user_loans SET amount_repaid = ? WHERE id = ?",
+                    (new_repaid, loan.id),
+                )
+            conn.commit()
+
+        remaining = max(0, loan.effective_total_due - new_repaid)
+        return {
+            "loan_id": loan.id,
+            "tier_name": loan.tier_name,
+            "amount_paid": pay_amount,
+            "new_wallet": new_wallet,
+            "remaining_due": remaining,
+            "is_settled": is_settled,
+        }
+
+    def apply_wage_garnishment(
+        self,
+        user_id: int,
+        earned_points: int,
+        action_type: str,
+        now: Optional[datetime] = None,
+    ) -> tuple[int, int, Optional[str]]:
+        """If user has an active or defaulted loan that is overdue, intercept 50% of earned points."""
+        if earned_points <= 0:
+            return 0, 0, None
+
+        current_time = now or datetime.now(timezone.utc)
+        loan = self.get_active_loan(user_id, now=current_time)
+        if not loan or not loan.is_overdue:
+            return earned_points, 0, None
+
+        remaining_due = loan.remaining_due
+        if remaining_due <= 0:
+            return earned_points, 0, None
+
+        garnished = min(max(1, int(earned_points * 0.50)), remaining_due)
+        if garnished <= 0:
+            return earned_points, 0, None
+
+        actual_earned = earned_points - garnished
+        new_repaid = loan.amount_repaid + garnished
+        is_fully_repaid = new_repaid >= loan.effective_total_due
+
+        with self._get_connection() as conn:
+            if is_fully_repaid:
+                conn.execute(
+                    "UPDATE user_loans SET status = 'REPAID', amount_repaid = ? WHERE id = ?",
+                    (new_repaid, loan.id),
+                )
+                conn.execute("UPDATE users SET arrested_until = NULL WHERE user_id = ?", (user_id,))
+            else:
+                conn.execute(
+                    "UPDATE user_loans SET amount_repaid = ? WHERE id = ?",
+                    (new_repaid, loan.id),
+                )
+            conn.execute(
+                "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'WAGE_GARNISHED', ?)",
+                (user_id, -garnished, f"Wage Garnishment: 50% of {action_type} earnings applied to {loan.tier_name}"),
+            )
+            conn.commit()
+
+        notice = f"⚖️ **Wage Garnishment Alert**: **{garnished:,} pts** (50%) of your {action_type} reward was seized by the Campus Loan Bureau to service your overdue {loan.tier_name}!"
+        if is_fully_repaid:
+            notice += f" 🎉 **Debt Settled!** Your {loan.tier_name} has been paid in full!"
+        return actual_earned, garnished, notice
+
+    def declare_bankruptcy(self, user_id: int, now: Optional[datetime] = None) -> BankruptcyResult:
+        """Discharge all outstanding debt, wipe wallet, lock casino for 3 days (30-day cooldown)."""
+        current_time = now or datetime.now(timezone.utc)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+
+        loan = self.get_active_loan(user_id, now=current_time)
+        if not loan or loan.remaining_due <= 0:
+            raise RewardsError("You cannot declare bankruptcy because you have no outstanding debt!")
+
+        user = self.get_or_create_user(user_id)
+        COOLDOWN_DAYS = 30
+        if user.last_bankruptcy_date:
+            try:
+                last_b = datetime.fromisoformat(user.last_bankruptcy_date)
+                if last_b.tzinfo is None:
+                    last_b = last_b.replace(tzinfo=timezone.utc)
+                diff = (current_time - last_b).total_seconds()
+                if diff < COOLDOWN_DAYS * 86400:
+                    rem_days = int(COOLDOWN_DAYS - (diff / 86400))
+                    raise RewardsError(
+                        f"⏳ Bankruptcy Protection Cooldown: You can only file for bankruptcy once every 30 days! Try again in **{rem_days} days**."
+                    )
+            except ValueError:
+                pass
+
+        discharged_amount = loan.remaining_due
+        wallet_lost = user.points
+        lock_until = current_time + timedelta(days=3)
+
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE user_loans SET status = 'DISCHARGED' WHERE user_id = ? AND status IN ('ACTIVE', 'DEFAULTED')",
+                (user_id,),
+            )
+            conn.execute(
+                """
+                UPDATE users
+                SET points = 0,
+                    last_bankruptcy_date = ?,
+                    casino_locked_until = ?,
+                    arrested_until = NULL
+                WHERE user_id = ?
+                """,
+                (current_time.isoformat(), lock_until.isoformat(), user_id),
+            )
+            conn.execute(
+                "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'BANKRUPTCY', ?)",
+                (user_id, -wallet_lost, f"Declared Chapter 11 Bankruptcy! Discharged {discharged_amount:,} pts of debt; wallet liquidated."),
+            )
+            conn.commit()
+
+        desc = (
+            f"📉 **Chapter 11 Bankruptcy Declared!**\n"
+            f"• Discharged Debt: **{discharged_amount:,} Uno Points**\n"
+            f"• Liquidated Wallet: **-{wallet_lost:,} Uno Points** (Wallet reset to 0)\n"
+            f"• Casino Lockout: Privileges frozen until <t:{int(lock_until.timestamp())}:f> (3 days)\n"
+            f"• Debtor's Jail: Cleared and released."
+        )
+
+        return BankruptcyResult(
+            success=True,
+            discharged_amount=discharged_amount,
+            discharged_loans_count=1,
+            wallet_cleared=wallet_lost,
+            casino_locked_until=lock_until.isoformat(),
+            description=desc,
+        )
+
     def execute_steal(
         self,
         thief_id: int,
@@ -4487,6 +5148,12 @@ class RewardsDBService:
                 (current_time.isoformat(), thief_id),
             )
             conn.commit()
+
+        # Check thief ski mask (guarantees success & consumes mask)
+        thief_inv = self.get_inventory(thief_id)
+        if thief_inv.get("ski_mask", 0) > 0:
+            self.remove_item(thief_id, "ski_mask", 1)
+            fixed_success = True
 
         # Check target Uno Reverse Card (passive counter-trap!)
         target_inv = self.get_inventory(target_id)
@@ -4657,6 +5324,7 @@ class RewardsDBService:
             raise RewardsError(f"Item '{item_id}' cannot be activated directly.")
 
         user = self.get_or_create_user(user_id)
+        current_time = now or datetime.now(timezone.utc)
         shield_until = None
         points_awarded = 0
         points_deducted = 0
@@ -4717,6 +5385,20 @@ class RewardsDBService:
                     f"That classmate is ranked #{target_rank} among students. The Class Treasurer Audit can only target students in the Top 3!"
                 )
 
+            if target_user.fake_clearance_until:
+                try:
+                    fc_dt = datetime.fromisoformat(target_user.fake_clearance_until)
+                    if fc_dt.tzinfo is None:
+                        fc_dt = fc_dt.replace(tzinfo=timezone.utc)
+                    if current_time < fc_dt:
+                        rem_hours = int((fc_dt - current_time).total_seconds() // 3600)
+                        rem_mins = int(((fc_dt - current_time).total_seconds() % 3600) // 60)
+                        raise RewardsError(
+                            f"Audit Blocked! That classmate presented an airtight Forged Tax Clearance certificate ({rem_hours}h {rem_mins}m remaining)!"
+                        )
+                except ValueError:
+                    pass
+
             if target_user.points < 20000:
                 raise RewardsError(
                     f"That classmate only has {target_user.points:,} pts in their wallet. Their liquid balance is too low to audit (< 20,000 pts)!"
@@ -4762,6 +5444,17 @@ class RewardsDBService:
 
             cap_note = " *(Max Payout Cap Reached!)*" if tax_amount == MAX_AUDIT_PAYOUT else ""
             desc = f"🕵️ Class Treasurer Audit executed! You audited 5% of <@{target_id}>'s liquid wallet (**+{tax_amount:,} Uno Points**){cap_note}!"
+
+        elif item_id == "fake_clearance":
+            self.remove_item(user_id, item_id, 1)
+            fc_dt = current_time + timedelta(hours=24)
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET fake_clearance_until = ? WHERE user_id = ?",
+                    (fc_dt.isoformat(), user_id),
+                )
+                conn.commit()
+            desc = "📄 Presented Forged Tax Clearance! You are protected from Class Treasurer Tax Audits for 24 hours."
 
         elif item_id == "coffee_bribe":
             self.remove_item(user_id, item_id, 1)
@@ -4918,7 +5611,12 @@ class RewardsDBService:
         trivia_remaining = MAX_TRIVIA - new_trivia_count
 
         points_awarded = TRIVIA_REWARD if is_correct else 0
-        new_balance = user.points + points_awarded
+        actual_awarded, garnished_amount, garnishment_notice = (0, 0, None)
+        if points_awarded > 0:
+            actual_awarded, garnished_amount, garnishment_notice = self.apply_wage_garnishment(
+                user_id, points_awarded, "Trivia Quiz", now=current_time
+            )
+        new_balance = user.points + actual_awarded
         new_lifetime = user.lifetime_points + points_awarded
 
         with self._get_connection() as conn:
@@ -4936,19 +5634,742 @@ class RewardsDBService:
             action_desc = f"Trivia Quiz {'Correct (+' + str(points_awarded) + ' pts)' if is_correct else 'Incorrect (0 pts)'}"
             if is_owl and is_correct:
                 action_desc += " [🦉 Owl Perk!]"
+            if garnished_amount > 0:
+                action_desc += f" [⚖️ {garnished_amount} pts Garnished for Loan]"
             conn.execute(
                 """
                 INSERT INTO transactions (user_id, amount, action_type, description)
                 VALUES (?, ?, 'TRIVIA', ?)
                 """,
-                (user_id, points_awarded, action_desc),
+                (user_id, actual_awarded, action_desc),
             )
             conn.commit()
 
         self.record_quest_progress(user_id, "trivia", current_time)
         return TriviaResult(
             is_correct=is_correct,
-            points_awarded=points_awarded,
+            points_awarded=actual_awarded,
             new_balance=new_balance,
             trivia_remaining=trivia_remaining,
+            garnished_amount=garnished_amount,
+            garnishment_notice=garnishment_notice,
         )
+
+    # ==========================================
+    # SERVER MEGA LOTTERY SYSTEM (/lottery)
+    # ==========================================
+
+    def get_lottery_info(self, user_id: Optional[int] = None) -> LotteryInfo:
+        """Fetch current jackpot pool, ticket counts, and user's ticket numbers."""
+        with self._get_connection() as conn:
+            row_pool = conn.execute(
+                "SELECT state_value FROM economy_state WHERE state_key = 'lottery_jackpot'"
+            ).fetchone()
+            row_draw = conn.execute(
+                "SELECT state_value FROM economy_state WHERE state_key = 'lottery_draw_id'"
+            ).fetchone()
+
+            jackpot = int(row_pool["state_value"]) if row_pool else 50000
+            draw_id = int(row_draw["state_value"]) if row_draw else 1
+
+            total_tickets = conn.execute(
+                "SELECT COUNT(*) as cnt FROM lottery_tickets WHERE draw_id = ?", (draw_id,)
+            ).fetchone()["cnt"]
+
+            user_tickets = 0
+            if user_id is not None:
+                user_tickets = conn.execute(
+                    "SELECT COUNT(*) as cnt FROM lottery_tickets WHERE draw_id = ? AND user_id = ?",
+                    (draw_id, user_id),
+                ).fetchone()["cnt"]
+
+            return LotteryInfo(
+                draw_id=draw_id,
+                jackpot_pool=jackpot,
+                ticket_price=200,
+                total_tickets=total_tickets,
+                user_tickets=user_tickets,
+                next_draw_time="Every Sunday at 12:00 AM PHT",
+            )
+
+    def buy_lottery_tickets(self, user_id: int, count: int = 1) -> dict:
+        """Purchase lottery tickets (200 pts each). 80% added to jackpot pool, 20% sink."""
+        if count < 1:
+            raise RewardsError("You must purchase at least 1 lottery ticket!")
+        if count > 100:
+            raise RewardsError("You can purchase a maximum of 100 tickets per transaction!")
+
+        ticket_price = 200
+        total_cost = count * ticket_price
+        user = self.get_or_create_user(user_id)
+
+        if user.points < total_cost:
+            raise InsufficientPointsError(
+                f"You need {total_cost:,} pts to buy {count} ticket(s), but only have {user.points:,} pts!"
+            )
+
+        info = self.get_lottery_info(user_id)
+        draw_id = info.draw_id
+        pot_addition = int(total_cost * 0.80)
+        new_pot = info.jackpot_pool + pot_addition
+
+        self.deduct_points(
+            user_id, total_cost, "LOTTERY_TICKETS", f"Bought {count} Mega Lottery ticket(s) for Draw #{draw_id}"
+        )
+
+        now_str = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            # Get max ticket number in draw
+            row_max = conn.execute(
+                "SELECT MAX(ticket_number) as mx FROM lottery_tickets WHERE draw_id = ?", (draw_id,)
+            ).fetchone()
+            start_num = (row_max["mx"] or 1000) + 1
+
+            for i in range(count):
+                conn.execute(
+                    "INSERT INTO lottery_tickets (draw_id, user_id, ticket_number, purchased_at) VALUES (?, ?, ?, ?)",
+                    (draw_id, user_id, start_num + i, now_str),
+                )
+
+            conn.execute(
+                "INSERT INTO economy_state (state_key, state_value) VALUES ('lottery_jackpot', ?) ON CONFLICT(state_key) DO UPDATE SET state_value = excluded.state_value",
+                (str(new_pot),),
+            )
+            conn.commit()
+
+        updated_info = self.get_lottery_info(user_id)
+        return {
+            "draw_id": draw_id,
+            "tickets_bought": count,
+            "total_cost": total_cost,
+            "new_jackpot": new_pot,
+            "user_total_tickets": updated_info.user_tickets,
+            "total_tickets_in_draw": updated_info.total_tickets,
+        }
+
+    def contribute_lottery_rake(self, amount: int) -> int:
+        """Inject small rake from casino games or lawsuits into the lottery pool."""
+        if amount <= 0:
+            return 0
+        info = self.get_lottery_info()
+        new_pot = info.jackpot_pool + amount
+        with self._get_connection() as conn:
+            conn.execute(
+                "INSERT INTO economy_state (state_key, state_value) VALUES ('lottery_jackpot', ?) ON CONFLICT(state_key) DO UPDATE SET state_value = excluded.state_value",
+                (str(new_pot),),
+            )
+            conn.commit()
+        return new_pot
+
+    def draw_lottery(self) -> dict:
+        """Draw the winning ticket for the active draw, award jackpot, and roll over."""
+        info = self.get_lottery_info()
+        draw_id = info.draw_id
+        jackpot = info.jackpot_pool
+
+        with self._get_connection() as conn:
+            tickets = conn.execute(
+                "SELECT ticket_number, user_id FROM lottery_tickets WHERE draw_id = ?", (draw_id,)
+            ).fetchall()
+
+            if not tickets:
+                # Roll over to next draw without resetting jackpot
+                next_draw = draw_id + 1
+                conn.execute(
+                    "INSERT INTO economy_state (state_key, state_value) VALUES ('lottery_draw_id', ?) ON CONFLICT(state_key) DO UPDATE SET state_value = excluded.state_value",
+                    (str(next_draw),),
+                )
+                conn.commit()
+                return {
+                    "has_winner": False,
+                    "draw_id": draw_id,
+                    "jackpot": jackpot,
+                    "message": f"No tickets were purchased for Draw #{draw_id}! Jackpot of {jackpot:,} pts rolls over to Draw #{next_draw}.",
+                }
+
+            winning_ticket = random.choice(tickets)
+            winner_id = winning_ticket["user_id"]
+            ticket_no = winning_ticket["ticket_number"]
+
+            # Award jackpot to winner
+            new_bal = self.add_points(
+                winner_id, jackpot, "LOTTERY_JACKPOT_WIN", f"Won Server Mega Lottery Draw #{draw_id} (Ticket #{ticket_no})"
+            )
+
+            # Reset jackpot to seed 50,000 pts and increment draw_id
+            next_draw = draw_id + 1
+            seed_pot = 50000
+            conn.execute(
+                "INSERT INTO economy_state (state_key, state_value) VALUES ('lottery_jackpot', ?) ON CONFLICT(state_key) DO UPDATE SET state_value = excluded.state_value",
+                (str(seed_pot),),
+            )
+            conn.execute(
+                "INSERT INTO economy_state (state_key, state_value) VALUES ('lottery_draw_id', ?) ON CONFLICT(state_key) DO UPDATE SET state_value = excluded.state_value",
+                (str(next_draw),),
+            )
+            conn.commit()
+
+            return {
+                "has_winner": True,
+                "draw_id": draw_id,
+                "winner_id": winner_id,
+                "ticket_number": ticket_no,
+                "jackpot_won": jackpot,
+                "winner_new_balance": new_bal,
+                "next_draw_id": next_draw,
+            }
+
+    # ==========================================
+    # CAMPUS STOCK MARKET SYSTEM (/stonks)
+    # ==========================================
+
+    def _init_stocks_if_needed(self) -> None:
+        """Seed stock market table if empty."""
+        with self._get_connection() as conn:
+            cnt = conn.execute("SELECT COUNT(*) as c FROM stocks_state").fetchone()["c"]
+            if cnt == 0:
+                now_str = datetime.now(timezone.utc).isoformat()
+                for s in DEFAULT_STOCKS:
+                    conn.execute(
+                        """
+                        INSERT INTO stocks_state (ticker, name, current_price, prev_price, low_24h, high_24h, last_headline, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            s["ticker"],
+                            s["name"],
+                            s["base_price"],
+                            s["base_price"],
+                            s["base_price"],
+                            s["base_price"],
+                            s["initial_headline"],
+                            now_str,
+                        ),
+                    )
+                conn.commit()
+
+    def get_stock_market(self, simulate: bool = True) -> list[StockQuote]:
+        """Fetch all stocks, optionally applying random-walk price shift."""
+        self._init_stocks_if_needed()
+        current_time = datetime.now(timezone.utc)
+
+        HEADLINES = [
+            "Dean praises student study stamina; coffee consumption hits all-time high!",
+            "Professor announces surprise 50-page paper requirement; photocopy lines wrap around Intramuros.",
+            "Campus WiFi goes down during finals week; student rage spikes local volatility.",
+            "Late-night Uno high roller tournament declared official intramural spectator sport.",
+            "Intramuros food stalls accept Uno Points; trading volumes explode across campus.",
+            "Students develop automated bot for library seat reservations; campus tech index surges.",
+        ]
+
+        with self._get_connection() as conn:
+            rows = conn.execute("SELECT * FROM stocks_state").fetchall()
+            quotes = []
+
+            for r in rows:
+                price = r["current_price"]
+                prev_price = r["prev_price"]
+                low = r["low_24h"]
+                high = r["high_24h"]
+                headline = r["last_headline"]
+
+                if simulate:
+                    try:
+                        last_up = datetime.fromisoformat(r["updated_at"])
+                        if last_up.tzinfo is None:
+                            last_up = last_up.replace(tzinfo=timezone.utc)
+                        # Shift price every 3 minutes
+                        if (current_time - last_up).total_seconds() > 180:
+                            shift_pct = random.uniform(-0.10, 0.12)
+                            new_price = max(5, int(price * (1 + shift_pct)))
+                            prev_price = price
+                            low = min(low, new_price)
+                            high = max(high, new_price)
+                            headline = random.choice(HEADLINES)
+                            conn.execute(
+                                """
+                                UPDATE stocks_state
+                                SET current_price = ?, prev_price = ?, low_24h = ?, high_24h = ?, last_headline = ?, updated_at = ?
+                                WHERE ticker = ?
+                                """,
+                                (new_price, prev_price, low, high, headline, current_time.isoformat(), r["ticker"]),
+                            )
+                            price = new_price
+                    except ValueError:
+                        pass
+
+                change_pct = ((price - prev_price) / prev_price * 100.0) if prev_price > 0 else 0.0
+                quotes.append(
+                    StockQuote(
+                        ticker=r["ticker"],
+                        name=r["name"],
+                        current_price=price,
+                        prev_price=prev_price,
+                        change_pct=round(change_pct, 2),
+                        low_24h=low,
+                        high_24h=high,
+                        headline=headline,
+                    )
+                )
+
+            conn.commit()
+            return quotes
+
+    def buy_stock(self, user_id: int, ticker: str, shares: int) -> dict:
+        """Buy shares of a campus stock at current market price."""
+        if shares < 1:
+            raise RewardsError("You must buy at least 1 share!")
+        ticker_clean = ticker.strip().upper()
+        quotes = {q.ticker: q for q in self.get_stock_market(simulate=False)}
+
+        if ticker_clean not in quotes:
+            raise RewardsError(f"Invalid stock ticker `${ticker_clean}`! Available: {', '.join(quotes.keys())}")
+
+        quote = quotes[ticker_clean]
+        total_cost = shares * quote.current_price
+        user = self.get_or_create_user(user_id)
+
+        if user.points < total_cost:
+            raise InsufficientPointsError(
+                f"You need {total_cost:,} pts to buy {shares} share(s) of ${ticker_clean}, but only have {user.points:,} pts!"
+            )
+
+        new_bal = self.deduct_points(
+            user_id, total_cost, "STOCK_BUY", f"Bought {shares} shares of ${ticker_clean} @ {quote.current_price} pts"
+        )
+
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT shares, total_invested FROM user_stocks WHERE user_id = ? AND ticker = ?",
+                (user_id, ticker_clean),
+            ).fetchone()
+
+            if row:
+                new_shares = row["shares"] + shares
+                new_inv = row["total_invested"] + total_cost
+                conn.execute(
+                    "UPDATE user_stocks SET shares = ?, total_invested = ? WHERE user_id = ? AND ticker = ?",
+                    (new_shares, new_inv, user_id, ticker_clean),
+                )
+            else:
+                new_shares = shares
+                new_inv = total_cost
+                conn.execute(
+                    "INSERT INTO user_stocks (user_id, ticker, shares, total_invested) VALUES (?, ?, ?, ?)",
+                    (user_id, ticker_clean, new_shares, new_inv),
+                )
+            conn.commit()
+
+        return {
+            "ticker": ticker_clean,
+            "name": quote.name,
+            "shares_bought": shares,
+            "price_per_share": quote.current_price,
+            "total_cost": total_cost,
+            "total_shares": new_shares,
+            "new_wallet": new_bal,
+        }
+
+    def sell_stock(self, user_id: int, ticker: str, shares: int) -> dict:
+        """Sell shares of a campus stock at current market price."""
+        if shares < 1:
+            raise RewardsError("You must sell at least 1 share!")
+        ticker_clean = ticker.strip().upper()
+        quotes = {q.ticker: q for q in self.get_stock_market(simulate=False)}
+
+        if ticker_clean not in quotes:
+            raise RewardsError(f"Invalid stock ticker `${ticker_clean}`!")
+
+        quote = quotes[ticker_clean]
+
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT shares, total_invested FROM user_stocks WHERE user_id = ? AND ticker = ?",
+                (user_id, ticker_clean),
+            ).fetchone()
+
+            if not row or row["shares"] < shares:
+                owned = row["shares"] if row else 0
+                raise RewardsError(
+                    f"You only own {owned} share(s) of ${ticker_clean}! Cannot sell {shares} share(s)."
+                )
+
+            total_payout = shares * quote.current_price
+            rem_shares = row["shares"] - shares
+            rem_invested = int(row["total_invested"] * (rem_shares / row["shares"])) if rem_shares > 0 else 0
+
+            if rem_shares == 0:
+                conn.execute("DELETE FROM user_stocks WHERE user_id = ? AND ticker = ?", (user_id, ticker_clean))
+            else:
+                conn.execute(
+                    "UPDATE user_stocks SET shares = ?, total_invested = ? WHERE user_id = ? AND ticker = ?",
+                    (rem_shares, rem_invested, user_id, ticker_clean),
+                )
+            conn.commit()
+
+        new_bal = self.add_points(
+            user_id, total_payout, "STOCK_SELL", f"Sold {shares} shares of ${ticker_clean} @ {quote.current_price} pts"
+        )
+
+        return {
+            "ticker": ticker_clean,
+            "name": quote.name,
+            "shares_sold": shares,
+            "price_per_share": quote.current_price,
+            "total_payout": total_payout,
+            "remaining_shares": rem_shares,
+            "new_wallet": new_bal,
+        }
+
+    def get_portfolio(self, user_id: int) -> Portfolio:
+        """Calculate user portfolio holdings, valuation, and return on investment."""
+        quotes = {q.ticker: q for q in self.get_stock_market(simulate=False)}
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT ticker, shares, total_invested FROM user_stocks WHERE user_id = ? AND shares > 0",
+                (user_id,),
+            ).fetchall()
+
+            holdings = []
+            total_inv = 0
+            total_val = 0
+
+            for r in rows:
+                t = r["ticker"]
+                s = r["shares"]
+                inv = r["total_invested"]
+                q = quotes.get(t)
+                curr_price = q.current_price if q else 100
+                name = q.name if q else t
+                curr_val = s * curr_price
+                pl = curr_val - inv
+                pl_pct = (pl / inv * 100.0) if inv > 0 else 0.0
+
+                total_inv += inv
+                total_val += curr_val
+                holdings.append(
+                    StockHolding(
+                        ticker=t,
+                        name=name,
+                        shares=s,
+                        total_invested=inv,
+                        current_price=curr_price,
+                        current_value=curr_val,
+                        profit_loss=pl,
+                        profit_loss_pct=round(pl_pct, 2),
+                    )
+                )
+
+            net_pl = total_val - total_inv
+            net_pl_pct = (net_pl / total_inv * 100.0) if total_inv > 0 else 0.0
+            return Portfolio(
+                holdings=holdings,
+                total_invested=total_inv,
+                total_value=total_val,
+                net_profit=net_pl,
+                net_profit_pct=round(net_pl_pct, 2),
+            )
+
+    # ==========================================
+    # MIDNIGHT BLACK MARKET (/blackmarket)
+    # ==========================================
+
+    def is_blackmarket_open(self, now: Optional[datetime] = None) -> bool:
+        """Returns True if current Philippine Time is between 11:00 PM and 5:00 AM."""
+        current_time = now or datetime.now(PHT)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=PHT)
+        else:
+            current_time = current_time.astimezone(PHT)
+        hour = current_time.hour
+        return hour >= 23 or hour < 5
+
+    def get_blackmarket_catalog(self) -> dict[str, dict]:
+        """Return the contraband items catalog."""
+        return BLACKMARKET_CATALOG
+
+    def buy_blackmarket_item(
+        self, user_id: int, item_id: str, now: Optional[datetime] = None
+    ) -> dict:
+        """Purchase an illicit contraband item during black market hours."""
+        if not self.is_blackmarket_open(now=now):
+            raise RewardsError(
+                "🌙 The Black Market is CLOSED! The shady dealers only operate between **11:00 PM and 5:00 AM PHT**."
+            )
+
+        clean_id = item_id.strip().lower()
+        if clean_id not in BLACKMARKET_CATALOG:
+            avail = ", ".join(f"`{k}`" for k in BLACKMARKET_CATALOG.keys())
+            raise RewardsError(f"Item '{item_id}' is not sold on the Black Market! Available: {avail}")
+
+        item = BLACKMARKET_CATALOG[clean_id]
+        cost = item["cost"]
+        user = self.get_or_create_user(user_id)
+
+        if user.points < cost:
+            raise InsufficientPointsError(
+                f"You need {cost:,} pts to buy {item['name']}, but only have {user.points:,} pts!"
+            )
+
+        new_bal = self.deduct_points(
+            user_id, cost, "BLACK_MARKET_BUY", f"Purchased {item['name']} from Midnight Black Market"
+        )
+        self.add_item(user_id, clean_id, 1)
+
+        return {
+            "item_id": clean_id,
+            "name": item["name"],
+            "cost": cost,
+            "new_balance": new_bal,
+        }
+
+    # ==========================================
+    # CAMPUS BUSINESSES (/business)
+    # ==========================================
+
+    def get_user_businesses(self, user_id: int, now: Optional[datetime] = None) -> list[BusinessRecord]:
+        """Return all enterprises owned by the student, with calculated uncollected revenue."""
+        current_time = now or datetime.now(timezone.utc)
+        if current_time.tzinfo is None:
+            current_time = current_time.replace(tzinfo=timezone.utc)
+
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT business_id, level, last_collected, purchased_at FROM user_businesses WHERE user_id = ?",
+                (user_id,),
+            ).fetchall()
+
+            records = []
+            for r in rows:
+                b_id = r["business_id"]
+                info = BUSINESS_CATALOG.get(b_id, {})
+                base_yield = info.get("daily_yield", 500)
+                level = r["level"]
+                effective_yield = base_yield * level
+
+                try:
+                    last_c = datetime.fromisoformat(r["last_collected"])
+                    if last_c.tzinfo is None:
+                        last_c = last_c.replace(tzinfo=timezone.utc)
+                    hours_elapsed = max(0.0, (current_time - last_c).total_seconds() / 3600.0)
+                except ValueError:
+                    hours_elapsed = 0.0
+
+                accumulated = min(effective_yield * 3, int((hours_elapsed / 24.0) * effective_yield))
+                next_upgrade = int(info.get("cost", 20000) * 0.75 * (level + 1))
+
+                records.append(
+                    BusinessRecord(
+                        business_id=b_id,
+                        name=info.get("name", b_id.title()),
+                        daily_yield=effective_yield,
+                        level=level,
+                        accumulated_points=accumulated,
+                        next_upgrade_cost=next_upgrade,
+                        description=info.get("description", ""),
+                    )
+                )
+            return records
+
+    def buy_business(self, user_id: int, business_id: str, now: Optional[datetime] = None) -> BusinessRecord:
+        """Purchase a campus enterprise franchise."""
+        b_clean = business_id.strip().lower()
+        if b_clean not in BUSINESS_CATALOG:
+            avail = ", ".join(f"`{k}`" for k in BUSINESS_CATALOG.keys())
+            raise RewardsError(f"Enterprise '{business_id}' does not exist! Available: {avail}")
+
+        info = BUSINESS_CATALOG[b_clean]
+        cost = info["cost"]
+        user = self.get_or_create_user(user_id)
+
+        if user.points < cost:
+            raise InsufficientPointsError(
+                f"You need {cost:,} pts to buy {info['name']}, but only have {user.points:,} pts!"
+            )
+
+        current_time = now or datetime.now(timezone.utc)
+        now_str = current_time.isoformat()
+
+        with self._get_connection() as conn:
+            existing = conn.execute(
+                "SELECT level FROM user_businesses WHERE user_id = ? AND business_id = ?",
+                (user_id, b_clean),
+            ).fetchone()
+            if existing:
+                raise RewardsError(
+                    f"You already own a {info['name']}! Use `/business upgrade {b_clean}` to expand it."
+                )
+
+            conn.execute(
+                """
+                INSERT INTO user_businesses (user_id, business_id, level, last_collected, purchased_at)
+                VALUES (?, ?, 1, ?, ?)
+                """,
+                (user_id, b_clean, now_str, now_str),
+            )
+            conn.commit()
+
+        self.deduct_points(user_id, cost, "BUSINESS_PURCHASE", f"Purchased franchise: {info['name']}")
+        return BusinessRecord(
+            business_id=b_clean,
+            name=info["name"],
+            daily_yield=info["daily_yield"],
+            level=1,
+            accumulated_points=0,
+            next_upgrade_cost=int(cost * 0.75 * 2),
+            description=info["description"],
+        )
+
+    def upgrade_business(self, user_id: int, business_id: str) -> BusinessRecord:
+        """Upgrade an owned enterprise to multiply its daily yield."""
+        b_clean = business_id.strip().lower()
+        businesses = {b.business_id: b for b in self.get_user_businesses(user_id)}
+
+        if b_clean not in businesses:
+            raise RewardsError(f"You do not own the '{business_id}' business! Buy it first with `/business buy`.")
+
+        biz = businesses[b_clean]
+        upgrade_cost = biz.next_upgrade_cost
+        user = self.get_or_create_user(user_id)
+
+        if user.points < upgrade_cost:
+            raise InsufficientPointsError(
+                f"Upgrading {biz.name} to Level {biz.level + 1} costs {upgrade_cost:,} pts, but you only have {user.points:,} pts!"
+            )
+
+        self.deduct_points(
+            user_id, upgrade_cost, "BUSINESS_UPGRADE", f"Upgraded {biz.name} to Level {biz.level + 1}"
+        )
+
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE user_businesses SET level = level + 1 WHERE user_id = ? AND business_id = ?",
+                (user_id, b_clean),
+            )
+            conn.commit()
+
+        updated = {b.business_id: b for b in self.get_user_businesses(user_id)}
+        return updated[b_clean]
+
+    def collect_business_revenue(self, user_id: int, now: Optional[datetime] = None) -> tuple[int, list[str]]:
+        """Collect all accumulated passive revenue across student's enterprises."""
+        businesses = self.get_user_businesses(user_id, now=now)
+        if not businesses:
+            raise RewardsError("You don't own any campus businesses! Buy one with `/business buy`.")
+
+        total_collected = sum(b.accumulated_points for b in businesses)
+        if total_collected <= 0:
+            raise RewardsError("No revenue has accumulated yet! Check back in a few hours.")
+
+        current_time = now or datetime.now(timezone.utc)
+        now_str = current_time.isoformat()
+
+        with self._get_connection() as conn:
+            conn.execute(
+                "UPDATE user_businesses SET last_collected = ? WHERE user_id = ?",
+                (now_str, user_id),
+            )
+            conn.commit()
+
+        self.add_points(
+            user_id, total_collected, "BUSINESS_REVENUE", f"Collected {total_collected:,} pts from campus businesses"
+        )
+
+        breakdown = [f"• **{b.name} (Lvl {b.level})**: `+{b.accumulated_points:,} pts`" for b in businesses if b.accumulated_points > 0]
+        return total_collected, breakdown
+
+    # ==========================================
+    # COOPERATIVE BANK HEISTS (/heist)
+    # ==========================================
+
+    _active_heists: dict[int, dict] = {}
+
+    def start_heist_lobby(self, guild_id: int, leader_id: int) -> dict:
+        """Create a cooperative heist lobby for a server."""
+        if guild_id in self._active_heists:
+            raise RewardsError("A heist operation is already being planned in this server! Join it with `/heist join`.")
+
+        self.get_or_create_user(leader_id)
+        lobby = {
+            "guild_id": guild_id,
+            "leader_id": leader_id,
+            "created_at": datetime.now(timezone.utc),
+            "crew": {
+                leader_id: {"role": "Mastermind", "user_id": leader_id}
+            },
+        }
+        self._active_heists[guild_id] = lobby
+        return lobby
+
+    def join_heist_lobby(self, guild_id: int, user_id: int, role: str) -> dict:
+        """Join an existing heist crew with a chosen specialty role."""
+        if guild_id not in self._active_heists:
+            raise RewardsError("No active heist lobby found! Start one with `/heist start`.")
+
+        lobby = self._active_heists[guild_id]
+        if user_id in lobby["crew"]:
+            raise RewardsError("You are already part of this heist crew!")
+        if len(lobby["crew"]) >= 4:
+            raise RewardsError("The heist crew is full (Max 4 operatives)!")
+
+        role_clean = role.strip().title()
+        lobby["crew"][user_id] = {"role": role_clean, "user_id": user_id}
+        return lobby
+
+    def execute_heist(self, guild_id: int, leader_id: int, now: Optional[datetime] = None) -> dict:
+        """Execute the bank heist operation with the assembled crew."""
+        if guild_id not in self._active_heists:
+            raise RewardsError("No active heist operation found! Start one with `/heist start`.")
+
+        lobby = self._active_heists[guild_id]
+        if lobby["leader_id"] != leader_id:
+            raise RewardsError("Only the Heist Mastermind can execute the operation!")
+
+        crew = lobby["crew"]
+        crew_size = len(crew)
+        current_time = now or datetime.now(timezone.utc)
+
+        # Base success rate scales with crew size
+        success_rate = min(0.85, 0.25 + crew_size * 0.15)
+        is_success = random.random() < success_rate
+
+        # Clear lobby
+        del self._active_heists[guild_id]
+
+        if is_success:
+            total_vault = random.randint(30000, 60000)
+            cut_per_member = total_vault // crew_size
+            for member_id in crew:
+                self.add_points(
+                    member_id, cut_per_member, "HEIST_PAYOUT", f"Cut from Intramuros Central Bank Vault Heist (+{cut_per_member:,} pts)"
+                )
+            return {
+                "success": True,
+                "crew_size": crew_size,
+                "total_vault": total_vault,
+                "cut_per_member": cut_per_member,
+                "members": list(crew.keys()),
+            }
+        else:
+            # Arrest all crew members for 1 hour + 2,000 pt bail/penalty
+            jail_until = (current_time + timedelta(hours=1)).isoformat()
+            fine_amount = 2000
+            for member_id in crew:
+                u = self.get_or_create_user(member_id)
+                fine = min(fine_amount, u.points)
+                if fine > 0:
+                    self.deduct_points(member_id, fine, "HEIST_BAIL", "Bail fee following failed Central Bank Heist")
+                with self._get_connection() as conn:
+                    conn.execute(
+                        "UPDATE users SET arrested_until = ? WHERE user_id = ?",
+                        (jail_until, member_id),
+                    )
+                    conn.commit()
+
+            return {
+                "success": False,
+                "crew_size": crew_size,
+                "fine_amount": fine_amount,
+                "jail_minutes": 60,
+                "members": list(crew.keys()),
+            }

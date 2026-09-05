@@ -263,7 +263,7 @@ def test_shop_and_redeem_commands():
     """Test /shop and /redeem commands."""
     async def _test():
         cog, service, log_channel = _make_rewards_cog()
-        service.add_points(555, 60000, "TEST")
+        service.add_points(555, 300000, "TEST")
 
         # 1. /shop
         interaction = MagicMock()
@@ -289,10 +289,10 @@ def test_shop_and_redeem_commands():
         interaction2.response.send_message.assert_awaited_once()
         redeem_embed = interaction2.response.send_message.call_args.kwargs["embed"]
         assert "Consumable Purchased!" in redeem_embed.title
-        assert service.get_balance(555) == 59900
+        assert service.get_balance(555) == 299900
         assert service.get_inventory(555)["pickpocket"] == 1
 
-        # 3. /redeem physical (coffee - 50,000 pts)
+        # 3. /redeem physical (coffee - 250,000 pts)
         interaction3 = MagicMock()
         interaction3.user.id = 555
         interaction3.user.display_name = "Charlie"
@@ -305,7 +305,7 @@ def test_shop_and_redeem_commands():
         interaction3.response.send_message.assert_awaited_once()
         redeem_embed2 = interaction3.response.send_message.call_args.kwargs["embed"]
         assert "Prize Redemption Submitted!" in redeem_embed2.title
-        assert service.get_balance(555) == 9900
+        assert service.get_balance(555) == 49900
         log_channel.send.assert_awaited_once()
 
     asyncio.run(_test())
@@ -316,9 +316,9 @@ def test_redemption_approval_view():
     async def _test():
         from bot.cogs.rewards import RedemptionApprovalView
         cog, service, _ = _make_rewards_cog()
-        service.add_points(555, 60000, "TEST")
+        service.add_points(555, 300000, "TEST")
         redemption = service.record_redemption(555, "coffee")
-        assert service.get_balance(555) == 10000
+        assert service.get_balance(555) == 50000
 
         view = RedemptionApprovalView(service, redemption["id"])
 

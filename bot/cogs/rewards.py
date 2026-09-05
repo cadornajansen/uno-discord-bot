@@ -4230,6 +4230,662 @@ class RewardsCog(commands.Cog):
         await interaction.response.send_message(embed=embed, view=view)
 
 
+    # =========================================================================
+    # CAMPUS LOANS & DEBT (/loan, /bankruptcy)
+    # =========================================================================
+    loan_group = app_commands.Group(name="loan", description="University student loans, debt financing, and repayments.")
+
+    @loan_group.command(name="view", description="View your active student loan, due date, progress bar, or available loan tiers.")
+    async def loan_view(self, interaction: discord.Interaction) -> None:
+        """Display caller's loan status and credit summary."""
+        user_id = interaction.user.id
+        loan = self.rewards_service.get_active_loan(user_id)
+        user = self.rewards_service.get_or_create_user(user_id)
+
+        if not loan or loan.remaining_due <= 0:
+            embed = discord.Embed(
+                title="🏛️ Intramuros Student Financial Aid Office",
+                description=(
+                    "You currently have **no outstanding student debt**!\n\n"
+                    "**Available Campus Loan Tiers:**\n"
+                    "• 🎒 **Student Micro-Loan** (`/loan take tier:micro`)\n"
+                    "  Borrow **5,000 pts** · Repay **6,000 pts** within **48 hours** (20% interest)\n"
+                    "• 📚 **Semester Tuition Loan** (`/loan take tier:tuition`)\n"
+                    "  Borrow **20,000 pts** · Repay **25,000 pts** within **5 days** (25% interest, min 500 lifetime pts)\n"
+                    "• 🏛️ **Dean's Line of Credit** (`/loan take tier:deans`)\n"
+                    "  Borrow **50,000 pts** · Repay **65,000 pts** within **7 days** (30% interest, min 3k lifetime pts)\n\n"
+                    "💡 *Tip: Late payments incur +5% daily compounding penalty and automatic 50% wage garnishment!*"
+                ),
+                color=discord.Color.blue(),
+            )
+            embed.set_footer(text="Intramuros Campus Credit Bureau · Borrow responsibly!")
+            await interaction.response.send_message(embed=embed)
+            return
+
+        # Visual progress bar for repayment
+        pct = min(1.0, max(0.0, loan.amount_repaid / loan.effective_total_due)) if loan.effective_total_due > 0 else 1.0
+        filled = int(pct * 12)
+        bar = "█" * filled + "░" * (12 - filled)
+
+        due_dt = datetime.fromisoformat(loan.due_date)
+        if due_dt.tzinfo is None:
+            due_dt = due_dt.replace(tzinfo=timezone.utc)
+        due_str = f"<t:{int(due_dt.timestamp())}:R> (<t:{int(due_dt.timestamp())}:f>)"
+
+        color = discord.Color.red() if loan.is_overdue else discord.Color.gold()
+        status_text = "⚠️ **DEFAULTED / OVERDUE**" if loan.is_overdue else "🟢 **ACTIVE (IN GOOD STANDING)**"
+
+        embed = discord.Embed(
+            title=f"💳 Active Debt: {loan.tier_name}",
+            color=color,
+            description=(
+                f"**Status:** {status_text}\n"
+                f"**Repayment Progress:** `[{bar}]` **{int(pct * 100)}%**\n\n"
+                f"• 💰 **Principal Borrowed:** `{loan.principal:,} pts`\n"
+                f"• 📈 **Total Obligation:** `{loan.effective_total_due:,} pts`"
+                f"{f' *(Includes +{loan.penalty_accumulated:,} pts late penalty!)*' if loan.penalty_accumulated > 0 else ''}\n"
+                f"• 💵 **Amount Repaid:** `{loan.amount_repaid:,} pts`\n"
+                f"• ⚖️ **Remaining Due:** `{loan.remaining_due:,} pts`\n"
+                f"• ⏳ **Due Date:** {due_str}\n\n"
+                f"Repay your debt anytime with `/loan repay [amount]`!"
+            ),
+        )
+        if loan.is_overdue:
+            embed.add_field(
+                name="🚨 Wage Garnishment Active!",
+                value="50% of your earnings from `/daily`, `/work`, `/beg`, `/study`, and `/trivia` are automatically seized to service your debt!",
+                inline=False,
+            )
+        await interaction.response.send_message(embed=embed)
+
+    @loan_group.command(name="take", description="Borrow Uno Points from the University Credit Bureau.")
+    @app_commands.describe(tier="Choose loan tier: Micro (5k), Tuition (20k), or Dean's Line of Credit (50k).")
+    @app_commands.choices(
+        tier=[
+            app_commands.Choice(name="🎒 Student Micro-Loan (Borrow 5,000 pts · Repay 6,000 pts in 48h)", value="micro"),
+            app_commands.Choice(name="📚 Semester Tuition Loan (Borrow 20,000 pts · Repay 25,000 pts in 5d)", value="tuition"),
+            app_commands.Choice(name="🏛️ Dean's Line of Credit (Borrow 50,000 pts · Repay 65,000 pts in 7d)", value="deans"),
+        ]
+    )
+    async def loan_take(self, interaction: discord.Interaction, tier: app_commands.Choice[str]) -> None:
+        """Disburse loan tier to caller's wallet."""
+        user_id = interaction.user.id
+        try:
+            loan = self.rewards_service.take_loan(user_id, tier.value)
+            due_dt = datetime.fromisoformat(loan.due_date)
+            if due_dt.tzinfo is None:
+                due_dt = due_dt.replace(tzinfo=timezone.utc)
+            embed = discord.Embed(
+                title="💸 Loan Approved & Disbursed!",
+                description=(
+                    f"The University Financial Aid Office approved your **{loan.tier_name}**!\n\n"
+                    f"• 💰 **Disbursed to Wallet:** `+{loan.principal:,} Uno Points`\n"
+                    f"• 📈 **Total Due:** `{loan.total_due:,} Uno Points`\n"
+                    f"• ⏳ **Due Date:** <t:{int(due_dt.timestamp())}:R> (<t:{int(due_dt.timestamp())}:f>)\n\n"
+                    f"Make timely repayments with `/loan repay` to avoid late penalties and wage garnishment!"
+                ),
+                color=discord.Color.green(),
+            )
+            embed.set_footer(text="Campus Credit Bureau · Interest rate locked")
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @loan_group.command(name="repay", description="Repay part or all of your outstanding campus loan.")
+    @app_commands.describe(amount="Amount of points to repay (leave blank to repay entire debt or max available).")
+    async def loan_repay(self, interaction: discord.Interaction, amount: Optional[int] = None) -> None:
+        """Repay outstanding debt from wallet."""
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.repay_loan(user_id, amount)
+            if res["is_settled"]:
+                embed = discord.Embed(
+                    title="🎉 DEBT FULLY PAID OFF!",
+                    description=(
+                        f"Congratulations! You paid **{res['amount_paid']:,} pts** and fully settled your **{res['tier_name']}**!\n\n"
+                        f"• 💳 **Wallet Balance:** `{res['new_wallet']:,} Uno Points`\n"
+                        f"• 🌟 **Credit Standing:** Pristine · You can now borrow again anytime!"
+                    ),
+                    color=discord.Color.green(),
+                )
+            else:
+                embed = discord.Embed(
+                    title="💵 Partial Debt Repayment Successful",
+                    description=(
+                        f"You paid **{res['amount_paid']:,} pts** toward your **{res['tier_name']}**.\n\n"
+                        f"• ⚖️ **Remaining Due:** `{res['remaining_due']:,} Uno Points`\n"
+                        f"• 💳 **Wallet Balance:** `{res['new_wallet']:,} Uno Points`"
+                    ),
+                    color=discord.Color.blue(),
+                )
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @app_commands.command(name="bankruptcy", description="File for Chapter 11 campus bankruptcy to discharge all loans (clears wallet, 3-day casino lock).")
+    async def bankruptcy(self, interaction: discord.Interaction) -> None:
+        """Discharge outstanding debt under bankruptcy protection."""
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.declare_bankruptcy(user_id)
+            embed = discord.Embed(
+                title="⚖️ Chapter 11 Campus Bankruptcy Granted",
+                description=(
+                    f"The Intramuros Bankruptcy Court has discharged all your outstanding student debt!\n\n"
+                    f"• 🗑️ **Debt Discharged:** `{res.discharged_amount:,} Uno Points`\n"
+                    f"• 💸 **Liquid Assets Liquidated:** `{res.wallet_cleared:,} Uno Points` wiped to 0 pts\n"
+                    f"• ⛔ **Casino Lockout:** Gambling privileges frozen until <t:{int(datetime.fromisoformat(res.casino_locked_until).timestamp())}:R>\n"
+                    f"• ⏳ **Bankruptcy Protection Cooldown:** 30 days\n\n"
+                    f"*You have a clean slate to rebuild your campus fortune!*"
+                ),
+                color=discord.Color.dark_red(),
+            )
+            embed.set_footer(text="Intramuros Bankruptcy Court · Case Closed")
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    # =========================================================================
+    # SERVER MEGA LOTTERY (/lottery)
+    # =========================================================================
+    lottery_group = app_commands.Group(name="lottery", description="Server Mega Lottery jackpot pool and drawings.")
+
+    @lottery_group.command(name="view", description="Check current lottery jackpot pool, your tickets, and odds.")
+    async def lottery_view(self, interaction: discord.Interaction) -> None:
+        """View Mega Lottery board."""
+        user_id = interaction.user.id
+        info = self.rewards_service.get_lottery_info(user_id)
+        odds = f"{round(info.user_tickets / info.total_tickets * 100, 2)}%" if info.total_tickets > 0 else "0.00%"
+
+        embed = discord.Embed(
+            title=f"🎰 Server Mega Lottery — Draw #{info.draw_id}",
+            description=(
+                f"**💰 Progressive Jackpot Pool:**\n"
+                f"# `{info.jackpot_pool:,} Uno Points`\n\n"
+                f"• 🎟️ **Ticket Price:** `200 pts` (80% added directly to pot!)\n"
+                f"• 🎫 **Total Tickets in Draw:** `{info.total_tickets:,}`\n"
+                f"• 👤 **Your Tickets:** `{info.user_tickets:,}`\n"
+                f"• 🍀 **Your Win Chance:** `{odds}`\n"
+                f"• ⏱️ **Drawing Schedule:** {info.next_draw_time}\n\n"
+                f"Buy tickets now with `/lottery buy [tickets]`!"
+            ),
+            color=discord.Color.gold(),
+        )
+        embed.set_footer(text="Progressive pot accumulates from ticket sales, casino rakes, and court fines!")
+        await interaction.response.send_message(embed=embed)
+
+    @lottery_group.command(name="buy", description="Purchase tickets for the Server Mega Lottery (200 pts each).")
+    @app_commands.describe(tickets="Number of tickets to purchase (1–100).")
+    async def lottery_buy(self, interaction: discord.Interaction, tickets: int = 1) -> None:
+        """Buy lottery tickets."""
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.buy_lottery_tickets(user_id, tickets)
+            embed = discord.Embed(
+                title="🎟️ Lottery Tickets Purchased!",
+                description=(
+                    f"You bought **{res['tickets_bought']} ticket(s)** for Draw #{res['draw_id']}!\n\n"
+                    f"• 💵 **Cost Paid:** `{res['total_cost']:,} pts`\n"
+                    f"• 🎫 **Your Total Tickets:** `{res['user_total_tickets']}` / {res['total_tickets_in_draw']}\n"
+                    f"• 🏆 **New Jackpot Pool:** `{res['new_jackpot']:,} Uno Points`"
+                ),
+                color=discord.Color.green(),
+            )
+            embed.set_footer(text="Good luck! Winning ticket is drawn every Sunday at midnight PHT.")
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @lottery_group.command(name="draw", description="Draw the winning ticket for the active Mega Lottery draw (Admin/Owner only).")
+    async def lottery_draw(self, interaction: discord.Interaction) -> None:
+        """Execute lottery draw."""
+        from bot.services.rewards_db import OWNER_ECONOMY_OVERRIDE_USER_ID
+        if interaction.user.id != OWNER_ECONOMY_OVERRIDE_USER_ID and not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("❌ Only Administrators can trigger the lottery drawing!", ephemeral=True)
+            return
+
+        res = self.rewards_service.draw_lottery()
+        if not res["has_winner"]:
+            embed = discord.Embed(
+                title=f"🎰 Mega Lottery Draw #{res['draw_id']} Results",
+                description=res["message"],
+                color=discord.Color.orange(),
+            )
+        else:
+            embed = discord.Embed(
+                title="🎉 WE HAVE A MEGA LOTTERY JACKPOT WINNER! 🎉",
+                description=(
+                    f"The winning ticket has been drawn for **Draw #{res['draw_id']}**!\n\n"
+                    f"🏆 **Winner:** <@{res['winner_id']}>\n"
+                    f"🎫 **Winning Ticket Number:** `#{res['ticket_number']}`\n"
+                    f"💰 **Jackpot Payout:** `+{res['jackpot_won']:,} Uno Points`\n\n"
+                    f"The pool for **Draw #{res['next_draw_id']}** has been seeded with 50,000 pts! Buy your tickets now!"
+                ),
+                color=discord.Color.gold(),
+            )
+        await interaction.response.send_message(embed=embed)
+
+    # =========================================================================
+    # CAMPUS STOCK MARKET (/stonks)
+    # =========================================================================
+    stonks_group = app_commands.Group(name="stonks", description="Campus stock exchange, ticker quotes, and student investments.")
+
+    @stonks_group.command(name="market", description="View the Intramuros Campus Stock Exchange ticker board and latest news.")
+    async def stonks_market(self, interaction: discord.Interaction) -> None:
+        """Display campus stock ticker board."""
+        quotes = self.rewards_service.get_stock_market(simulate=True)
+        embed = discord.Embed(
+            title="📈 Intramuros Student Stock Exchange (ISSE)",
+            description="Live campus market ticker. Prices fluctuate based on student events and midterms!",
+            color=discord.Color.blue(),
+        )
+        for q in quotes:
+            icon = "📈" if q.change_pct >= 0 else "📉"
+            sign = "+" if q.change_pct >= 0 else ""
+            embed.add_field(
+                name=f"${q.ticker} — {q.name}",
+                value=(
+                    f"**Price:** `{q.current_price:,} pts` ({icon} `{sign}{q.change_pct}%`)\n"
+                    f"**24h Range:** `{q.low_24h}` – `{q.high_24h}` pts\n"
+                    f"📰 *{q.headline}*"
+                ),
+                inline=False,
+            )
+        embed.set_footer(text="Buy shares with /stonks buy · Sell with /stonks sell · View /stonks portfolio")
+        await interaction.response.send_message(embed=embed)
+
+    @stonks_group.command(name="buy", description="Buy shares of a campus stock.")
+    @app_commands.describe(
+        ticker="Stock ticker to purchase ($COFFEE, $PRINT, $NITRO, $UNO).",
+        shares="Number of shares to buy."
+    )
+    @app_commands.choices(
+        ticker=[
+            app_commands.Choice(name="$COFFEE (Dean's Coffee Holdings)", value="COFFEE"),
+            app_commands.Choice(name="$PRINT (Photocopy Cartel Intramuros)", value="PRINT"),
+            app_commands.Choice(name="$NITRO (Campus Tech & Nitro Speculation)", value="NITRO"),
+            app_commands.Choice(name="$UNO (Wild Card Volatility Index)", value="UNO"),
+        ]
+    )
+    async def stonks_buy(self, interaction: discord.Interaction, ticker: app_commands.Choice[str], shares: int = 1) -> None:
+        """Buy shares."""
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.buy_stock(user_id, ticker.value, shares)
+            embed = discord.Embed(
+                title=f"📈 Purchased ${res['ticker']} Shares",
+                description=(
+                    f"Executed market buy order for **{res['shares_bought']} share(s)** of **{res['name']}**!\n\n"
+                    f"• 🏷️ **Price per Share:** `{res['price_per_share']:,} pts`\n"
+                    f"• 💵 **Total Cost:** `{res['total_cost']:,} pts`\n"
+                    f"• 📊 **Total Shares Owned:** `{res['total_shares']}`\n"
+                    f"• 💳 **Wallet Balance:** `{res['new_wallet']:,} pts`"
+                ),
+                color=discord.Color.green(),
+            )
+            embed.set_footer(text="Track your portfolio with /stonks portfolio")
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @stonks_group.command(name="sell", description="Sell shares of a campus stock.")
+    @app_commands.describe(
+        ticker="Stock ticker to sell ($COFFEE, $PRINT, $NITRO, $UNO).",
+        shares="Number of shares to liquidate."
+    )
+    @app_commands.choices(
+        ticker=[
+            app_commands.Choice(name="$COFFEE (Dean's Coffee Holdings)", value="COFFEE"),
+            app_commands.Choice(name="$PRINT (Photocopy Cartel Intramuros)", value="PRINT"),
+            app_commands.Choice(name="$NITRO (Campus Tech & Nitro Speculation)", value="NITRO"),
+            app_commands.Choice(name="$UNO (Wild Card Volatility Index)", value="UNO"),
+        ]
+    )
+    async def stonks_sell(self, interaction: discord.Interaction, ticker: app_commands.Choice[str], shares: int = 1) -> None:
+        """Sell shares."""
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.sell_stock(user_id, ticker.value, shares)
+            embed = discord.Embed(
+                title=f"📉 Sold ${res['ticker']} Shares",
+                description=(
+                    f"Executed market sell order for **{res['shares_sold']} share(s)** of **{res['name']}**!\n\n"
+                    f"• 🏷️ **Sold Price:** `{res['price_per_share']:,} pts`\n"
+                    f"• 💰 **Proceeds Credited:** `+{res['total_payout']:,} pts`\n"
+                    f"• 📊 **Remaining Shares:** `{res['remaining_shares']}`\n"
+                    f"• 💳 **Wallet Balance:** `{res['new_wallet']:,} pts`"
+                ),
+                color=discord.Color.blue(),
+            )
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @stonks_group.command(name="portfolio", description="View your campus stock investment portfolio, returns, and ROI.")
+    async def stonks_portfolio(self, interaction: discord.Interaction) -> None:
+        """Display caller's stock portfolio."""
+        user_id = interaction.user.id
+        pf = self.rewards_service.get_portfolio(user_id)
+
+        if not pf.holdings:
+            embed = discord.Embed(
+                title="📊 Your Student Investment Portfolio",
+                description="You don't own any campus stocks yet! View the market with `/stonks market` and buy shares with `/stonks buy`.",
+                color=discord.Color.dark_grey(),
+            )
+            await interaction.response.send_message(embed=embed)
+            return
+
+        icon = "📈" if pf.net_profit >= 0 else "📉"
+        sign = "+" if pf.net_profit >= 0 else ""
+        color = discord.Color.green() if pf.net_profit >= 0 else discord.Color.red()
+
+        embed = discord.Embed(
+            title="📊 Student Investment Portfolio",
+            description=(
+                f"• 💰 **Total Invested:** `{pf.total_invested:,} pts`\n"
+                f"• 💎 **Current Portfolio Value:** `{pf.total_value:,} pts`\n"
+                f"• {icon} **Net P/L:** `{sign}{pf.net_profit:,} pts` (`{sign}{pf.net_profit_pct}%`)"
+            ),
+            color=color,
+        )
+        for h in pf.holdings:
+            h_icon = "📈" if h.profit_loss >= 0 else "📉"
+            h_sign = "+" if h.profit_loss >= 0 else ""
+            embed.add_field(
+                name=f"${h.ticker} ({h.shares} shares)",
+                value=(
+                    f"**Value:** `{h.current_value:,} pts` (Avg Cost: `{int(h.total_invested / h.shares)}`)\n"
+                    f"**P/L:** `{h_sign}{h.profit_loss:,} pts` ({h_icon} `{h_sign}{h.profit_loss_pct}%`)"
+                ),
+                inline=True,
+            )
+        embed.set_footer(text="Prices update dynamically with campus events")
+        await interaction.response.send_message(embed=embed)
+
+    # =========================================================================
+    # MIDNIGHT BLACK MARKET (/blackmarket)
+    # =========================================================================
+    blackmarket_group = app_commands.Group(name="blackmarket", description="Illicit underground contraband (Open 11 PM – 5 AM PHT).")
+
+    @blackmarket_group.command(name="view", description="Browse the Midnight Black Market contraband catalog.")
+    async def blackmarket_view(self, interaction: discord.Interaction) -> None:
+        """View Black Market contraband items."""
+        is_open = self.rewards_service.is_blackmarket_open()
+        catalog = self.rewards_service.get_blackmarket_catalog()
+
+        status_str = "🟢 **OPEN FOR BUSINESS**" if is_open else "🔴 **CLOSED UNTIL MIDNIGHT (11:00 PM – 5:00 AM PHT)**"
+        color = discord.Color.dark_purple() if is_open else discord.Color.dark_grey()
+
+        embed = discord.Embed(
+            title="🌙 Intramuros Midnight Black Market",
+            description=(
+                f"**Operating Hours:** 11:00 PM – 5:00 AM Philippine Time\n"
+                f"**Current Status:** {status_str}\n\n"
+                f"Shady smugglers sell illicit tools outside the campus walls. Purchases are final!"
+            ),
+            color=color,
+        )
+        for item_id, info in catalog.items():
+            embed.add_field(
+                name=f"{info['name']} — `{info['cost']:,} Uno Points`",
+                value=f"{info['description']}\n*Command:* `/blackmarket buy item:{item_id}`",
+                inline=False,
+            )
+        embed.set_footer(text="Intramuros Underground Syndicate · Discretion guaranteed")
+        await interaction.response.send_message(embed=embed)
+
+    @blackmarket_group.command(name="buy", description="Buy an illicit item from the Midnight Black Market.")
+    @app_commands.describe(item="Contraband item to purchase.")
+    @app_commands.choices(
+        item=[
+            app_commands.Choice(name="🎭 Ski Mask (1,500 pts - 100% Guaranteed Stealth Steal)", value="ski_mask"),
+            app_commands.Choice(name="📄 Forged Tax Clearance (3,500 pts - 24h Tax Audit Immunity)", value="fake_clearance"),
+            app_commands.Choice(name="⚖️ Bribe Waiver (5,000 pts - Quashes Next Lawsuit Against You)", value="bribe_waiver"),
+        ]
+    )
+    async def blackmarket_buy(self, interaction: discord.Interaction, item: app_commands.Choice[str]) -> None:
+        """Buy contraband item."""
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.buy_blackmarket_item(user_id, item.value)
+            embed = discord.Embed(
+                title="🤫 Black Market Deal Complete",
+                description=(
+                    f"You slipped **{res['cost']:,} pts** to the smuggler and acquired **{res['name']}**!\n\n"
+                    f"• 🎒 Item placed in your `/inventory`\n"
+                    f"• 💳 **New Balance:** `{res['new_balance']:,} Uno Points`"
+                ),
+                color=discord.Color.dark_purple(),
+            )
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    # =========================================================================
+    # CAMPUS BUSINESSES (/business)
+    # =========================================================================
+    business_group = app_commands.Group(name="business", description="Manage campus enterprises and collect daily passive revenue.")
+
+    @business_group.command(name="view", description="View your campus businesses and uncollected daily revenue.")
+    async def business_view(self, interaction: discord.Interaction) -> None:
+        """View owned enterprises and available franchises."""
+        user_id = interaction.user.id
+        owned = self.rewards_service.get_user_businesses(user_id)
+
+        embed = discord.Embed(
+            title="🏢 Intramuros Student Enterprises Hub",
+            description="Buy campus franchises to earn steady passive Uno Points every day!",
+            color=discord.Color.teal(),
+        )
+
+        if owned:
+            total_uncollected = sum(b.accumulated_points for b in owned)
+            daily_total = sum(b.daily_yield for b in owned)
+            embed.description = (
+                f"**📊 Daily Passive Yield:** `+{daily_total:,} pts/day`\n"
+                f"**💰 Accumulated Uncollected:** `+{total_uncollected:,} pts`\n\n"
+                f"Collect your profits anytime with `/business collect`!"
+            )
+            for b in owned:
+                embed.add_field(
+                    name=f"{b.name} (Level {b.level})",
+                    value=(
+                        f"• **Yield:** `+{b.daily_yield:,} pts/day`\n"
+                        f"• **Uncollected:** `+{b.accumulated_points:,} pts`\n"
+                        f"• **Upgrade Cost:** `{b.next_upgrade_cost:,} pts` (`/business upgrade business:{b.business_id}`)"
+                    ),
+                    inline=True,
+                )
+
+        embed.add_field(
+            name="🏪 Available Campus Franchises",
+            value=(
+                "• 🍲 **Pares Cart** (`15,000 pts`): Generates **+400 pts/day** (`/business buy business:pares_cart`)\n"
+                "• 🖨️ **Photocopy Kiosk** (`40,000 pts`): Generates **+1,200 pts/day** (`/business buy business:photocopy_kiosk`)\n"
+                "• 🧋 **Milk Tea Station** (`100,000 pts`): Generates **+3,200 pts/day** (`/business buy business:milk_tea_shop`)"
+            ),
+            inline=False,
+        )
+        embed.set_footer(text="Max revenue buffer is 3 days · Collect regularly!")
+        await interaction.response.send_message(embed=embed)
+
+    @business_group.command(name="buy", description="Purchase a campus enterprise franchise.")
+    @app_commands.describe(business="Franchise to purchase.")
+    @app_commands.choices(
+        business=[
+            app_commands.Choice(name="🍲 Intramuros Pares Cart (15,000 pts · +400 pts/day)", value="pares_cart"),
+            app_commands.Choice(name="🖨️ Photocopy & Bookbind Kiosk (40,000 pts · +1,200 pts/day)", value="photocopy_kiosk"),
+            app_commands.Choice(name="🧋 Boba & Milk Tea Station (100,000 pts · +3,200 pts/day)", value="milk_tea_shop"),
+        ]
+    )
+    async def business_buy(self, interaction: discord.Interaction, business: app_commands.Choice[str]) -> None:
+        """Buy business franchise."""
+        user_id = interaction.user.id
+        try:
+            biz = self.rewards_service.buy_business(user_id, business.value)
+            embed = discord.Embed(
+                title="🎉 Franchise Acquired!",
+                description=(
+                    f"You are now the proud owner of a **{biz.name}**!\n\n"
+                    f"• 💰 **Passive Revenue:** `+{biz.daily_yield:,} Uno Points / day`\n"
+                    f"• 📈 **Level:** `1`\n\n"
+                    f"Check `/business view` and collect your profits daily!"
+                ),
+                color=discord.Color.green(),
+            )
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @business_group.command(name="upgrade", description="Upgrade an owned enterprise to multiply its daily revenue.")
+    @app_commands.describe(business="Franchise to expand.")
+    @app_commands.choices(
+        business=[
+            app_commands.Choice(name="🍲 Intramuros Pares Cart", value="pares_cart"),
+            app_commands.Choice(name="🖨️ Photocopy & Bookbind Kiosk", value="photocopy_kiosk"),
+            app_commands.Choice(name="🧋 Boba & Milk Tea Station", value="milk_tea_shop"),
+        ]
+    )
+    async def business_upgrade(self, interaction: discord.Interaction, business: app_commands.Choice[str]) -> None:
+        """Upgrade business level."""
+        user_id = interaction.user.id
+        try:
+            biz = self.rewards_service.upgrade_business(user_id, business.value)
+            embed = discord.Embed(
+                title="🚀 Franchise Expanded!",
+                description=(
+                    f"Upgraded **{biz.name}** to **Level {biz.level}**!\n\n"
+                    f"• 📈 **New Daily Yield:** `+{biz.daily_yield:,} pts/day`\n"
+                    f"• 🛠️ **Next Upgrade Cost:** `{biz.next_upgrade_cost:,} pts`"
+                ),
+                color=discord.Color.green(),
+            )
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @business_group.command(name="collect", description="Collect accumulated passive revenue from all your campus businesses.")
+    async def business_collect(self, interaction: discord.Interaction) -> None:
+        """Collect passive revenue."""
+        user_id = interaction.user.id
+        try:
+            total_rev, breakdown = self.rewards_service.collect_business_revenue(user_id)
+            user = self.rewards_service.get_or_create_user(user_id)
+            embed = discord.Embed(
+                title="💰 Daily Business Revenue Collected!",
+                description=(
+                    f"You collected a total of **+{total_rev:,} Uno Points** from your businesses!\n\n"
+                    + "\n".join(breakdown)
+                    + f"\n\n💳 **New Wallet Balance:** `{user.points:,} Uno Points`"
+                ),
+                color=discord.Color.green(),
+            )
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    # =========================================================================
+    # COOPERATIVE BANK HEISTS (/heist)
+    # =========================================================================
+    heist_group = app_commands.Group(name="heist", description="High-stakes co-op bank heists with your classmates.")
+
+    @heist_group.command(name="start", description="Assemble a crew to rob the Intramuros Central Bank Vault (30k–60k pot).")
+    async def heist_start(self, interaction: discord.Interaction) -> None:
+        """Start a heist recruitment lobby."""
+        guild_id = self._server_id(interaction)
+        user_id = interaction.user.id
+        try:
+            lobby = self.rewards_service.start_heist_lobby(guild_id, user_id)
+            embed = discord.Embed(
+                title="🚨 OPERATION VAULT CRACK: CREW RECRUITMENT",
+                description=(
+                    f"**Mastermind:** <@{user_id}>\n"
+                    f"**Target:** Intramuros Central Bank Vault (`30,000` – `60,000` pts pool)\n\n"
+                    f"**Current Crew (1/4):**\n"
+                    f"• <@{user_id}> — `Mastermind`\n\n"
+                    f"**Recruitment Open!** Other classmates can join using:\n"
+                    f"• `/heist join role:hacker` (Bypasses security cameras)\n"
+                    f"• `/heist join role:driver` (Ensures speedy getaway)\n"
+                    f"• `/heist join role:demolitions` (Cracks thermal vault door)\n"
+                    f"• `/heist join role:lookout` (Spots police blockades)\n\n"
+                    f"When your crew is ready, the Mastermind executes with `/heist execute`!"
+                ),
+                color=discord.Color.dark_red(),
+            )
+            embed.set_footer(text="Failure penalty: 1 hour in Debtor's Jail + 2,000 pts bail fee each!")
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @heist_group.command(name="join", description="Join an active heist crew with a chosen specialty role.")
+    @app_commands.describe(role="Specialty role in the heist operation.")
+    @app_commands.choices(
+        role=[
+            app_commands.Choice(name="💻 Hacker (Security System Loop)", value="Hacker"),
+            app_commands.Choice(name="🚗 Getaway Driver (High-Speed Escape)", value="Getaway Driver"),
+            app_commands.Choice(name="💥 Demolitions (Thermal Vault Burn)", value="Demolitions"),
+            app_commands.Choice(name="🎭 Lookout (Campus Police Recon)", value="Lookout"),
+        ]
+    )
+    async def heist_join(self, interaction: discord.Interaction, role: app_commands.Choice[str]) -> None:
+        """Join heist lobby."""
+        guild_id = self._server_id(interaction)
+        user_id = interaction.user.id
+        try:
+            lobby = self.rewards_service.join_heist_lobby(guild_id, user_id, role.value)
+            crew_list = "\n".join(f"• <@{m_id}> — `{info['role']}`" for m_id, info in lobby["crew"].items())
+            embed = discord.Embed(
+                title="🤝 Operative Enlisted!",
+                description=(
+                    f"<@{user_id}> joined the heist as **{role.name}**!\n\n"
+                    f"**Crew Roster ({len(lobby['crew'])}/4):**\n"
+                    f"{crew_list}\n\n"
+                    f"Mastermind <@{lobby['leader_id']}> can execute whenever ready with `/heist execute`!"
+                ),
+                color=discord.Color.gold(),
+            )
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+    @heist_group.command(name="execute", description="Launch the bank heist operation with the assembled crew (Mastermind only).")
+    async def heist_execute(self, interaction: discord.Interaction) -> None:
+        """Execute heist operation."""
+        guild_id = self._server_id(interaction)
+        user_id = interaction.user.id
+        try:
+            res = self.rewards_service.execute_heist(guild_id, user_id)
+            if res["success"]:
+                crew_tags = ", ".join(f"<@{uid}>" for uid in res["members"])
+                embed = discord.Embed(
+                    title="💥 VAULT CRACKED! THE HEIST WAS A SUCCESS! 💰",
+                    description=(
+                        f"The crew infiltrated the Intramuros Central Bank, thermal-burned the titanium door, and vanished into the shadows!\n\n"
+                        f"• 🏦 **Total Vault Stolen:** `{res['total_vault']:,} Uno Points`\n"
+                        f"• 👥 **Crew Size:** `{res['crew_size']} operatives`\n"
+                        f"• 💰 **Cut per Operative:** `+{res['cut_per_member']:,} Uno Points`\n\n"
+                        f"Operatives: {crew_tags}"
+                    ),
+                    color=discord.Color.green(),
+                )
+            else:
+                crew_tags = ", ".join(f"<@{uid}>" for uid in res["members"])
+                embed = discord.Embed(
+                    title="🚨 BUSTED! SWAT AMBUSH AT THE VAULT! 🚔",
+                    description=(
+                        f"A silent alarm tripped! Intramuros Police Department and campus SWAT surrounded the perimeter!\n\n"
+                        f"• 🔒 **Sentenced to Jail:** `60 minutes` (Economic actions frozen)\n"
+                        f"• 💸 **Bail Forfeited:** `-{res['fine_amount']:,} Uno Points` each\n\n"
+                        f"Apprehended suspects: {crew_tags}"
+                    ),
+                    color=discord.Color.red(),
+                )
+            await interaction.response.send_message(embed=embed)
+        except RewardsError as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
+
+
 class RedemptionApprovalView(discord.ui.View):
     """Interactive Admin view for approving or rejecting prize claims."""
 
