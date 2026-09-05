@@ -1134,3 +1134,54 @@ def test_martial_law_cog_command_and_interaction_check():
 
     asyncio.run(_test())
 
+def test_fine_and_bail_slash_commands():
+    """Test /fine and /bail slash commands and ensuring arrested user can execute /fine."""
+    async def _test():
+        cog, service, log_channel = _make_rewards_cog()
+        cop_id = 555
+        jailbird_id = 777
+
+        service.add_points(cop_id, 60_000, "START")
+        service.arrest_user(cop_id, jailbird_id)
+        assert service.is_user_arrested(jailbird_id) is not None
+
+        # 1. Arrested user can pass interaction_check for /fine
+        interaction_fine_check = MagicMock()
+        interaction_fine_check.user.id = jailbird_id
+        interaction_fine_check.command.qualified_name = "fine"
+        assert await cog.interaction_check(interaction_fine_check) is True
+
+        # 2. Arrested user executes /fine for themselves
+        service.add_points(jailbird_id, 30_000, "START")
+        interaction_fine = MagicMock()
+        interaction_fine.user.id = jailbird_id
+        interaction_fine.user.mention = f"<@{jailbird_id}>"
+        interaction_fine.response.send_message = AsyncMock()
+
+        await cog.fine.callback(cog, interaction_fine, target=None)
+        interaction_fine.response.send_message.assert_awaited_once()
+        embed = interaction_fine.response.send_message.call_args.kwargs["embed"]
+        assert "BAIL POSTED" in embed.title
+        assert service.is_user_arrested(jailbird_id) is None
+        assert service.get_balance(jailbird_id) == 5_000
+
+        # 3. Test /bail alias command
+        service.add_points(cop_id, 50_000, "START")
+        service.arrest_user(cop_id, jailbird_id)
+        assert service.is_user_arrested(jailbird_id) is not None
+
+        service.add_points(cop_id, 30_000, "START")
+        interaction_bail = MagicMock()
+        interaction_bail.user.id = cop_id
+        interaction_bail.user.mention = f"<@{cop_id}>"
+        interaction_bail.response.send_message = AsyncMock()
+
+        target_member = MagicMock()
+        target_member.id = jailbird_id
+
+        await cog.bail.callback(cog, interaction_bail, target=target_member)
+        interaction_bail.response.send_message.assert_awaited_once()
+        assert service.is_user_arrested(jailbird_id) is None
+
+    asyncio.run(_test())
+

@@ -2362,6 +2362,46 @@ class RewardsDBService:
 
         return cost, arrest_until
 
+    def pay_fine(self, user_id: int, target_id: Optional[int] = None) -> tuple[int, int]:
+        """Pay a 25,000 pt bail fine to release self or a target from arrest. Returns (cost, target_id)."""
+        target = target_id if target_id is not None else user_id
+        if not self.is_user_arrested(target):
+            name = "You are" if target == user_id else f"Classmate <@{target}> is"
+            raise RewardsError(f"{name} not currently under arrest!")
+
+        cost = 25_000
+        payer = self.get_or_create_user(user_id)
+        payer_total = payer.points + payer.bank_points
+        if payer_total < cost:
+            raise InsufficientPointsError(
+                f"Paying the bail release fine requires 25,000 Uno Points (wallet + bank)! You have {payer_total:,} pts."
+            )
+
+        wallet_deduct = min(payer.points, cost)
+        bank_deduct = cost - wallet_deduct
+
+        if wallet_deduct > 0:
+            self.deduct_points(user_id, wallet_deduct, "BAIL_FINE", f"Bail fine paid to release {target}")
+
+        if bank_deduct > 0:
+            with self._get_connection() as conn:
+                conn.execute(
+                    "UPDATE users SET bank_points = bank_points - ? WHERE user_id = ?",
+                    (bank_deduct, user_id),
+                )
+                conn.execute(
+                    "INSERT INTO transactions (user_id, amount, action_type, description) VALUES (?, ?, 'BAIL_FINE_BANK', ?)",
+                    (user_id, -bank_deduct, f"Bank vault fee for bail fine to release {target}"),
+                )
+                conn.commit()
+
+        with self._get_connection() as conn:
+            conn.execute("UPDATE users SET arrested_until = NULL WHERE user_id = ?", (target,))
+            conn.commit()
+
+        return cost, target
+
+
     def sue_user(self, user_id: int, target_id: int, amount: int) -> dict:
         """File a lawsuit against a classmate. Deducts amount from suer and target (wallet + bank)."""
         if amount < 20_000:

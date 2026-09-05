@@ -102,7 +102,7 @@ class PrefixCommandsCog(commands.Cog):
                 if target_cog.rewards_service.is_martial_law_active():
                     allowed_under_martial_law = {
                         "balance", "profile", "rank", "leaderboard", "inventory",
-                        "guide", "guild_view", "quests", "daily", "martial_law"
+                        "guide", "guild_view", "quests", "daily", "martial_law", "fine", "bail"
                     }
                     if command_attribute not in allowed_under_martial_law:
                         await context.reply(
@@ -111,7 +111,7 @@ class PrefixCommandsCog(commands.Cog):
                         )
                         return
 
-                read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild_view", "quests", "martial_law"}
+                read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild_view", "quests", "martial_law", "fine", "bail"}
                 arrested_until = target_cog.rewards_service.is_user_arrested(user_id)
                 if arrested_until and command_attribute not in read_only:
                     await context.reply(
@@ -346,6 +346,12 @@ class PrefixCommandsCog(commands.Cog):
     async def arrest_prefix(self, context: commands.Context, member: discord.Member) -> None:
         """Prefix alias for /arrest."""
         await self._invoke_app_command(context, "RewardsCog", "arrest", member)
+
+    @commands.command(name="fine", aliases=["bail", "payfine", "pay_fine"])
+    async def fine_prefix(self, context: commands.Context, target: Optional[discord.Member] = None) -> None:
+        """Prefix alias for /fine."""
+        await self._invoke_app_command(context, "RewardsCog", "fine", target)
+
 
     @commands.command(name="martial_law", aliases=["martiallaw", "ml"])
     async def martial_law_prefix(self, context: commands.Context, state: str = "on") -> None:

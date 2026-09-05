@@ -1207,3 +1207,54 @@ def test_martial_law_state_and_restrictions(rewards_service: RewardsDBService):
     res_cit = rewards_service.bank_withdraw(citizen_id, 1000)
     assert res_cit["amount_withdrawn"] == 1000
 
+def test_pay_fine_rules_and_cost(rewards_service: RewardsDBService):
+    """Test paying bail fine to release from arrest."""
+    user_id = 1001
+    friend_id = 1002
+
+    # 1. Not arrested check
+    with pytest.raises(RewardsError, match="not currently under arrest"):
+        rewards_service.pay_fine(user_id)
+
+    # 2. Arrest user_id
+    rewards_service.get_or_create_user(user_id)
+    rewards_service.get_or_create_user(friend_id)
+    with rewards_service._get_connection() as conn:
+        conn.execute("UPDATE users SET points = 50000, bank_points = 0 WHERE user_id = ?", (friend_id,))
+        conn.commit()
+    rewards_service.arrest_user(friend_id, user_id)
+    assert rewards_service.is_user_arrested(user_id) is not None
+
+    # 3. Insufficient funds check (user has 0 pts)
+    with pytest.raises(InsufficientPointsError, match="requires 25,000 Uno Points"):
+        rewards_service.pay_fine(user_id)
+
+    # 4. User pays fine for themselves (15k wallet + 15k bank)
+    with rewards_service._get_connection() as conn:
+        conn.execute("UPDATE users SET points = 15000, bank_points = 15000 WHERE user_id = ?", (user_id,))
+        conn.commit()
+
+    cost, target = rewards_service.pay_fine(user_id)
+    assert cost == 25_000
+    assert target == user_id
+    assert rewards_service.is_user_arrested(user_id) is None
+    assert rewards_service.get_balance(user_id) == 0
+    assert rewards_service.get_profile(user_id).bank_points == 5_000
+
+    # 5. Friend bails out user
+    with rewards_service._get_connection() as conn:
+        conn.execute("UPDATE users SET points = 50000, bank_points = 0 WHERE user_id = ?", (friend_id,))
+        conn.commit()
+    rewards_service.arrest_user(friend_id, user_id)
+    assert rewards_service.is_user_arrested(user_id) is not None
+
+    with rewards_service._get_connection() as conn:
+        conn.execute("UPDATE users SET points = 30000, bank_points = 0 WHERE user_id = ?", (friend_id,))
+        conn.commit()
+
+    cost_b, target_b = rewards_service.pay_fine(friend_id, user_id)
+    assert cost_b == 25_000
+    assert target_b == user_id
+    assert rewards_service.is_user_arrested(user_id) is None
+    assert rewards_service.get_balance(friend_id) == 5_000
+

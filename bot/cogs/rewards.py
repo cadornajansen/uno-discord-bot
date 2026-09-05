@@ -2395,7 +2395,7 @@ class RewardsCog(commands.Cog):
         if self.rewards_service.is_martial_law_active():
             allowed_under_martial_law = {
                 "balance", "profile", "rank", "leaderboard", "inventory",
-                "guide", "guild view", "quests", "daily", "martial_law"
+                "guide", "guild view", "quests", "daily", "martial_law", "fine", "bail"
             }
             if command_name not in allowed_under_martial_law:
                 await interaction.response.send_message(
@@ -2406,7 +2406,7 @@ class RewardsCog(commands.Cog):
                 )
                 return False
 
-        read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild view", "quests", "martial_law"}
+        read_only = {"balance", "profile", "rank", "leaderboard", "inventory", "guide", "guild view", "quests", "martial_law", "fine", "bail"}
 
         arrested_until = self.rewards_service.is_user_arrested(user_id)
         if arrested_until and command_name not in read_only:
@@ -2668,6 +2668,39 @@ class RewardsCog(commands.Cog):
             )
         except (InsufficientPointsError, RewardsError) as exc:
             await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
+
+
+    @app_commands.command(name="fine", description="Pay a 25,000 Uno Points court fine to get out of arrest jail (or bail out a friend).")
+    @app_commands.describe(target="Optional classmate to bail out. Leave empty to bail yourself out.")
+    async def fine(self, interaction: discord.Interaction, target: Optional[discord.Member] = None) -> None:
+        """Pay fine to release from arrest."""
+        target_id = target.id if target else interaction.user.id
+        try:
+            cost, released_id = self.rewards_service.pay_fine(interaction.user.id, target_id)
+            target_mention = f"<@{released_id}>"
+            embed = discord.Embed(
+                title="🔓 BAIL POSTED — RELEASE FROM CUSTODY",
+                description=(
+                    f"**{interaction.user.mention}** paid a **{cost:,} Uno Points** court fine to post bail for {target_mention}!\n\n"
+                    f"✅ {target_mention} is now a free citizen! All economic commands and privileges have been fully restored."
+                ),
+                color=discord.Color.green(),
+            )
+            await interaction.response.send_message(embed=embed)
+            await self._log_activity(
+                "🔓 Bail Fine Paid",
+                f"{interaction.user.mention} paid {cost:,} pts to release {target_mention} from arrest.",
+                discord.Color.green(),
+            )
+        except (InsufficientPointsError, RewardsError) as exc:
+            await interaction.response.send_message(f"❌ {exc}", ephemeral=True)
+
+    @app_commands.command(name="bail", description="Pay a 25,000 Uno Points bail fine to get out of arrest jail (or bail out a friend).")
+    @app_commands.describe(target="Optional classmate to bail out. Leave empty to bail yourself out.")
+    async def bail(self, interaction: discord.Interaction, target: Optional[discord.Member] = None) -> None:
+        """Alias for /fine."""
+        await self.fine.callback(self, interaction, target)
+
 
     @app_commands.command(name="martial_law", description="[OWNER ONLY] Declare or lift state of Martial Law across the server economy.")
     @app_commands.describe(mode="Enable ('on') or Disable ('off') Martial Law.")
