@@ -627,7 +627,6 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
                 "• **Uno Reverse Card** — Passive trap that counter-steals 40%–60% from pickpockets.\n"
                 "• **Point Airdrop** — Drops a 100 pt community care package in chat for 4 quick catchers.\n"
                 "• **EMP Shield Breaker** — Shatters a classmate's active Immunity Shield.\n"
-                "• **Class Treasurer Audit** — Takes 5% from an eligible top-ranked player when used.\n"
                 "• **Mystery Gacha Box** — High-roller lootbox with prizes up to 1,000 points."
             ),
             inline=False,
@@ -722,7 +721,7 @@ def build_student_guide_embed(category: str = "overview") -> discord.Embed:
         value=(
             "• `/bank <deposit|withdraw|view>` — Protected bank vault 100% immune to theft (10% fee).\n"
             "• Points are never deducted automatically.\n"
-            "• Skill cards: 1-Week Immunity Shield, Uno Reverse Card, Point Airdrops, EMP Breakers, Tax Audits."
+            "• Skill cards: 1-Week Immunity Shield, Uno Reverse Card, Point Airdrops, EMP Breakers."
         ),
         inline=False,
     )
@@ -2131,7 +2130,7 @@ def build_shop_embed(rewards_service: RewardsDBService, user_id: int, category: 
 
         dept_text = (
             "• 🐾 **Pet Shelter** (14 pets) — Cats (2x Daily), Dogs (Guard), Bunnies (Bet Win), Owls (Trivia), Turtles, Foxes, Axolotls\n"
-            "• ⚔️ **Offense & Traps** — Pickpocket, Uno Reverse, EMP Breaker, Tax Audit\n"
+            "• ⚔️ **Offense & Traps** — Pickpocket, Uno Reverse, EMP Breaker\n"
             "• 🛡️ **Defense & Boosters** — 1-Week Shield, 2x Daily Booster, Coffee Bribe\n"
             "• 🎲 **Events & Gacha** — Point Airdrop, Mystery Gacha Box\n"
             "• 🎁 **Real-World & Nitro** — Coffee Treat, GCash ₱100, Free Printing, Nitro 1M"
@@ -3859,7 +3858,7 @@ class RewardsCog(commands.Cog):
     @app_commands.command(name="use", description="Activate a consumable item from your inventory (e.g. Shield, Airdrop, Gacha, EMP).")
     @app_commands.describe(
         item="The consumable item to activate.",
-        target="Target classmate (required for EMP Shield Breaker or Class Treasurer Audit).",
+        target="Target classmate (required for EMP Shield Breaker).",
     )
     @app_commands.choices(item=[
         app_commands.Choice(name="🛡️ 1-Week Immunity Shield", value="shield_1w"),
@@ -3867,7 +3866,6 @@ class RewardsCog(commands.Cog):
         app_commands.Choice(name="🌧️ Point Airdrop", value="airdrop"),
         app_commands.Choice(name="📦 Mystery Gacha Box", value="gacha_box"),
         app_commands.Choice(name="🔨 EMP Shield Breaker", value="shield_breaker"),
-        app_commands.Choice(name="🕵️ Class Treasurer Audit", value="tax_audit"),
         app_commands.Choice(name="☕ Dean's Coffee Bribe", value="coffee_bribe"),
     ])
     async def use(
@@ -3950,7 +3948,6 @@ class RewardsCog(commands.Cog):
         app_commands.Choice(name="🌧️ Point Airdrop (120 pts)", value="airdrop"),
         app_commands.Choice(name="📦 Mystery Gacha Box (150 pts)", value="gacha_box"),
         app_commands.Choice(name="🔨 EMP Shield Breaker (140 pts)", value="shield_breaker"),
-        app_commands.Choice(name="🕵️ Class Treasurer Audit (10,000 pts)", value="tax_audit"),
         app_commands.Choice(name="☕ Dean's Coffee Bribe (100 pts)", value="coffee_bribe"),
         app_commands.Choice(name="☕ Intramuros Coffee Treat (50,000 pts)", value="coffee"),
         app_commands.Choice(name="💳 GCash Gift Card ₱100 (65,000 pts)", value="gcash_100"),

@@ -423,11 +423,6 @@ ITEM_DEFINITIONS = {
         "description": "Target a protected classmate to instantly shatter their active Immunity Shield!",
         "usable": True,
     },
-    "tax_audit": {
-        "name": "🕵️ Class Treasurer Audit",
-        "description": "Target a Top-3 Leaderboard player to audit 5% of their points into your wallet!",
-        "usable": True,
-    },
     "coffee_bribe": {
         "name": "☕ Dean's Coffee Bribe",
         "description": "Instant lucky grant of +100 to +180 Uno Points from the CS Faculty coffee fund!",
@@ -490,13 +485,6 @@ SHOP_CATALOG = {
         "category": "consumable",
         "subcategory": "offense",
         "description": "Target a protected classmate to instantly shatter their active Immunity Shield.",
-    },
-    "tax_audit": {
-        "name": "🕵️ Class Treasurer Audit",
-        "cost": 10000,
-        "category": "consumable",
-        "subcategory": "offense",
-        "description": "Target a Top-3 Leaderboard player to audit 5% of their points into your wallet.",
     },
     "coffee_bribe": {
         "name": "☕ Dean's Coffee Bribe",
@@ -2887,7 +2875,6 @@ class RewardsDBService:
                 "airdrop",
                 "gacha_box",
                 "shield_breaker",
-                "tax_audit",
                 "coffee_bribe",
             ]
             reward_item_id = fixed_skill if fixed_skill in possible_skills else random.choice(possible_skills)
@@ -4686,27 +4673,6 @@ class RewardsDBService:
                 conn.execute("UPDATE users SET shield_until = NULL WHERE user_id = ?", (target_id,))
                 conn.commit()
             desc = f"🔨 EMP Shatter! You struck <@{target_id}> with an EMP shockwave and completely destroyed their Immunity Shield!"
-
-        elif item_id == "tax_audit":
-            if not target_id:
-                raise RewardsError("You must specify a Top-3 classmate to audit with `/use tax_audit @classmate`!")
-            if target_id == user_id:
-                raise RewardsError("You cannot audit yourself!")
-            target_profile = self.get_profile(target_id, now=now)
-            if target_profile.rank > 3:
-                raise RewardsError(
-                    f"That classmate is ranked #{target_profile.rank}. The Class Treasurer Audit can only target students in the Top 3!"
-                )
-            if target_profile.points <= 0:
-                raise RewardsError("That classmate has no points to audit!")
-            self.remove_item(user_id, item_id, 1)
-            tax_amount = max(1, int(target_profile.points * 0.05))
-            if tax_amount > target_profile.points:
-                tax_amount = target_profile.points
-            self.deduct_points(target_id, tax_amount, "TAX_AUDITED", f"Audited by Class Treasurer {user_id}")
-            new_balance = self.add_points(user_id, tax_amount, "TAX_COLLECTED", f"Collected 5% Class Tax from {target_id}")
-            points_awarded = tax_amount
-            desc = f"🕵️ Class Treasurer Audit executed! You audited a 5% Class Fund Tax (**+{tax_amount:,} Uno Points**) from <@{target_id}>!"
 
         elif item_id == "coffee_bribe":
             self.remove_item(user_id, item_id, 1)

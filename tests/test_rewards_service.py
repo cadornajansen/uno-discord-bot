@@ -417,11 +417,11 @@ def test_uno_reverse_card_counter_steals(rewards_service: RewardsDBService):
     assert "uno_reverse" not in rewards_service.get_inventory(1002)
 
 
-def test_shield_breaker_and_tax_audit(rewards_service: RewardsDBService):
-    """Test EMP Shield Breaker destroying shields and Tax Audit taxing Top-3 players."""
+def test_shield_breaker(rewards_service: RewardsDBService):
+    """Test EMP Shield Breaker destroying shields and verify Tax Audit is retired."""
     now = datetime(2026, 8, 1, 12, 0, tzinfo=timezone.utc)
     rewards_service.add_points(1001, 500, "TOP1")
-    rewards_service.add_points(1002, 100, "AUDITOR")
+    rewards_service.add_points(1002, 100, "ATTACKER")
 
     # 1. Activate shield on Top 1
     rewards_service.add_item(1001, "shield_1w", 1)
@@ -435,12 +435,10 @@ def test_shield_breaker_and_tax_audit(rewards_service: RewardsDBService):
     assert not rewards_service.has_active_shield(1001, now=now)
     assert "shield_breaker" not in rewards_service.get_inventory(1002)
 
-    # 3. Tax Audit Top 1 player (5% of 500 = 25 pts, deducted from target)
-    rewards_service.add_item(1002, "tax_audit", 1)
-    res_tax = rewards_service.use_item(1002, "tax_audit", target_id=1001, now=now)
-    assert res_tax.points_awarded == 25
-    assert rewards_service.get_balance(1001) == 475  # Target user loses 25 pts
-    assert rewards_service.get_balance(1002) == 125  # Auditor gets 25 pts added
+    # 3. Verify tax_audit is no longer in shop catalog or item definitions
+    from bot.services.rewards_db import ITEM_DEFINITIONS, SHOP_CATALOG
+    assert "tax_audit" not in ITEM_DEFINITIONS
+    assert "tax_audit" not in SHOP_CATALOG
 
 
 def test_coffee_bribe_and_gacha_box(rewards_service: RewardsDBService):
