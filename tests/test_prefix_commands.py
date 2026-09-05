@@ -71,6 +71,7 @@ def test_prefix_cog_registers_all_non_document_aliases():
         "arrest",
         "martial_law",
         "fine",
+        "tax_audit",
     }.issubset(command_names)
 
 
